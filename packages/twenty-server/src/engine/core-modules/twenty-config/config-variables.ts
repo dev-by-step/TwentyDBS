@@ -681,7 +681,12 @@ export class ConfigVariables {
     type: ConfigVariableType.STRING,
     isSensitive: true,
   })
-  @IsOptional()
+  @ValidateIf((env) =>
+    (env.PRE_INSTALLED_APPS ?? '')
+      .split(',')
+      .map((name: string) => name.trim())
+      .includes('@twenty-apps/exa'),
+  )
   EXA_API_KEY?: string;
 
   @ConfigVariablesMetadata({

@@ -50,20 +50,33 @@ const chargeCredits = async (
   }
 
   try {
-    await fetch(`${apiUrl.replace(/\/$/, '')}/app/billing/charge`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${apiUrl.replace(/\/$/, '')}/app/billing/charge`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          creditsUsedMicro: computeMicroCredits(numResults),
+          quantity: 1,
+          unit: 'INVOCATION',
+          operationType: 'WEB_SEARCH',
+          resourceContext: 'exa',
+        }),
       },
-      body: JSON.stringify({
-        creditsUsedMicro: computeMicroCredits(numResults),
-        quantity: 1,
-        unit: 'INVOCATION',
-        operationType: 'WEB_SEARCH',
-        resourceContext: 'exa',
-      }),
-    });
+    );
+
+    // fetch() only rejects on network errors, not on 4xx/5xx responses —
+    // inspect the status explicitly so billing failures are visible.
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+
+      console.error(
+        `exa_web_search: billing charge returned ${response.status} ${response.statusText}: ${body}`,
+      );
+    }
   } catch (error) {
     // Non-fatal — log and continue. The tool result is already computed;
     // losing a billing event is preferable to surfacing a billing failure
