@@ -42,7 +42,6 @@ import {
   ConfigVariableException,
   ConfigVariableExceptionCode,
 } from 'src/engine/core-modules/twenty-config/twenty-config.exception';
-import { WebSearchDriverType } from 'src/engine/core-modules/web-search/web-search.interface';
 import { type AiModelPreferences } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-preferences.type';
 import { type AiProvidersConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.type';
 import { loadDefaultModelPreferences } from 'src/engine/metadata-modules/ai/ai-models/utils/load-default-model-preferences.util';
@@ -678,21 +677,11 @@ export class ConfigVariables {
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.LLM,
     description:
-      'Web search driver type - EXA for Exa search, DISABLED to turn off',
-    type: ConfigVariableType.STRING,
-    options: Object.values(WebSearchDriverType),
-  })
-  @IsOptional()
-  @CastToUpperSnakeCase()
-  WEB_SEARCH_DRIVER: WebSearchDriverType = WebSearchDriverType.DISABLED;
-
-  @ConfigVariablesMetadata({
-    group: ConfigVariablesGroup.LLM,
-    description: 'Exa API key for web search',
+      'Exa API key. Seeded into the @twenty-apps/exa application registration as a server-level variable at bootstrap, so logic function handlers can read it from their execution env. Required only when the Exa app is listed in PRE_INSTALLED_APPS.',
     type: ConfigVariableType.STRING,
     isSensitive: true,
   })
-  @ValidateIf((env) => env.WEB_SEARCH_DRIVER === WebSearchDriverType.EXA)
+  @IsOptional()
   EXA_API_KEY?: string;
 
   @ConfigVariablesMetadata({
