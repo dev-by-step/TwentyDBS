@@ -55,3 +55,12 @@ TRANSLATION_QA_REPORT.md
 .playwright-mcp/
 .playwright-cli/
 output/playwright/
+
+# Fichiers de configuration locale (ne pas versionner)
+docs/ARCHITECTURE.md
+docs/ROADMAP.md
+docs/DATA_MIGRATION.md
+
+# Données de production (données réelles clients)
+docs/*.csv
+*.csv
