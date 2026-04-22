@@ -4,6 +4,7 @@ import { plainToClass } from 'class-transformer';
 import {
   IsDefined,
   IsOptional,
+  IsString,
   IsUrl,
   ValidateIf,
   type ValidationError,
@@ -687,6 +688,7 @@ export class ConfigVariables {
       .map((name: string) => name.trim())
       .includes('@twenty-apps/exa'),
   )
+  @IsString()
   EXA_API_KEY?: string;
 
   @ConfigVariablesMetadata({
