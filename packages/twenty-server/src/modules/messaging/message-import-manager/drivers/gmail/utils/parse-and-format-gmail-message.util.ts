@@ -12,6 +12,7 @@ import { sanitizeString } from 'src/modules/messaging/message-import-manager/uti
 export const parseAndFormatGmailMessage = (
   message: gmailV1.Schema$Message,
   connectedAccount: Pick<ConnectedAccountEntity, 'handle' | 'handleAliases'>,
+  convertHtmlToText: (html: string) => string,
 ): MessageWithParticipants | null => {
   const {
     id,
@@ -27,7 +28,7 @@ export const parseAndFormatGmailMessage = (
     attachments,
     deliveredTo,
     labelIds,
-  } = parseGmailMessage(message);
+  } = parseGmailMessage(message, convertHtmlToText);
 
   if (
     !from ||

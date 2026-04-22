@@ -7,7 +7,10 @@ import { getBodyData } from 'src/modules/messaging/message-import-manager/driver
 import { getPropertyFromHeaders } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/get-property-from-headers.util';
 import { safeParseEmailAddressAddress } from 'src/modules/messaging/message-import-manager/utils/safe-parse.util';
 
-export const parseGmailMessage = (message: gmail_v1.Schema$Message) => {
+export const parseGmailMessage = (
+  message: gmail_v1.Schema$Message,
+  convertHtmlToText: (html: string) => string,
+) => {
   const subject = getPropertyFromHeaders(message, 'Subject');
   const rawFrom = getPropertyFromHeaders(message, 'From');
   const rawTo = getPropertyFromHeaders(message, 'To');
@@ -25,8 +28,13 @@ export const parseGmailMessage = (message: gmail_v1.Schema$Message) => {
   assert(historyId, 'History-ID is missing');
   assert(internalDate, 'Internal date is missing');
 
-  const bodyData = getBodyData(message);
-  const text = bodyData ? Buffer.from(bodyData, 'base64').toString() : '';
+  const bodyResult = getBodyData(message);
+  const decodedBody = bodyResult
+    ? Buffer.from(bodyResult.data, 'base64').toString()
+    : '';
+  const text = bodyResult?.isHtml
+    ? convertHtmlToText(decodedBody)
+    : decodedBody;
 
   const attachments = getAttachmentData(message);
 

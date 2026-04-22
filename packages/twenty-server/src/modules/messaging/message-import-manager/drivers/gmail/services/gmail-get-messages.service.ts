@@ -13,6 +13,7 @@ import { GmailMessagesImportErrorHandler } from 'src/modules/messaging/message-i
 import { filterGmailMessagesByFolderPolicy } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/filter-gmail-messages-by-folder-policy.util';
 import { parseAndFormatGmailMessage } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/parse-and-format-gmail-message.util';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
+import { createHtmlToTextConverter } from 'src/modules/messaging/message-import-manager/utils/create-html-to-text-converter.util';
 
 const GMAIL_BATCH_REQUEST_MAX_SIZE = 50;
 
@@ -178,6 +179,8 @@ export class GmailGetMessagesService {
       ),
     );
 
+    const convertHtmlToText = createHtmlToTextConverter();
+
     return results
       .map(({ messageId, data, error }) => {
         if (error) {
@@ -189,6 +192,7 @@ export class GmailGetMessagesService {
         return parseAndFormatGmailMessage(
           data as gmailV1.Schema$Message,
           connectedAccount,
+          convertHtmlToText,
         );
       })
       .filter(isDefined);
