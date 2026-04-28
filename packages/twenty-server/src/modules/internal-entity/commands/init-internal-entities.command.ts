@@ -1,4 +1,7 @@
-import { Logger } from '@nestjs/common';
+import { access, readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+import { isNonEmptyString } from '@sniptt/guards';
 
 import { Command } from 'nest-commander';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
@@ -15,16 +18,21 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import { OPPORTUNITY_ENTITY_MIGRATION_MAP } from 'src/modules/internal-entity/constants/opportunity-entity-migration.constant';
 
 type FlatMaps = {
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
   objectIdByName: Record<string, string>;
+};
+
+type OpportunityCsvRow = {
+  opportunityId: string;
+  entityName: string | null;
 };
 
 @Command({
@@ -33,8 +41,6 @@ type FlatMaps = {
     'Crée InternalEntity, les relations M2M Person/Company, seed les 4 entités, migre les opportunités existantes',
 })
 export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
-  private readonly logger = new Logger(InitInternalEntitiesCommand.name);
-
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly objectMetadataService: ObjectMetadataService,
@@ -58,195 +64,139 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
 
     const schemaName = getWorkspaceSchemaName(workspaceId);
 
-    // ÉTAPE 1: Idempotence — vérifie si l'objet existe déjà
-    const existing = await this.objectMetadataService.findOneWithinWorkspace(
+    await this.ensureMetadataSchema(workspaceId);
+    const internalEntityTableName = await this.resolveObjectTableNameOrThrow(
       workspaceId,
-      { where: { nameSingular: 'internalEntity' } },
+      'internalEntity',
     );
 
-    if (!isDefined(existing)) {
-      await this.createMetadataSchema(workspaceId);
-    } else {
-      this.logger.log(
-        `InternalEntity existe déjà pour le workspace ${workspaceId}, schéma ignoré`,
-      );
-    }
-
-    // ÉTAPE 6: Seed des 4 instances InternalEntity
-    await this.seedInternalEntities(dataSource, schemaName);
-
-    // ÉTAPE 7: Backfill Opportunity → InternalEntity
+    await this.seedInternalEntities(
+      dataSource,
+      schemaName,
+      internalEntityTableName,
+      workspaceId,
+    );
     await this.backfillOpportunities(dataSource, schemaName);
-
-    // ÉTAPE 8: Vérification finale
     await this.verifyMigration(dataSource, schemaName);
   }
 
-  private async createMetadataSchema(workspaceId: string): Promise<void> {
-    // ÉTAPE 2: Créer l'objet InternalEntity
-    this.logger.log('Création de l\'objet InternalEntity...');
+  private async ensureMetadataSchema(workspaceId: string): Promise<void> {
+    this.logger.log('Vérification du schéma InternalEntity...');
 
-    const internalEntityMetadata =
-      await this.objectMetadataService.createOneObject({
-        createObjectInput: {
-          nameSingular: 'internalEntity',
-          namePlural: 'internalEntities',
-          labelSingular: 'Internal Entity',
-          labelPlural: 'Internal Entities',
-          icon: 'IconBuilding',
-        },
-        workspaceId,
-      });
+    const internalEntityMetadata = await this.ensureObjectMetadata({
+      workspaceId,
+      nameSingular: 'internalEntity',
+      namePlural: 'internalEntities',
+      labelSingular: 'Internal Entity',
+      labelPlural: 'Internal Entities',
+      icon: 'IconBuilding',
+    });
 
-    this.logger.log(`InternalEntity créé (id=${internalEntityMetadata.id})`);
+    const personEntityMembershipMetadata = await this.ensureObjectMetadata({
+      workspaceId,
+      nameSingular: 'personEntityMembership',
+      namePlural: 'personEntityMemberships',
+      labelSingular: 'Person Entity Membership',
+      labelPlural: 'Person Entity Memberships',
+      icon: 'IconUserCircle',
+      skipNameField: true,
+    });
 
-    // ÉTAPE 3: Créer les objets junction
-    this.logger.log('Création des objets junction...');
+    const companyEntityMembershipMetadata = await this.ensureObjectMetadata({
+      workspaceId,
+      nameSingular: 'companyEntityMembership',
+      namePlural: 'companyEntityMemberships',
+      labelSingular: 'Company Entity Membership',
+      labelPlural: 'Company Entity Memberships',
+      icon: 'IconBuildingSkyscraper',
+      skipNameField: true,
+    });
 
-    const personEntityMembershipMetadata =
-      await this.objectMetadataService.createOneObject({
-        createObjectInput: {
-          nameSingular: 'personEntityMembership',
-          namePlural: 'personEntityMemberships',
-          labelSingular: 'Person Entity Membership',
-          labelPlural: 'Person Entity Memberships',
-          icon: 'IconUserCircle',
-          skipNameField: true,
-        },
-        workspaceId,
-      });
-
-    const companyEntityMembershipMetadata =
-      await this.objectMetadataService.createOneObject({
-        createObjectInput: {
-          nameSingular: 'companyEntityMembership',
-          namePlural: 'companyEntityMemberships',
-          labelSingular: 'Company Entity Membership',
-          labelPlural: 'Company Entity Memberships',
-          icon: 'IconBuildingSkyscraper',
-          skipNameField: true,
-        },
-        workspaceId,
-      });
-
-    this.logger.log(
-      `Junction objects créés: personEntityMembership (id=${personEntityMembershipMetadata.id}), companyEntityMembership (id=${companyEntityMembershipMetadata.id})`,
+    const personMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'person',
+    );
+    const companyMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'company',
+    );
+    const opportunityMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'opportunity',
     );
 
-    // Récupérer les IDs des objets standard (person, company, opportunity)
-    const personMetadata =
-      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
-        where: { nameSingular: 'person' },
-      });
-    const companyMetadata =
-      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
-        where: { nameSingular: 'company' },
-      });
-    const opportunityMetadata =
-      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
-        where: { nameSingular: 'opportunity' },
-      });
-
-    if (
-      !isDefined(personMetadata) ||
-      !isDefined(companyMetadata) ||
-      !isDefined(opportunityMetadata)
-    ) {
-      throw new Error(
-        'Objets standard person/company/opportunity introuvables dans le workspace',
-      );
-    }
-
-    // ÉTAPE 4a: Champs junction Person <-> InternalEntity
-    this.logger.log('Création des champs junction Person <-> InternalEntity...');
-
-    await this.fieldMetadataService.createManyFields({
-      createFieldInputs: [
-        {
-          type: FieldMetadataType.RELATION,
-          name: 'internalEntities',
-          label: 'Internal Entities',
-          icon: 'IconBuilding',
-          objectMetadataId: personMetadata.id,
-          relationCreationPayload: {
-            type: RelationType.ONE_TO_MANY,
-            targetFieldLabel: 'Person',
-            targetFieldIcon: 'IconUser',
-            targetObjectMetadataId: personEntityMembershipMetadata.id,
-          },
-        },
-      ],
+    await this.ensureTextField({
       workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'color',
+      label: 'Color',
+      description: 'Hex color for the internal entity',
+      icon: 'IconColorSwatch',
+      isNullable: false,
+      defaultValue: "'#6B7280'",
     });
 
-    await this.fieldMetadataService.createManyFields({
-      createFieldInputs: [
-        {
-          type: FieldMetadataType.RELATION,
-          name: 'persons',
-          label: 'Persons',
-          icon: 'IconUser',
-          objectMetadataId: internalEntityMetadata.id,
-          relationCreationPayload: {
-            type: RelationType.ONE_TO_MANY,
-            targetFieldLabel: 'Internal Entity',
-            targetFieldIcon: 'IconBuilding',
-            targetObjectMetadataId: personEntityMembershipMetadata.id,
-          },
-        },
-      ],
+    await this.ensureUuidField({
       workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'workspaceId',
+      label: 'Workspace Id',
+      description: 'Workspace isolation reference for the entity record',
+      icon: 'Icon123',
+      isNullable: true,
+      isUIReadOnly: true,
     });
 
-    // ÉTAPE 4b: Champs junction Company <-> InternalEntity
-    this.logger.log(
-      'Création des champs junction Company <-> InternalEntity...',
-    );
-
-    await this.fieldMetadataService.createManyFields({
-      createFieldInputs: [
-        {
-          type: FieldMetadataType.RELATION,
-          name: 'internalEntities',
-          label: 'Internal Entities',
-          icon: 'IconBuilding',
-          objectMetadataId: companyMetadata.id,
-          relationCreationPayload: {
-            type: RelationType.ONE_TO_MANY,
-            targetFieldLabel: 'Company',
-            targetFieldIcon: 'IconBuildingSkyscraper',
-            targetObjectMetadataId: companyEntityMembershipMetadata.id,
-          },
-        },
-      ],
+    await this.ensureRelationField({
       workspaceId,
+      objectMetadataId: personMetadata.id,
+      name: 'internalEntities',
+      label: 'Internal Entities',
+      icon: 'IconBuilding',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Person',
+      targetFieldIcon: 'IconUser',
+      targetObjectMetadataId: personEntityMembershipMetadata.id,
     });
 
-    await this.fieldMetadataService.createManyFields({
-      createFieldInputs: [
-        {
-          type: FieldMetadataType.RELATION,
-          name: 'companies',
-          label: 'Companies',
-          icon: 'IconBuildingSkyscraper',
-          objectMetadataId: internalEntityMetadata.id,
-          relationCreationPayload: {
-            type: RelationType.ONE_TO_MANY,
-            targetFieldLabel: 'Internal Entity',
-            targetFieldIcon: 'IconBuilding',
-            targetObjectMetadataId: companyEntityMembershipMetadata.id,
-          },
-        },
-      ],
+    await this.ensureRelationField({
       workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'persons',
+      label: 'Persons',
+      icon: 'IconUser',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Internal Entity',
+      targetFieldIcon: 'IconBuilding',
+      targetObjectMetadataId: personEntityMembershipMetadata.id,
     });
 
-    // ÉTAPE 4c: Configuration des champs junction (junctionTargetFieldId)
-    this.logger.log('Configuration des champs junction (junctionTargetFieldId)...');
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: companyMetadata.id,
+      name: 'internalEntities',
+      label: 'Internal Entities',
+      icon: 'IconBuilding',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Company',
+      targetFieldIcon: 'IconBuildingSkyscraper',
+      targetObjectMetadataId: companyEntityMembershipMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'companies',
+      label: 'Companies',
+      icon: 'IconBuildingSkyscraper',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Internal Entity',
+      targetFieldIcon: 'IconBuilding',
+      targetObjectMetadataId: companyEntityMembershipMetadata.id,
+    });
 
     const flatMaps = await this.getFreshMaps(workspaceId);
 
-    // person.internalEntities → cible: personEntityMembership.internalEntity
     const personInternalEntitiesFieldId = this.findFieldId(
       'person',
       'internalEntities',
@@ -269,7 +219,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId,
     });
 
-    // internalEntity.persons → cible: personEntityMembership.person
     const internalEntityPersonsFieldId = this.findFieldId(
       'internalEntity',
       'persons',
@@ -292,7 +241,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId,
     });
 
-    // company.internalEntities → cible: companyEntityMembership.internalEntity
     const companyInternalEntitiesFieldId = this.findFieldId(
       'company',
       'internalEntities',
@@ -315,7 +263,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId,
     });
 
-    // internalEntity.companies → cible: companyEntityMembership.company
     const internalEntityCompaniesFieldId = this.findFieldId(
       'internalEntity',
       'companies',
@@ -338,41 +285,39 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId,
     });
 
-    // ÉTAPE 5: Champ internalEntity sur Opportunity (MANY_TO_ONE)
-    this.logger.log('Ajout du champ internalEntity sur Opportunity...');
-
-    await this.fieldMetadataService.createOneField({
-      createFieldInput: {
-        type: FieldMetadataType.RELATION,
-        name: 'internalEntity',
-        label: 'Internal Entity',
-        icon: 'IconBuilding',
-        objectMetadataId: opportunityMetadata.id,
-        relationCreationPayload: {
-          type: RelationType.MANY_TO_ONE,
-          targetFieldLabel: 'Opportunities',
-          targetFieldIcon: 'IconTargetArrow',
-          targetObjectMetadataId: internalEntityMetadata.id,
-        },
-      },
+    await this.ensureRelationField({
       workspaceId,
+      objectMetadataId: opportunityMetadata.id,
+      name: 'internalEntity',
+      label: 'Internal Entity',
+      icon: 'IconBuilding',
+      relationType: RelationType.MANY_TO_ONE,
+      targetFieldLabel: 'Opportunities',
+      targetFieldIcon: 'IconTargetArrow',
+      targetObjectMetadataId: internalEntityMetadata.id,
     });
 
-    this.logger.log('Schéma InternalEntity créé avec succès');
+    this.logger.log('Schéma InternalEntity prêt');
   }
 
   private async seedInternalEntities(
     dataSource: GlobalWorkspaceDataSource,
     schemaName: string,
+    internalEntityTableName: string,
+    workspaceId: string,
   ): Promise<void> {
     this.logger.log('Seed des 4 InternalEntity...');
 
     for (const seed of Object.values(INTERNAL_ENTITY_SEEDS)) {
       await dataSource.query(
-        `INSERT INTO "${schemaName}"."internalEntity" ("id", "name", "position", "createdAt", "updatedAt")
-         VALUES ($1, $2, 0, NOW(), NOW())
-         ON CONFLICT ("id") DO NOTHING`,
-        [seed.id, seed.name],
+        `INSERT INTO "${schemaName}"."${internalEntityTableName}" ("id", "name", "color", "workspaceId", "position", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, 0, NOW(), NOW())
+         ON CONFLICT ("id") DO UPDATE
+         SET "name" = EXCLUDED."name",
+             "color" = EXCLUDED."color",
+             "workspaceId" = EXCLUDED."workspaceId",
+             "updatedAt" = NOW()`,
+        [seed.id, seed.name, seed.color, workspaceId],
         undefined,
         { shouldBypassPermissionChecks: true },
       );
@@ -390,14 +335,24 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     this.logger.log('Backfill Opportunity → InternalEntity...');
 
     let migratedCount = 0;
+    let csvFallbackCount = 0;
+    const csvRows = await this.readOpportunityCsvRows();
 
-    for (const [opportunityId, entityId] of Object.entries(
-      OPPORTUNITY_ENTITY_MIGRATION_MAP,
-    )) {
+    for (const { opportunityId, entityName } of csvRows) {
+      const resolvedEntityId = this.resolveInternalEntityId(entityName);
+      const entityId =
+        resolvedEntityId ?? INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id;
+
+      if (!isDefined(resolvedEntityId)) {
+        csvFallbackCount += 1;
+      }
+
       const result = await dataSource.query(
         `UPDATE "${schemaName}"."opportunity"
          SET "internalEntityId" = $1
-         WHERE id = $2 AND "internalEntityId" IS NULL`,
+         WHERE id = $2
+           AND "deletedAt" IS NULL
+           AND "internalEntityId" IS DISTINCT FROM $1`,
         [entityId, opportunityId],
         undefined,
         { shouldBypassPermissionChecks: true },
@@ -406,10 +361,11 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       migratedCount += result?.[1] ?? 0;
     }
 
-    this.logger.log(`${migratedCount} opportunités migrées`);
+    this.logger.log(
+      `${migratedCount} opportunité(s) synchronisée(s) depuis le CSV (${csvRows.length} ligne(s) lues)`,
+    );
 
-    // Fallback : toute opportunité sans internalEntityId → ANGLE_INTELLIGENCE
-    const fallbackResult = await dataSource.query(
+    const orphanFallbackResult = await dataSource.query(
       `UPDATE "${schemaName}"."opportunity"
        SET "internalEntityId" = $1
        WHERE "internalEntityId" IS NULL AND "deletedAt" IS NULL`,
@@ -418,11 +374,11 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       { shouldBypassPermissionChecks: true },
     );
 
-    const fallbackCount = fallbackResult?.[1] ?? 0;
+    const orphanFallbackCount = orphanFallbackResult?.[1] ?? 0;
 
-    if (fallbackCount > 0) {
+    if (csvFallbackCount > 0 || orphanFallbackCount > 0) {
       this.logger.log(
-        `${fallbackCount} opportunité(s) assignée(s) à ANGLE_INTELLIGENCE (fallback)`,
+        `${csvFallbackCount} opportunité(s) CSV et ${orphanFallbackCount} opportunité(s) orpheline(s) assignée(s) à ANGLE_INTELLIGENCE (fallback)`,
       );
     }
   }
@@ -444,14 +400,384 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const nullCount = parseInt(result?.[0]?.count ?? '0', 10);
 
     if (nullCount > 0) {
-      this.logger.warn(
+      throw new Error(
         `${nullCount} opportunité(s) sans internalEntityId après migration`,
       );
-    } else {
-      this.logger.log(
-        'Vérification OK : toutes les opportunités ont un internalEntityId',
+    }
+
+    this.logger.log(
+      'Vérification OK : toutes les opportunités ont un internalEntityId',
+    );
+  }
+
+  private async ensureObjectMetadata({
+    workspaceId,
+    nameSingular,
+    namePlural,
+    labelSingular,
+    labelPlural,
+    icon,
+    skipNameField,
+  }: {
+    workspaceId: string;
+    nameSingular: string;
+    namePlural: string;
+    labelSingular: string;
+    labelPlural: string;
+    icon: string;
+    skipNameField?: boolean;
+  }) {
+    const existing = await this.objectMetadataService.findOneWithinWorkspace(
+      workspaceId,
+      {
+        where: { nameSingular },
+      },
+    );
+
+    if (isDefined(existing)) {
+      return existing;
+    }
+
+    this.logger.log(`Création de l'objet ${nameSingular}...`);
+
+    return this.objectMetadataService.createOneObject({
+      createObjectInput: {
+        nameSingular,
+        namePlural,
+        labelSingular,
+        labelPlural,
+        icon,
+        skipNameField,
+      },
+      workspaceId,
+    });
+  }
+
+  private async findObjectMetadataOrThrow(
+    workspaceId: string,
+    nameSingular: string,
+  ) {
+    const objectMetadata =
+      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
+        where: { nameSingular },
+      });
+
+    if (!isDefined(objectMetadata)) {
+      throw new Error(
+        `Objet standard introuvable dans le workspace: ${nameSingular}`,
       );
     }
+
+    return objectMetadata;
+  }
+
+  private async resolveObjectTableNameOrThrow(
+    workspaceId: string,
+    nameSingular: string,
+  ): Promise<string> {
+    const objectMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      nameSingular,
+    );
+
+    return computeObjectTargetTable({
+      nameSingular: objectMetadata.nameSingular,
+      isCustom: objectMetadata.isCustom,
+    });
+  }
+
+  private async ensureTextField({
+    workspaceId,
+    objectMetadataId,
+    name,
+    label,
+    description,
+    icon,
+    isNullable,
+    defaultValue,
+  }: {
+    workspaceId: string;
+    objectMetadataId: string;
+    name: string;
+    label: string;
+    description: string;
+    icon: string;
+    isNullable: boolean;
+    defaultValue?: string;
+  }): Promise<void> {
+    const existing = await this.fieldMetadataService.findOneWithinWorkspace(
+      workspaceId,
+      {
+        where: {
+          objectMetadataId,
+          name,
+        },
+      },
+    );
+
+    if (isDefined(existing)) {
+      return;
+    }
+
+    await this.fieldMetadataService.createOneField({
+      createFieldInput: {
+        type: FieldMetadataType.TEXT,
+        objectMetadataId,
+        name,
+        label,
+        description,
+        icon,
+        isActive: true,
+        isNullable,
+        isUnique: false,
+        ...(isDefined(defaultValue) ? { defaultValue } : {}),
+      },
+      workspaceId,
+    });
+  }
+
+  private async ensureUuidField({
+    workspaceId,
+    objectMetadataId,
+    name,
+    label,
+    description,
+    icon,
+    isNullable,
+    isUIReadOnly,
+  }: {
+    workspaceId: string;
+    objectMetadataId: string;
+    name: string;
+    label: string;
+    description: string;
+    icon: string;
+    isNullable: boolean;
+    isUIReadOnly: boolean;
+  }): Promise<void> {
+    const existing = await this.fieldMetadataService.findOneWithinWorkspace(
+      workspaceId,
+      {
+        where: {
+          objectMetadataId,
+          name,
+        },
+      },
+    );
+
+    if (isDefined(existing)) {
+      return;
+    }
+
+    await this.fieldMetadataService.createOneField({
+      createFieldInput: {
+        type: FieldMetadataType.UUID,
+        objectMetadataId,
+        name,
+        label,
+        description,
+        icon,
+        isActive: true,
+        isNullable,
+        isUnique: false,
+        isUIReadOnly,
+      },
+      workspaceId,
+    });
+  }
+
+  private async ensureRelationField({
+    workspaceId,
+    objectMetadataId,
+    name,
+    label,
+    icon,
+    relationType,
+    targetFieldLabel,
+    targetFieldIcon,
+    targetObjectMetadataId,
+  }: {
+    workspaceId: string;
+    objectMetadataId: string;
+    name: string;
+    label: string;
+    icon: string;
+    relationType: RelationType;
+    targetFieldLabel: string;
+    targetFieldIcon: string;
+    targetObjectMetadataId: string;
+  }): Promise<void> {
+    const existing = await this.fieldMetadataService.findOneWithinWorkspace(
+      workspaceId,
+      {
+        where: {
+          objectMetadataId,
+          name,
+        },
+      },
+    );
+
+    if (isDefined(existing)) {
+      return;
+    }
+
+    await this.fieldMetadataService.createOneField({
+      createFieldInput: {
+        type: FieldMetadataType.RELATION,
+        name,
+        label,
+        icon,
+        objectMetadataId,
+        relationCreationPayload: {
+          type: relationType,
+          targetFieldLabel,
+          targetFieldIcon,
+          targetObjectMetadataId,
+        },
+      },
+      workspaceId,
+    });
+  }
+
+  private async readOpportunityCsvRows(): Promise<OpportunityCsvRow[]> {
+    const opportunityCsvPath = await this.resolveOpportunityCsvPath();
+    const csvContent = await readFile(opportunityCsvPath, 'utf8');
+    const lines = csvContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (lines.length < 2) {
+      throw new Error(
+        `Le fichier ${opportunityCsvPath} ne contient aucune donnée exploitable`,
+      );
+    }
+
+    const [headerLine, ...dataLines] = lines;
+    const headers = this.parseCsvLine(headerLine);
+    const opportunityIdIndex = headers.indexOf('Id');
+    const entityColumnIndex = headers.indexOf('Société');
+
+    if (opportunityIdIndex === -1 || entityColumnIndex === -1) {
+      throw new Error(
+        `Colonnes obligatoires introuvables dans ${opportunityCsvPath}`,
+      );
+    }
+
+    return dataLines.map((line, index) => {
+      const values = this.parseCsvLine(line);
+      const opportunityId = values[opportunityIdIndex]?.trim();
+
+      if (!isNonEmptyString(opportunityId)) {
+        throw new Error(
+          `Ligne ${index + 2} invalide dans ${opportunityCsvPath}: Id manquant`,
+        );
+      }
+
+      return {
+        opportunityId,
+        entityName: this.parseEntityName(
+          values[entityColumnIndex] ?? '',
+          opportunityCsvPath,
+        ),
+      };
+    });
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const values: string[] = [];
+    let currentValue = '';
+    let isInsideQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const currentCharacter = line[index];
+      const nextCharacter = line[index + 1];
+
+      if (currentCharacter === '"') {
+        if (isInsideQuotes && nextCharacter === '"') {
+          currentValue += '"';
+          index += 1;
+        } else {
+          isInsideQuotes = !isInsideQuotes;
+        }
+
+        continue;
+      }
+
+      if (currentCharacter === ',' && !isInsideQuotes) {
+        values.push(currentValue);
+        currentValue = '';
+
+        continue;
+      }
+
+      currentValue += currentCharacter;
+    }
+
+    values.push(currentValue);
+
+    return values;
+  }
+
+  private async resolveOpportunityCsvPath(): Promise<string> {
+    for (const parentDepth of [0, 1, 2, 3, 4]) {
+      const opportunityCsvPath = resolve(
+        process.cwd(),
+        '../'.repeat(parentDepth),
+        'docs/opportunity.csv',
+      );
+
+      try {
+        await access(opportunityCsvPath);
+
+        return opportunityCsvPath;
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error(
+      `Fichier docs/opportunity.csv introuvable depuis ${process.cwd()}`,
+    );
+  }
+
+  private parseEntityName(
+    value: string,
+    opportunityCsvPath: string,
+  ): string | null {
+    if (!isNonEmptyString(value)) {
+      return null;
+    }
+
+    let parsedValue: unknown;
+
+    try {
+      parsedValue = JSON.parse(value);
+    } catch {
+      throw new Error(
+        `Valeur Société invalide dans ${opportunityCsvPath}: ${value}`,
+      );
+    }
+
+    if (!Array.isArray(parsedValue) || parsedValue.length === 0) {
+      return null;
+    }
+
+    const [firstEntityName] = parsedValue;
+
+    if (!isNonEmptyString(firstEntityName)) {
+      return null;
+    }
+
+    return firstEntityName;
+  }
+
+  private resolveInternalEntityId(entityName: string | null): string | null {
+    if (!isNonEmptyString(entityName)) {
+      return null;
+    }
+
+    return INTERNAL_ENTITY_SEEDS[entityName]?.id ?? null;
   }
 
   private async getFreshMaps(workspaceId: string): Promise<FlatMaps> {
@@ -468,7 +794,9 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
         },
       );
 
-    const { idByNameSingular } = buildObjectIdByNameMaps(flatObjectMetadataMaps);
+    const { idByNameSingular } = buildObjectIdByNameMaps(
+      flatObjectMetadataMaps,
+    );
 
     return {
       flatFieldMetadataMaps,

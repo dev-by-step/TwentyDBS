@@ -76,7 +76,7 @@ Lorsqu'une carte [ID] est demandée :
 
 | ID | Branche | Objectif |
 |----|---------|----------|
-| 1 | `1-init-projet` | Objet `InternalEntity` + relations M2M Person/Company + migration CSV |
+| 1 | `1-init-projet` | Init repo + `InternalEntity` + M2M + migration CSV |
 | 2 | `2-identification-entite-source` | Auto-tag à la création selon l'entité utilisateur |
 | 3 | `3-filtrage-vues-entites` | Sélecteur d'entité UI + filtre GQL global |
 | 4 | `4-gestion-contacts-multi-societes` | UI M2M sur fiches contact |

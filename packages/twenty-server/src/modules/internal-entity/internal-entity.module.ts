@@ -6,6 +6,7 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
+import { ImportCsvOpportunitiesCommand } from 'src/modules/internal-entity/commands/import-csv-opportunities.command';
 
 @Module({
   imports: [
@@ -14,6 +15,6 @@ import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/command
     FieldMetadataModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],
-  providers: [InitInternalEntitiesCommand],
+  providers: [InitInternalEntitiesCommand, ImportCsvOpportunitiesCommand],
 })
 export class InternalEntityModule {}
