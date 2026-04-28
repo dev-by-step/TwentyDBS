@@ -94,7 +94,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           labelSingular: 'Internal Entity',
           labelPlural: 'Internal Entities',
           icon: 'IconBuilding',
-          isLabelSyncedWithName: false,
         },
         workspaceId,
       });
@@ -408,6 +407,24 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     }
 
     this.logger.log(`${migratedCount} opportunités migrées`);
+
+    // Fallback : toute opportunité sans internalEntityId → ANGLE_INTELLIGENCE
+    const fallbackResult = await dataSource.query(
+      `UPDATE "${schemaName}"."opportunity"
+       SET "internalEntityId" = $1
+       WHERE "internalEntityId" IS NULL AND "deletedAt" IS NULL`,
+      [INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+
+    const fallbackCount = fallbackResult?.[1] ?? 0;
+
+    if (fallbackCount > 0) {
+      this.logger.log(
+        `${fallbackCount} opportunité(s) assignée(s) à ANGLE_INTELLIGENCE (fallback)`,
+      );
+    }
   }
 
   private async verifyMigration(
