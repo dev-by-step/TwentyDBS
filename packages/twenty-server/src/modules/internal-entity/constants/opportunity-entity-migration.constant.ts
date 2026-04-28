@@ -1,0 +1,16 @@
+import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+
+// Mapping UUID opportunité → UUID InternalEntity
+// Source : docs/opportunity.csv
+export const OPPORTUNITY_ENTITY_MIGRATION_MAP: Record<string, string> = {
+  '510dc787-4e71-46d5-bdf2-28676e5ecfdf': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  '497ff55a-3288-4c04-b07a-6236dfb0e9db': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  '3acd130d-2e00-407c-9dcd-7ea6aa2a1da6': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  'b45bba5c-2308-4c58-b3ef-0c31c5f808d7': INTERNAL_ENTITY_SEEDS.DEVBYSTEP.id,
+  'f0688e4b-e8f1-4e79-9830-eb8a0bdeeff0': INTERNAL_ENTITY_SEEDS.ALLSENSIA.id,
+  'c191eba1-4707-41f0-9ff4-165aa15049b3': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  '3a9467a9-22b7-48e6-9937-472d29317580': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  '3d57ac11-62f1-421c-a5f7-aa5559aa58f3': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  'bf23a382-02e3-4108-82b5-04fd6e243a05': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+  '4c615043-745c-4456-8fa9-be7194d8d006': INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+};

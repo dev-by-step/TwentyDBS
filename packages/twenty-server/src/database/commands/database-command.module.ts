@@ -42,6 +42,7 @@ import { WorkspaceManagerModule } from 'src/engine/workspace-manager/workspace-m
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { WorkspaceVersionModule } from 'src/engine/workspace-manager/workspace-version/workspace-version.module';
 import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-event-import-manager/calendar-event-import-manager.module';
+import { InternalEntityModule } from 'src/modules/internal-entity/internal-entity.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
@@ -82,6 +83,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     WorkspaceCacheModule,
     WorkspaceVersionModule,
     UpgradeModule,
+    InternalEntityModule,
   ],
   providers: [
     DataSeedWorkspaceCommand,
