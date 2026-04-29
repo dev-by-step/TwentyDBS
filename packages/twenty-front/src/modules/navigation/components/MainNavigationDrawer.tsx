@@ -1,5 +1,6 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { NavigationDrawerAiChatContent } from '@/ai/components/NavigationDrawerAiChatContent';
+import { EntitySelector } from '@/entity-filter/components/entity-selector/entity-selector.component';
 import { MainNavigationDrawerNavigationContent } from '@/navigation/components/MainNavigationDrawerNavigationContent';
 import { MainNavigationDrawerTabsRow } from '@/navigation/components/MainNavigationDrawerTabsRow';
 import { NavigationDrawer } from '@/ui/navigation/navigation-drawer/components/NavigationDrawer';
@@ -22,6 +23,7 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
     >
       <NavigationDrawerFixedContent>
         <MainNavigationDrawerTabsRow />
+        <EntitySelector />
       </NavigationDrawerFixedContent>
 
       <NavigationDrawerScrollableContent>

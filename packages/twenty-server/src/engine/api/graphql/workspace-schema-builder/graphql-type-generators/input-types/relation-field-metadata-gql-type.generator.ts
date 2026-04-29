@@ -19,6 +19,7 @@ import {
 import { computeObjectMetadataInputTypeKey } from 'src/engine/api/graphql/workspace-schema-builder/utils/compute-stored-gql-type-key-utils/compute-object-metadata-input-type.util';
 import { computeRelationConnectInputTypeKey } from 'src/engine/api/graphql/workspace-schema-builder/utils/compute-stored-gql-type-key-utils/compute-relation-connect-input-type-key.util';
 import { extractGraphQLRelationFieldNames } from 'src/engine/api/graphql/workspace-schema-builder/utils/extract-graphql-relation-field-names.util';
+import { computeMorphOrRelationFieldJoinColumnName } from 'src/engine/metadata-modules/field-metadata/utils/compute-morph-or-relation-field-join-column-name.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 
@@ -84,8 +85,40 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
     >;
     typeOptions: { settings?: FlatFieldMetadata['settings'] };
   }) {
-    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
-      return {};
+    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
+      if (
+        !(
+          'junctionTargetFieldId' in fieldMetadata.settings &&
+          typeof fieldMetadata.settings.junctionTargetFieldId === 'string'
+        )
+      ) {
+        return {};
+      }
+
+      const type = this.typeMapperService.mapToFilterType(
+        fieldMetadata.type,
+        typeOptions,
+      );
+
+      if (!isDefined(type)) {
+        const message = `Could not find a GraphQL input type for ${type} field metadata`;
+
+        this.logger.error(message, {
+          type,
+          typeOptions,
+        });
+        throw new Error(message);
+      }
+
+      return {
+        [computeMorphOrRelationFieldJoinColumnName({
+          name: fieldMetadata.name,
+        })]: {
+          type,
+          description: fieldMetadata.description,
+        },
+      };
+    }
 
     const { joinColumnName } = extractGraphQLRelationFieldNames(fieldMetadata);
 

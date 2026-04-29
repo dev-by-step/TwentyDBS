@@ -44,6 +44,7 @@ export class GraphqlQueryParser {
 
     this.filterConditionParser = new GraphqlQueryFilterConditionParser(
       this.flatObjectMetadata,
+      this.flatObjectMetadataMaps,
       this.flatFieldMetadataMaps,
     );
     this.orderFieldParser = new GraphqlQueryOrderFieldParser(

@@ -67,6 +67,7 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     recordFilter,
     fieldParser: new GraphqlQueryFilterFieldParser(
       objectMetadata,
+      internalContext.flatObjectMetadataMaps,
       internalContext.flatFieldMetadataMaps,
     ),
     useDirectTableReference: isUpdateOrDeleteQuery,

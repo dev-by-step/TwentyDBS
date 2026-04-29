@@ -18,6 +18,7 @@ export const USER_QUERY_FRAGMENT = gql`
     firstName
     lastName
     email
+    entityId
     hasPassword
     canAccessFullAdminPanel
     canImpersonate
