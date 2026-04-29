@@ -1,8 +1,3 @@
-import { access, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
-import { isNonEmptyString } from '@sniptt/guards';
-
 import { Command } from 'nest-commander';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
@@ -18,11 +13,21 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
-import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import {
+  INTERNAL_ENTITY_SEEDS,
+  type InternalEntitySeed,
+} from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import {
+  buildWorkspaceSqlTableName,
+  INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
+  resolveInternalEntitySeedId,
+  resolveObjectTableNameOrThrow,
+  validateUuidOrThrow,
+} from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 type FlatMaps = {
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
@@ -30,15 +35,15 @@ type FlatMaps = {
   objectIdByName: Record<string, string>;
 };
 
-type OpportunityCsvRow = {
+type OpportunityInternalEntityMapping = {
   opportunityId: string;
-  entityName: string | null;
+  internalEntityId: string;
 };
 
 @Command({
   name: 'init-internal-entities',
   description:
-    'Crée InternalEntity, les relations M2M Person/Company, seed les 4 entités, migre les opportunités existantes',
+    'Crée InternalEntity, les relations M2M Person/Company, seed les entités internes, migre les opportunités existantes',
 })
 export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
@@ -46,6 +51,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly importCsvOpportunitiesParserService: ImportCsvOpportunitiesParserService,
   ) {
     super(workspaceIteratorService);
   }
@@ -62,22 +68,39 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
-    const schemaName = getWorkspaceSchemaName(workspaceId);
-
-    await this.ensureMetadataSchema(workspaceId);
-    const internalEntityTableName = await this.resolveObjectTableNameOrThrow(
+    const validatedWorkspaceId = validateUuidOrThrow(
       workspaceId,
-      'internalEntity',
+      'workspaceId',
+    );
+    const schemaName = getWorkspaceSchemaName(validatedWorkspaceId);
+
+    await this.ensureMetadataSchema(validatedWorkspaceId);
+    const internalEntityTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'internalEntity',
+    });
+    const opportunityTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'opportunity',
+    });
+    const internalEntitySqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      internalEntityTableName,
+    );
+    const opportunitySqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      opportunityTableName,
     );
 
     await this.seedInternalEntities(
       dataSource,
-      schemaName,
-      internalEntityTableName,
-      workspaceId,
+      internalEntitySqlTable,
+      validatedWorkspaceId,
     );
-    await this.backfillOpportunities(dataSource, schemaName);
-    await this.verifyMigration(dataSource, schemaName);
+    await this.backfillOpportunities(dataSource, opportunitySqlTable);
+    await this.verifyMigration(dataSource, opportunitySqlTable);
   }
 
   private async ensureMetadataSchema(workspaceId: string): Promise<void> {
@@ -302,106 +325,178 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
 
   private async seedInternalEntities(
     dataSource: GlobalWorkspaceDataSource,
-    schemaName: string,
-    internalEntityTableName: string,
+    internalEntitySqlTable: string,
     workspaceId: string,
   ): Promise<void> {
-    this.logger.log('Seed des 4 InternalEntity...');
+    this.logger.log('Seed des InternalEntity...');
 
-    for (const seed of Object.values(INTERNAL_ENTITY_SEEDS)) {
-      await dataSource.query(
-        `INSERT INTO "${schemaName}"."${internalEntityTableName}" ("id", "name", "color", "workspaceId", "position", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, 0, NOW(), NOW())
-         ON CONFLICT ("id") DO UPDATE
-         SET "name" = EXCLUDED."name",
-             "color" = EXCLUDED."color",
-             "workspaceId" = EXCLUDED."workspaceId",
-             "updatedAt" = NOW()`,
-        [seed.id, seed.name, seed.color, workspaceId],
-        undefined,
-        { shouldBypassPermissionChecks: true },
-      );
+    const seeds = Object.values(INTERNAL_ENTITY_SEEDS);
+
+    if (seeds.length === 0) {
+      this.logger.warn('Aucune InternalEntity configurée dans les seeds');
+
+      return;
     }
 
-    this.logger.log(
-      `${Object.keys(INTERNAL_ENTITY_SEEDS).length} InternalEntity seedées`,
+    const { valuesSql, parameters } = this.buildInternalEntitySeedBatch(
+      seeds,
+      workspaceId,
     );
+
+    await this.runAdminQuery(
+      dataSource,
+      `INSERT INTO ${internalEntitySqlTable} ("id", "name", "color", "workspaceId", "position", "createdAt", "updatedAt")
+       VALUES ${valuesSql}
+       ON CONFLICT ("id") DO UPDATE
+       SET "name" = EXCLUDED."name",
+           "color" = EXCLUDED."color",
+           "workspaceId" = EXCLUDED."workspaceId",
+           "updatedAt" = NOW()`,
+      parameters,
+    );
+
+    this.logger.log(`${seeds.length} InternalEntity seedées`);
+  }
+
+  private buildInternalEntitySeedBatch(
+    seeds: InternalEntitySeed[],
+    workspaceId: string,
+  ): {
+    valuesSql: string;
+    parameters: string[];
+  } {
+    const parameters: string[] = [];
+
+    const valuesSql = seeds
+      .map((seed, index) => {
+        const offset = index * 4;
+
+        parameters.push(seed.id, seed.name, seed.color, workspaceId);
+
+        return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${
+          offset + 4
+        }, 0, NOW(), NOW())`;
+      })
+      .join(', ');
+
+    return { valuesSql, parameters };
   }
 
   private async backfillOpportunities(
     dataSource: GlobalWorkspaceDataSource,
-    schemaName: string,
+    opportunitySqlTable: string,
   ): Promise<void> {
     this.logger.log('Backfill Opportunity → InternalEntity...');
 
-    let migratedCount = 0;
-    let csvFallbackCount = 0;
-    const csvRows = await this.readOpportunityCsvRows();
+    let skippedCount = 0;
+    const unresolvedEntityNames = new Set<string>();
+    const opportunityInternalEntityMappings: OpportunityInternalEntityMapping[] =
+      [];
+    const csvRows =
+      await this.importCsvOpportunitiesParserService.readCsvOpportunities();
 
-    for (const { opportunityId, entityName } of csvRows) {
-      const resolvedEntityId = this.resolveInternalEntityId(entityName);
-      const entityId =
-        resolvedEntityId ?? INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id;
+    for (const row of csvRows) {
+      const entityId = resolveInternalEntitySeedId(row.entityName);
 
-      if (!isDefined(resolvedEntityId)) {
-        csvFallbackCount += 1;
+      if (!isDefined(entityId)) {
+        skippedCount += 1;
+        unresolvedEntityNames.add(row.entityName ?? '<empty>');
+
+        continue;
       }
 
-      const result = await dataSource.query(
-        `UPDATE "${schemaName}"."opportunity"
-         SET "internalEntityId" = $1
-         WHERE id = $2
-           AND "deletedAt" IS NULL
-           AND "internalEntityId" IS DISTINCT FROM $1`,
-        [entityId, opportunityId],
-        undefined,
-        { shouldBypassPermissionChecks: true },
-      );
-
-      migratedCount += result?.[1] ?? 0;
+      opportunityInternalEntityMappings.push({
+        opportunityId: row.id,
+        internalEntityId: entityId,
+      });
     }
 
+    const migratedCount =
+      opportunityInternalEntityMappings.length > 0
+        ? await this.updateOpportunitiesInternalEntity(
+            dataSource,
+            opportunitySqlTable,
+            opportunityInternalEntityMappings,
+          )
+        : 0;
+
     this.logger.log(
-      `${migratedCount} opportunité(s) synchronisée(s) depuis le CSV (${csvRows.length} ligne(s) lues)`,
+      `${migratedCount} opportunité(s) synchronisée(s) depuis le CSV (${csvRows.length} ligne(s) lues, ${skippedCount} ignorée(s))`,
     );
 
-    const orphanFallbackResult = await dataSource.query(
-      `UPDATE "${schemaName}"."opportunity"
-       SET "internalEntityId" = $1
-       WHERE "internalEntityId" IS NULL AND "deletedAt" IS NULL`,
-      [INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id],
-      undefined,
-      { shouldBypassPermissionChecks: true },
-    );
-
-    const orphanFallbackCount = orphanFallbackResult?.[1] ?? 0;
-
-    if (csvFallbackCount > 0 || orphanFallbackCount > 0) {
-      this.logger.log(
-        `${csvFallbackCount} opportunité(s) CSV et ${orphanFallbackCount} opportunité(s) orpheline(s) assignée(s) à ANGLE_INTELLIGENCE (fallback)`,
+    if (unresolvedEntityNames.size > 0) {
+      this.logger.warn(
+        `InternalEntity inconnue(s) dans le CSV: ${[
+          ...unresolvedEntityNames,
+        ].join(
+          ', ',
+        )}. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.`,
       );
     }
   }
 
+  private async updateOpportunitiesInternalEntity(
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    mappings: OpportunityInternalEntityMapping[],
+  ): Promise<number> {
+    const { valuesSql, parameters } =
+      this.buildOpportunityInternalEntityMappingsBatch(mappings);
+
+    const updatedRows = await this.runAdminQuery<Array<{ id: string }>>(
+      dataSource,
+      `UPDATE ${opportunitySqlTable} AS opportunity
+       SET "internalEntityId" = csv_values.internal_entity_id,
+           "updatedAt" = NOW()
+       FROM (VALUES ${valuesSql}) AS csv_values(id, internal_entity_id)
+       WHERE opportunity.id = csv_values.id
+         AND opportunity."deletedAt" IS NULL
+         AND opportunity."internalEntityId" IS DISTINCT FROM csv_values.internal_entity_id
+       RETURNING opportunity.id`,
+      parameters,
+    );
+
+    return updatedRows.length;
+  }
+
+  private buildOpportunityInternalEntityMappingsBatch(
+    mappings: OpportunityInternalEntityMapping[],
+  ): {
+    valuesSql: string;
+    parameters: string[];
+  } {
+    const parameters: string[] = [];
+
+    const valuesSql = mappings
+      .map((mapping, index) => {
+        const offset = index * 2;
+
+        parameters.push(mapping.opportunityId, mapping.internalEntityId);
+
+        return `($${offset + 1}::uuid, $${offset + 2}::uuid)`;
+      })
+      .join(', ');
+
+    return { valuesSql, parameters };
+  }
+
   private async verifyMigration(
     dataSource: GlobalWorkspaceDataSource,
-    schemaName: string,
+    opportunitySqlTable: string,
   ): Promise<void> {
-    const result = await dataSource.query<{ count: string }[]>(
+    const result = await this.runAdminQuery<Array<{ count: string }>>(
+      dataSource,
       `SELECT COUNT(*)::text AS count
-       FROM "${schemaName}"."opportunity"
+       FROM ${opportunitySqlTable}
        WHERE "internalEntityId" IS NULL
          AND "deletedAt" IS NULL`,
-      undefined,
-      undefined,
-      { shouldBypassPermissionChecks: true },
     );
 
     const nullCount = parseInt(result?.[0]?.count ?? '0', 10);
 
     if (nullCount > 0) {
       throw new Error(
-        `${nullCount} opportunité(s) sans internalEntityId après migration`,
+        `${nullCount} opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.`,
       );
     }
 
@@ -469,21 +564,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     }
 
     return objectMetadata;
-  }
-
-  private async resolveObjectTableNameOrThrow(
-    workspaceId: string,
-    nameSingular: string,
-  ): Promise<string> {
-    const objectMetadata = await this.findObjectMetadataOrThrow(
-      workspaceId,
-      nameSingular,
-    );
-
-    return computeObjectTargetTable({
-      nameSingular: objectMetadata.nameSingular,
-      isCustom: objectMetadata.isCustom,
-    });
   }
 
   private async ensureTextField({
@@ -639,147 +719,6 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     });
   }
 
-  private async readOpportunityCsvRows(): Promise<OpportunityCsvRow[]> {
-    const opportunityCsvPath = await this.resolveOpportunityCsvPath();
-    const csvContent = await readFile(opportunityCsvPath, 'utf8');
-    const lines = csvContent
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (lines.length < 2) {
-      throw new Error(
-        `Le fichier ${opportunityCsvPath} ne contient aucune donnée exploitable`,
-      );
-    }
-
-    const [headerLine, ...dataLines] = lines;
-    const headers = this.parseCsvLine(headerLine);
-    const opportunityIdIndex = headers.indexOf('Id');
-    const entityColumnIndex = headers.indexOf('Société');
-
-    if (opportunityIdIndex === -1 || entityColumnIndex === -1) {
-      throw new Error(
-        `Colonnes obligatoires introuvables dans ${opportunityCsvPath}`,
-      );
-    }
-
-    return dataLines.map((line, index) => {
-      const values = this.parseCsvLine(line);
-      const opportunityId = values[opportunityIdIndex]?.trim();
-
-      if (!isNonEmptyString(opportunityId)) {
-        throw new Error(
-          `Ligne ${index + 2} invalide dans ${opportunityCsvPath}: Id manquant`,
-        );
-      }
-
-      return {
-        opportunityId,
-        entityName: this.parseEntityName(
-          values[entityColumnIndex] ?? '',
-          opportunityCsvPath,
-        ),
-      };
-    });
-  }
-
-  private parseCsvLine(line: string): string[] {
-    const values: string[] = [];
-    let currentValue = '';
-    let isInsideQuotes = false;
-
-    for (let index = 0; index < line.length; index += 1) {
-      const currentCharacter = line[index];
-      const nextCharacter = line[index + 1];
-
-      if (currentCharacter === '"') {
-        if (isInsideQuotes && nextCharacter === '"') {
-          currentValue += '"';
-          index += 1;
-        } else {
-          isInsideQuotes = !isInsideQuotes;
-        }
-
-        continue;
-      }
-
-      if (currentCharacter === ',' && !isInsideQuotes) {
-        values.push(currentValue);
-        currentValue = '';
-
-        continue;
-      }
-
-      currentValue += currentCharacter;
-    }
-
-    values.push(currentValue);
-
-    return values;
-  }
-
-  private async resolveOpportunityCsvPath(): Promise<string> {
-    for (const parentDepth of [0, 1, 2, 3, 4]) {
-      const opportunityCsvPath = resolve(
-        process.cwd(),
-        '../'.repeat(parentDepth),
-        'docs/opportunity.csv',
-      );
-
-      try {
-        await access(opportunityCsvPath);
-
-        return opportunityCsvPath;
-      } catch {
-        continue;
-      }
-    }
-
-    throw new Error(
-      `Fichier docs/opportunity.csv introuvable depuis ${process.cwd()}`,
-    );
-  }
-
-  private parseEntityName(
-    value: string,
-    opportunityCsvPath: string,
-  ): string | null {
-    if (!isNonEmptyString(value)) {
-      return null;
-    }
-
-    let parsedValue: unknown;
-
-    try {
-      parsedValue = JSON.parse(value);
-    } catch {
-      throw new Error(
-        `Valeur Société invalide dans ${opportunityCsvPath}: ${value}`,
-      );
-    }
-
-    if (!Array.isArray(parsedValue) || parsedValue.length === 0) {
-      return null;
-    }
-
-    const [firstEntityName] = parsedValue;
-
-    if (!isNonEmptyString(firstEntityName)) {
-      return null;
-    }
-
-    return firstEntityName;
-  }
-
-  private resolveInternalEntityId(entityName: string | null): string | null {
-    if (!isNonEmptyString(entityName)) {
-      return null;
-    }
-
-    return INTERNAL_ENTITY_SEEDS[entityName]?.id ?? null;
-  }
-
   private async getFreshMaps(workspaceId: string): Promise<FlatMaps> {
     await this.flatEntityMapsCacheService.invalidateFlatEntityMaps({
       workspaceId,
@@ -837,5 +776,18 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     }
 
     throw new Error(`Champ introuvable: ${objectName}.${fieldName}`);
+  }
+
+  private async runAdminQuery<T>(
+    dataSource: GlobalWorkspaceDataSource,
+    query: string,
+    parameters: unknown[] = [],
+  ): Promise<T> {
+    return dataSource.query<T>(
+      query,
+      parameters,
+      undefined,
+      INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
+    );
   }
 }
