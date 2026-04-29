@@ -7,6 +7,7 @@ export const fromUserEntityToFlat = (entity: UserEntity): FlatUser => ({
   lastName: entity.lastName,
   email: entity.email,
   defaultAvatarUrl: entity.defaultAvatarUrl,
+  entityId: entity.entityId,
   isEmailVerified: entity.isEmailVerified,
   disabled: entity.disabled,
   canImpersonate: entity.canImpersonate,
