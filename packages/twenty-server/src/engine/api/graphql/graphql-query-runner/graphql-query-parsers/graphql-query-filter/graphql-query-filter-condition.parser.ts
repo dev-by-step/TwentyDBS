@@ -15,11 +15,13 @@ export class GraphqlQueryFilterConditionParser {
 
   constructor(
     flatObjectMetadata: FlatObjectMetadata,
+    flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
   ) {
     this.flatObjectMetadata = flatObjectMetadata;
     this.queryFilterFieldParser = new GraphqlQueryFilterFieldParser(
       this.flatObjectMetadata,
+      flatObjectMetadataMaps,
       flatFieldMetadataMaps,
     );
   }

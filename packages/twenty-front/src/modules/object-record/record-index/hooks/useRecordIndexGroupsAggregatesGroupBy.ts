@@ -1,4 +1,6 @@
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { EMPTY_QUERY } from '@/object-record/constants/EmptyQuery';
@@ -34,6 +36,7 @@ export const useRecordIndexGroupsAggregatesGroupBy = ({
   recordIndexGroupAggregateFieldMetadataItem: Nullable<FieldMetadataItem>;
   recordIndexGroupAggregateOperation: ExtendedAggregateOperations;
 }) => {
+  const { selectedEntityId } = useEntityFilter();
   const apolloCoreClient = useApolloCoreClient();
 
   const currentRecordFilterGroups = useAtomComponentStateValue(
@@ -81,6 +84,11 @@ export const useRecordIndexGroupsAggregatesGroupBy = ({
       fields: objectMetadataItem.fields,
       filterValue: anyFieldFilterValue,
     });
+  const entityScopedFilter = buildEntityScopedRecordFilter({
+    objectNameSingular: objectMetadataItem.nameSingular,
+    filter: { ...requestFilters, ...anyFieldFilter },
+    selectedEntityId,
+  });
 
   const objectPermissions = useObjectPermissionsForObject(
     objectMetadataItem.id,
@@ -99,7 +107,7 @@ export const useRecordIndexGroupsAggregatesGroupBy = ({
       skip ||
       !isDefined(recordAggregateGqlField),
     variables: {
-      filter: { ...requestFilters, ...anyFieldFilter },
+      filter: entityScopedFilter,
       groupBy: {
         ...groupByGqlInput,
       },

@@ -3,6 +3,8 @@ import { useQuery } from '@apollo/client/react';
 import { useEffect } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type ObjectMetadataItemIdentifier } from '@/object-metadata/types/ObjectMetadataItemIdentifier';
@@ -46,6 +48,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   limit = QUERY_DEFAULT_LIMIT_RECORDS,
   withSoftDeleted = false,
 }: UseFindManyRecordsParams<T>) => {
+  const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
@@ -70,10 +73,15 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
         and: [...(filter ? [filter] : []), softDeleteFilter],
       }
     : filter;
+  const entityScopedFilter = buildEntityScopedRecordFilter({
+    objectNameSingular,
+    filter: withSoftDeleteFilter,
+    selectedEntityId,
+  });
 
   const queryIdentifier = getQueryIdentifier({
     objectNameSingular,
-    filter: withSoftDeleteFilter,
+    filter: entityScopedFilter,
     orderBy,
     limit,
   });
@@ -94,7 +102,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     useQuery<RecordGqlOperationFindManyResult>(findManyRecordsQuery, {
       skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
       variables: {
-        filter: withSoftDeleteFilter,
+        filter: entityScopedFilter,
         orderBy,
         lastCursor: cursorFilter?.cursor ?? undefined,
         limit,
@@ -119,7 +127,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   const { fetchMoreRecords, records, hasNextPage } =
     useFetchMoreRecordsWithPagination<T>({
       objectNameSingular,
-      filter: withSoftDeleteFilter,
+      filter: entityScopedFilter,
       orderBy,
       limit,
       fetchMore,

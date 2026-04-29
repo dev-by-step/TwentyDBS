@@ -1,6 +1,8 @@
 import { useLazyQuery } from '@apollo/client/react';
 import { useCallback, useMemo } from 'react';
 
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { getRecordsFromRecordConnection } from '@/object-record/cache/utils/getRecordsFromRecordConnection';
@@ -31,6 +33,7 @@ export const useLazyFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   recordGqlFields,
   fetchPolicy = 'cache-first',
 }: UseLazyFindManyRecordsParams<T>) => {
+  const { selectedEntityId } = useEntityFilter();
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -47,9 +50,15 @@ export const useLazyFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     objectMetadataItem,
   });
 
-  const queryIdentifier = getQueryIdentifier({
+  const entityScopedFilter = buildEntityScopedRecordFilter({
     objectNameSingular,
     filter,
+    selectedEntityId,
+  });
+
+  const queryIdentifier = getQueryIdentifier({
+    objectNameSingular,
+    filter: entityScopedFilter,
     orderBy,
     limit,
   });
@@ -62,11 +71,11 @@ export const useLazyFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
 
   const defaultVariables = useMemo(
     () => ({
-      filter,
+      filter: entityScopedFilter,
       limit,
       orderBy,
     }),
-    [filter, limit, orderBy],
+    [entityScopedFilter, limit, orderBy],
   );
 
   const [findManyRecords, { data, error, fetchMore }] =
@@ -77,7 +86,7 @@ export const useLazyFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
 
   const { fetchMoreRecordsLazy } = useLazyFetchMoreRecordsWithPagination<T>({
     objectNameSingular,
-    filter,
+    filter: entityScopedFilter,
     orderBy,
     limit,
     fetchMore,
