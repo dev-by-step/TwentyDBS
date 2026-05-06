@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+export type InternalEntityMembershipInsertMapping = {
+  recordId: string;
+  internalEntityId: string;
+};
+
 export const buildMembershipInsertBatch = ({
   recordIds,
   internalEntityId,
@@ -16,6 +21,30 @@ export const buildMembershipInsertBatch = ({
       const offset = index * 3;
 
       parameters.push(randomUUID(), recordId, internalEntityId);
+
+      return `($${offset + 1}::uuid, $${offset + 2}::uuid, $${
+        offset + 3
+      }::uuid)`;
+    })
+    .join(', ');
+
+  return { valuesSql, parameters };
+};
+
+export const buildMembershipInsertBatchFromMappings = ({
+  mappings,
+}: {
+  mappings: InternalEntityMembershipInsertMapping[];
+}): {
+  valuesSql: string;
+  parameters: string[];
+} => {
+  const parameters: string[] = [];
+  const valuesSql = mappings
+    .map((mapping, index) => {
+      const offset = index * 3;
+
+      parameters.push(randomUUID(), mapping.recordId, mapping.internalEntityId);
 
       return `($${offset + 1}::uuid, $${offset + 2}::uuid, $${
         offset + 3

@@ -9,6 +9,7 @@ import {
 import { isDefined } from 'twenty-shared/utils';
 
 import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
+import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
 
 import { validateAndTransformOperatorAndValue } from 'src/engine/api/common/common-args-processors/filter-arg-processor/utils/validate-and-transform-operator-and-value.util';
 import {
@@ -46,6 +47,11 @@ export class FilterArgProcessorService {
         flatFieldMetadataMaps,
         flatObjectMetadata,
       );
+    const oneToManyRelationFieldIdByFilterKey =
+      this.buildOneToManyRelationFieldIdByFilterKey(
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      );
 
     return this.validateAndTransformFilter(
       filter,
@@ -53,6 +59,7 @@ export class FilterArgProcessorService {
       flatFieldMetadataMaps,
       fieldIdByName,
       fieldIdByJoinColumnName,
+      oneToManyRelationFieldIdByFilterKey,
     ) as T;
   }
 
@@ -62,6 +69,7 @@ export class FilterArgProcessorService {
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
     fieldIdByName: Record<string, string>,
     fieldIdByJoinColumnName: Record<string, string>,
+    oneToManyRelationFieldIdByFilterKey: Record<string, string>,
   ): ObjectRecordFilter {
     const transformedFilter: ObjectRecordFilter = {};
 
@@ -75,6 +83,7 @@ export class FilterArgProcessorService {
               flatFieldMetadataMaps,
               fieldIdByName,
               fieldIdByJoinColumnName,
+              oneToManyRelationFieldIdByFilterKey,
             ),
         );
         continue;
@@ -87,6 +96,7 @@ export class FilterArgProcessorService {
           flatFieldMetadataMaps,
           fieldIdByName,
           fieldIdByJoinColumnName,
+          oneToManyRelationFieldIdByFilterKey,
         );
         continue;
       }
@@ -98,6 +108,7 @@ export class FilterArgProcessorService {
         flatFieldMetadataMaps,
         fieldIdByName,
         fieldIdByJoinColumnName,
+        oneToManyRelationFieldIdByFilterKey,
       );
     }
 
@@ -111,10 +122,16 @@ export class FilterArgProcessorService {
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
     fieldIdByName: Record<string, string>,
     fieldIdByJoinColumnName: Record<string, string>,
+    oneToManyRelationFieldIdByFilterKey: Record<string, string>,
   ): Record<string, unknown> {
     const resolvedByName = fieldIdByName[key];
     const resolvedByJoinColumn = fieldIdByJoinColumnName[key];
-    const fieldMetadataId = resolvedByName ?? resolvedByJoinColumn;
+    const resolvedByOneToManyRelationFilterKey =
+      oneToManyRelationFieldIdByFilterKey[key];
+    const fieldMetadataId =
+      resolvedByName ??
+      resolvedByJoinColumn ??
+      resolvedByOneToManyRelationFilterKey;
 
     if (!isDefined(fieldMetadataId)) {
       const nameSingular = flatObjectMetadata.nameSingular;
@@ -187,6 +204,31 @@ export class FilterArgProcessorService {
       filterValue,
       fieldMetadata,
     );
+  }
+
+  private buildOneToManyRelationFieldIdByFilterKey(
+    flatObjectMetadata: FlatObjectMetadata,
+    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  ): Record<string, string> {
+    return getFlatFieldsFromFlatObjectMetadata(
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    ).reduce<Record<string, string>>((acc, fieldMetadata) => {
+      if (
+        isFlatFieldMetadataOfType(fieldMetadata, FieldMetadataType.RELATION) &&
+        fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY &&
+        'junctionTargetFieldId' in fieldMetadata.settings &&
+        typeof fieldMetadata.settings.junctionTargetFieldId === 'string'
+      ) {
+        acc[
+          computeMorphOrRelationFieldJoinColumnName({
+            name: fieldMetadata.name,
+          })
+        ] = fieldMetadata.id;
+      }
+
+      return acc;
+    }, {});
   }
 
   private validateAndTransformCompositeFieldFilter(
