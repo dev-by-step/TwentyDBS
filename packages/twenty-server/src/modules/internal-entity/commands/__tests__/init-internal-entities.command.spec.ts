@@ -27,6 +27,17 @@ type InitInternalEntitiesCommandInternals = {
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
   ) => Promise<void>;
+  backfillCompanyMembershipsFromOpportunities: (
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    companyEntityMembershipSqlTable: string,
+  ) => Promise<void>;
+  backfillPersonMembershipsFromCompanies: (
+    dataSource: GlobalWorkspaceDataSource,
+    personSqlTable: string,
+    companyEntityMembershipSqlTable: string,
+    personEntityMembershipSqlTable: string,
+  ) => Promise<void>;
 };
 
 const setCommandLogger = (command: unknown): MockLogger => {
@@ -162,4 +173,99 @@ describe('InitInternalEntitiesCommand', () => {
     );
   });
 
+  it('should backfill company memberships from tagged opportunities', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+    const companyId = faker.string.uuid();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([
+        {
+          recordId: companyId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await commandInternals.backfillCompanyMembershipsFromOpportunities(
+      dataSource,
+      '"workspace_abc"."opportunity"',
+      '"workspace_abc"."companyEntityMembership"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+
+    const [selectQuery, selectParameters, selectQueryRunner, selectOptions] =
+      dataSourceMock.query.mock.calls[0];
+
+    expect(selectQuery).toContain('SELECT DISTINCT opportunity."companyId"');
+    expect(selectQuery).toContain('opportunity."internalEntityId"');
+    expect(selectParameters).toStrictEqual([]);
+    expect(selectQueryRunner).toBeUndefined();
+    expect(selectOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+
+    const [insertQuery, insertParameters, insertQueryRunner, insertOptions] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(insertQuery).toContain(
+      'INSERT INTO "workspace_abc"."companyEntityMembership"',
+    );
+    expect(insertQuery).toContain('"companyId"');
+    expect(insertQuery).toContain('source.internal_entity_id');
+    expect(insertParameters).toHaveLength(3);
+    expect(insertParameters[1]).toBe(companyId);
+    expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
+    expect(insertQueryRunner).toBeUndefined();
+    expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 membership(s) candidat(s) traité(s) pour Company <- Opportunity',
+    );
+  });
+
+  it('should backfill person memberships from tagged companies', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+    const personId = faker.string.uuid();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([
+        {
+          recordId: personId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await commandInternals.backfillPersonMembershipsFromCompanies(
+      dataSource,
+      '"workspace_abc"."person"',
+      '"workspace_abc"."companyEntityMembership"',
+      '"workspace_abc"."personEntityMembership"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+
+    const [selectQuery] = dataSourceMock.query.mock.calls[0];
+
+    expect(selectQuery).toContain('SELECT DISTINCT person."id" AS "recordId"');
+    expect(selectQuery).toContain(
+      'INNER JOIN "workspace_abc"."companyEntityMembership" company_membership',
+    );
+
+    const [insertQuery, insertParameters, insertQueryRunner, insertOptions] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(insertQuery).toContain(
+      'INSERT INTO "workspace_abc"."personEntityMembership"',
+    );
+    expect(insertQuery).toContain('"personId"');
+    expect(insertParameters).toHaveLength(3);
+    expect(insertParameters[1]).toBe(personId);
+    expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
+    expect(insertQueryRunner).toBeUndefined();
+    expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 membership(s) candidat(s) traité(s) pour Person <- Company',
+    );
+  });
 });

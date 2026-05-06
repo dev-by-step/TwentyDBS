@@ -28,6 +28,11 @@ import {
   resolveObjectTableNameOrThrow,
   validateUuidOrThrow,
 } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
+import {
+  buildMembershipInsertBatchFromMappings,
+  buildMembershipInsertQuery,
+  type InternalEntityMembershipInsertMapping,
+} from 'src/modules/internal-entity/query-hooks/utils/internal-entity-source-tagging-sql.util';
 
 type FlatMaps = {
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
@@ -85,6 +90,22 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId: validatedWorkspaceId,
       nameSingular: 'opportunity',
     });
+    const personTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'person',
+    });
+    const personEntityMembershipTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'personEntityMembership',
+    });
+    const companyEntityMembershipTableName =
+      await resolveObjectTableNameOrThrow({
+        objectMetadataService: this.objectMetadataService,
+        workspaceId: validatedWorkspaceId,
+        nameSingular: 'companyEntityMembership',
+      });
     const internalEntitySqlTable = buildWorkspaceSqlTableName(
       schemaName,
       internalEntityTableName,
@@ -93,6 +114,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       schemaName,
       opportunityTableName,
     );
+    const personSqlTable = buildWorkspaceSqlTableName(schemaName, personTableName);
+    const personEntityMembershipSqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      personEntityMembershipTableName,
+    );
+    const companyEntityMembershipSqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      companyEntityMembershipTableName,
+    );
 
     await this.seedInternalEntities(
       dataSource,
@@ -100,6 +130,28 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       validatedWorkspaceId,
     );
     await this.backfillOpportunities(dataSource, opportunitySqlTable);
+    await this.backfillCompanyMembershipsFromOpportunities(
+      dataSource,
+      opportunitySqlTable,
+      companyEntityMembershipSqlTable,
+    );
+    await this.backfillPersonMembershipsFromOpportunities(
+      dataSource,
+      opportunitySqlTable,
+      personEntityMembershipSqlTable,
+    );
+    await this.backfillCompanyMembershipsFromPeople(
+      dataSource,
+      personSqlTable,
+      personEntityMembershipSqlTable,
+      companyEntityMembershipSqlTable,
+    );
+    await this.backfillPersonMembershipsFromCompanies(
+      dataSource,
+      personSqlTable,
+      companyEntityMembershipSqlTable,
+      personEntityMembershipSqlTable,
+    );
     await this.verifyMigration(dataSource, opportunitySqlTable);
   }
 
@@ -457,6 +509,160 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     );
 
     return updatedRows.length;
+  }
+
+  private async backfillCompanyMembershipsFromOpportunities(
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    companyEntityMembershipSqlTable: string,
+  ): Promise<void> {
+    const mappings =
+      await this.selectDistinctRecordInternalEntityMappings(
+        dataSource,
+        `SELECT DISTINCT opportunity."companyId" AS "recordId",
+                opportunity."internalEntityId" AS "internalEntityId"
+         FROM ${opportunitySqlTable} opportunity
+         WHERE opportunity."companyId" IS NOT NULL
+           AND opportunity."internalEntityId" IS NOT NULL
+           AND opportunity."deletedAt" IS NULL`,
+      );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: companyEntityMembershipSqlTable,
+      sourceJoinColumnName: 'companyId',
+      mappings,
+      logLabel: 'Company <- Opportunity',
+    });
+  }
+
+  private async backfillPersonMembershipsFromOpportunities(
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    personEntityMembershipSqlTable: string,
+  ): Promise<void> {
+    const mappings =
+      await this.selectDistinctRecordInternalEntityMappings(
+        dataSource,
+        `SELECT DISTINCT opportunity."pointOfContactId" AS "recordId",
+                opportunity."internalEntityId" AS "internalEntityId"
+         FROM ${opportunitySqlTable} opportunity
+         WHERE opportunity."pointOfContactId" IS NOT NULL
+           AND opportunity."internalEntityId" IS NOT NULL
+           AND opportunity."deletedAt" IS NULL`,
+      );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: personEntityMembershipSqlTable,
+      sourceJoinColumnName: 'personId',
+      mappings,
+      logLabel: 'Person <- Opportunity',
+    });
+  }
+
+  private async backfillCompanyMembershipsFromPeople(
+    dataSource: GlobalWorkspaceDataSource,
+    personSqlTable: string,
+    personEntityMembershipSqlTable: string,
+    companyEntityMembershipSqlTable: string,
+  ): Promise<void> {
+    const mappings =
+      await this.selectDistinctRecordInternalEntityMappings(
+        dataSource,
+        `SELECT DISTINCT person."companyId" AS "recordId",
+                person_membership."internalEntityId" AS "internalEntityId"
+         FROM ${personSqlTable} person
+         INNER JOIN ${personEntityMembershipSqlTable} person_membership
+           ON person_membership."personId" = person."id"
+          AND person_membership."deletedAt" IS NULL
+         WHERE person."companyId" IS NOT NULL
+           AND person."deletedAt" IS NULL`,
+      );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: companyEntityMembershipSqlTable,
+      sourceJoinColumnName: 'companyId',
+      mappings,
+      logLabel: 'Company <- Person',
+    });
+  }
+
+  private async backfillPersonMembershipsFromCompanies(
+    dataSource: GlobalWorkspaceDataSource,
+    personSqlTable: string,
+    companyEntityMembershipSqlTable: string,
+    personEntityMembershipSqlTable: string,
+  ): Promise<void> {
+    const mappings =
+      await this.selectDistinctRecordInternalEntityMappings(
+        dataSource,
+        `SELECT DISTINCT person."id" AS "recordId",
+                company_membership."internalEntityId" AS "internalEntityId"
+         FROM ${personSqlTable} person
+         INNER JOIN ${companyEntityMembershipSqlTable} company_membership
+           ON company_membership."companyId" = person."companyId"
+          AND company_membership."deletedAt" IS NULL
+         WHERE person."companyId" IS NOT NULL
+           AND person."deletedAt" IS NULL`,
+      );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: personEntityMembershipSqlTable,
+      sourceJoinColumnName: 'personId',
+      mappings,
+      logLabel: 'Person <- Company',
+    });
+  }
+
+  private async selectDistinctRecordInternalEntityMappings(
+    dataSource: GlobalWorkspaceDataSource,
+    query: string,
+  ): Promise<InternalEntityMembershipInsertMapping[]> {
+    return this.runAdminQuery<InternalEntityMembershipInsertMapping[]>(
+      dataSource,
+      query,
+    );
+  }
+
+  private async insertMembershipMappings({
+    dataSource,
+    membershipSqlTable,
+    sourceJoinColumnName,
+    mappings,
+    logLabel,
+  }: {
+    dataSource: GlobalWorkspaceDataSource;
+    membershipSqlTable: string;
+    sourceJoinColumnName: 'companyId' | 'personId';
+    mappings: InternalEntityMembershipInsertMapping[];
+    logLabel: string;
+  }): Promise<void> {
+    if (mappings.length === 0) {
+      this.logger.log(`Aucun membership à backfill pour ${logLabel}`);
+
+      return;
+    }
+
+    const { valuesSql, parameters } = buildMembershipInsertBatchFromMappings({
+      mappings,
+    });
+
+    await this.runAdminQuery(
+      dataSource,
+      buildMembershipInsertQuery({
+        membershipSqlTable,
+        sourceJoinColumnName,
+        valuesSql,
+      }),
+      parameters,
+    );
+
+    this.logger.log(
+      `${mappings.length} membership(s) candidat(s) traité(s) pour ${logLabel}`,
+    );
   }
 
   private buildOpportunityInternalEntityMappingsBatch(

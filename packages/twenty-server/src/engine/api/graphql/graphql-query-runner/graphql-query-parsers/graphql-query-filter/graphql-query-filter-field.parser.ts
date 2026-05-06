@@ -23,6 +23,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
 import { isFlatFieldMetadataOfType } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-flat-field-metadata-of-type.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
 import { escapeIdentifier } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 
 const ARRAY_OPERATORS = ['in', 'contains', 'notContains'];
@@ -287,11 +288,11 @@ export class GraphqlQueryFilterFieldParser {
       }
     ).expressionMap?.mainAlias?.metadata?.schema;
 
+    const targetTableName = computeObjectTargetTable(targetObjectMetadata);
+
     return isDefined(schemaName)
-      ? `${escapeIdentifier(schemaName)}.${escapeIdentifier(
-          targetObjectMetadata.targetTableName,
-        )}`
-      : escapeIdentifier(targetObjectMetadata.targetTableName);
+      ? `${escapeIdentifier(schemaName)}.${escapeIdentifier(targetTableName)}`
+      : escapeIdentifier(targetTableName);
   }
 
   private parseCompositeFieldForFilter(
