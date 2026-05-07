@@ -1,13 +1,13 @@
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { type PageLayout } from '@/page-layout/types/PageLayout';
-import { type PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
-import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { injectRelationWidgetsIntoLayout } from '@/page-layout/utils/injectRelationWidgetsIntoLayout';
 import {
   FieldDisplayMode,
   WidgetConfigurationType,
   WidgetType,
 } from '~/generated-metadata/graphql';
+import type { FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import type { PageLayout } from '@/page-layout/types/PageLayout';
+import type { PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
+import type { PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 
 const createMockWidget = (
   id: string,
@@ -195,6 +195,24 @@ describe('injectRelationWidgetsIntoLayout', () => {
       expect.objectContaining({
         fieldMetadataId: 'f1',
         fieldDisplayMode: FieldDisplayMode.CARD,
+      }),
+    );
+  });
+
+  it('should allow callers to override the injected field display mode', () => {
+    const layout = createMockLayout([
+      createMockTab('tab-1', [createMockWidget('fields-1', WidgetType.FIELDS)]),
+    ]);
+    const fields = [createMockFieldMetadataItem('f1', 'Company')];
+
+    const result = injectRelationWidgetsIntoLayout(layout, fields, {
+      getFieldDisplayMode: () => FieldDisplayMode.FIELD,
+    });
+
+    expect(result.tabs[0].widgets[1].configuration).toEqual(
+      expect.objectContaining({
+        fieldMetadataId: 'f1',
+        fieldDisplayMode: FieldDisplayMode.FIELD,
       }),
     );
   });

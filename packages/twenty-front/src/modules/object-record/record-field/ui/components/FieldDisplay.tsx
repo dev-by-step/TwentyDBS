@@ -54,6 +54,8 @@ import { isFieldRawJson } from '@/object-record/record-field/ui/types/guards/isF
 import { isFieldSelect } from '@/object-record/record-field/ui/types/guards/isFieldSelect';
 import { isFieldText } from '@/object-record/record-field/ui/types/guards/isFieldText';
 import { isFieldUuid } from '@/object-record/record-field/ui/types/guards/isFieldUuid';
+import { InternalEntityRelationFieldDisplay } from '@/internal-entity/components/InternalEntityRelationFieldDisplay';
+import { useInternalEntityRelationFieldInfo } from '@/internal-entity/hooks/useInternalEntityRelationFieldInfo';
 
 export const FieldDisplay = () => {
   const {
@@ -67,6 +69,7 @@ export const FieldDisplay = () => {
     fieldDefinition,
     isLabelIdentifier,
   );
+  const { isInternalEntityRelation } = useInternalEntityRelationFieldInfo();
 
   if (isDefined(isForbidden) && isForbidden) {
     return <ForbiddenFieldDisplay />;
@@ -76,6 +79,8 @@ export const FieldDisplay = () => {
     <ChipFieldDisplay />
   ) : isFieldRelationManyToOne(fieldDefinition) ? (
     <RelationToOneFieldDisplay />
+  ) : isFieldRelationOneToMany(fieldDefinition) && isInternalEntityRelation ? (
+    <InternalEntityRelationFieldDisplay />
   ) : isFieldRelationOneToMany(fieldDefinition) ? (
     <RelationFromManyFieldDisplay />
   ) : isFieldMorphRelationManyToOne(fieldDefinition) ? (

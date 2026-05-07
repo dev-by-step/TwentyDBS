@@ -2,6 +2,8 @@ import { useStore } from 'jotai';
 import { type ReactNode, useCallback, useContext } from 'react';
 import { v4 } from 'uuid';
 
+import { InternalEntityRelationPicker } from '@/internal-entity/components/InternalEntityRelationPicker';
+import { getInternalEntityRelationFieldBehavior } from '@/internal-entity/utils/getInternalEntityRelationFieldBehavior';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
@@ -71,6 +73,13 @@ export const RecordDetailRelationSectionDropdownToMany = ({
   }
 
   const isJunctionRelation = hasJunctionConfig(fieldMetadataItem.settings);
+  const internalEntityRelationBehavior = getInternalEntityRelationFieldBehavior(
+    {
+      fieldMetadataItem,
+      sourceObjectMetadataId: objectMetadataItem.id,
+      objectMetadataItems,
+    },
+  );
 
   const relationFieldDefinition =
     fieldDefinition as FieldDefinition<FieldRelationMetadata>;
@@ -357,7 +366,9 @@ export const RecordDetailRelationSectionDropdownToMany = ({
     ],
   );
 
-  const canCreateNew = !isMorphJunction;
+  const canCreateNew =
+    !isMorphJunction &&
+    (internalEntityRelationBehavior?.canCreateTargetRecord ?? true);
 
   const objectMetadataItemIdForCreate =
     isJunctionRelation && isDefined(junctionTargetObjectMetadata)
@@ -380,6 +391,46 @@ export const RecordDetailRelationSectionDropdownToMany = ({
     ],
   );
 
+  const dropdownContent =
+    internalEntityRelationBehavior?.requiresDetachConfirmation ? (
+      <InternalEntityRelationPicker
+        focusId={dropdownId}
+        componentInstanceId={dropdownId}
+        layoutDirection={
+          dropdownPlacement?.includes('end')
+            ? 'search-bar-on-bottom'
+            : 'search-bar-on-top'
+        }
+        modalInstanceId={`internal-entity-picker:${recordId}:${fieldDefinition.fieldMetadataId}:dropdown`}
+        onChange={handleChange}
+        onSubmit={() => {
+          closeDropdown(dropdownId);
+        }}
+        onClickOutside={() => {
+          closeDropdown(dropdownId);
+        }}
+      />
+    ) : (
+      <MultipleRecordPicker
+        focusId={dropdownId}
+        componentInstanceId={dropdownId}
+        onCreate={canCreateNew ? handleCreateNew : undefined}
+        objectMetadataItemIdForCreate={objectMetadataItemIdForCreate}
+        onChange={handleChange}
+        onSubmit={() => {
+          closeDropdown(dropdownId);
+        }}
+        onClickOutside={() => {
+          closeDropdown(dropdownId);
+        }}
+        layoutDirection={
+          dropdownPlacement?.includes('end')
+            ? 'search-bar-on-bottom'
+            : 'search-bar-on-top'
+        }
+      />
+    );
+
   return (
     <Dropdown
       dropdownId={dropdownId}
@@ -395,26 +446,7 @@ export const RecordDetailRelationSectionDropdownToMany = ({
           />
         )
       }
-      dropdownComponents={
-        <MultipleRecordPicker
-          focusId={dropdownId}
-          componentInstanceId={dropdownId}
-          onCreate={canCreateNew ? handleCreateNew : undefined}
-          objectMetadataItemIdForCreate={objectMetadataItemIdForCreate}
-          onChange={handleChange}
-          onSubmit={() => {
-            closeDropdown(dropdownId);
-          }}
-          onClickOutside={() => {
-            closeDropdown(dropdownId);
-          }}
-          layoutDirection={
-            dropdownPlacement?.includes('end')
-              ? 'search-bar-on-bottom'
-              : 'search-bar-on-top'
-          }
-        />
-      }
+      dropdownComponents={dropdownContent}
     />
   );
 };

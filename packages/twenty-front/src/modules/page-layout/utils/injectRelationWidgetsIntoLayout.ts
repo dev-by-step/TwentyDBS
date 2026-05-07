@@ -2,6 +2,7 @@ import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataIte
 import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { DYNAMIC_RELATION_WIDGET_ID_PREFIX } from '@/page-layout/utils/isDynamicRelationWidget';
+import { isFieldWidget } from '@/page-layout/widgets/field/utils/isFieldWidget';
 import { isDefined } from 'twenty-shared/utils';
 import {
   FieldDisplayMode,
@@ -13,6 +14,7 @@ import {
 const getRelationFieldWidgetToInsert = (
   field: FieldMetadataItem,
   tabId: string,
+  fieldDisplayMode: FieldDisplayMode,
 ): PageLayoutWidget => ({
   __typename: 'PageLayoutWidget' as const,
   id: `${DYNAMIC_RELATION_WIDGET_ID_PREFIX}${field.id}-${field.label}`,
@@ -41,7 +43,7 @@ const getRelationFieldWidgetToInsert = (
     __typename: 'FieldConfiguration' as const,
     configurationType: WidgetConfigurationType.FIELD,
     fieldMetadataId: field.id,
-    fieldDisplayMode: FieldDisplayMode.CARD,
+    fieldDisplayMode,
   },
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
@@ -51,17 +53,31 @@ const getRelationFieldWidgetToInsert = (
 const getRelationFieldWidgetsToInsert = (
   relationFields: FieldMetadataItem[],
   tabId: string,
+  getFieldDisplayMode: (
+    field: FieldMetadataItem,
+  ) => FieldDisplayMode | undefined,
 ): PageLayoutWidget[] => {
   return relationFields.map((field) =>
-    getRelationFieldWidgetToInsert(field, tabId),
+    getRelationFieldWidgetToInsert(
+      field,
+      tabId,
+      getFieldDisplayMode(field) ?? FieldDisplayMode.CARD,
+    ),
   );
 };
 
 export const injectRelationWidgetsIntoLayout = (
   layout: PageLayout,
-  boxedRelationFieldMetadataItems: FieldMetadataItem[],
+  relationFieldMetadataItems: FieldMetadataItem[],
+  {
+    getFieldDisplayMode = () => FieldDisplayMode.CARD,
+  }: {
+    getFieldDisplayMode?: (
+      field: FieldMetadataItem,
+    ) => FieldDisplayMode | undefined;
+  } = {},
 ): PageLayout => {
-  if (boxedRelationFieldMetadataItems.length === 0) {
+  if (relationFieldMetadataItems.length === 0) {
     return layout;
   }
 
@@ -70,9 +86,27 @@ export const injectRelationWidgetsIntoLayout = (
     return layout;
   }
 
+  const existingFieldWidgetFieldMetadataIds = new Set(
+    layout.tabs
+      .flatMap((tab) => tab.widgets)
+      .flatMap((widget) =>
+        isFieldWidget(widget) ? [widget.configuration.fieldMetadataId] : [],
+      ),
+  );
+
+  const relationFieldMetadataItemsToInject = relationFieldMetadataItems.filter(
+    (fieldMetadataItem) =>
+      !existingFieldWidgetFieldMetadataIds.has(fieldMetadataItem.id),
+  );
+
+  if (relationFieldMetadataItemsToInject.length === 0) {
+    return layout;
+  }
+
   const relationWidgets = getRelationFieldWidgetsToInsert(
-    boxedRelationFieldMetadataItems,
+    relationFieldMetadataItemsToInject,
     firstTab.id,
+    getFieldDisplayMode,
   );
 
   return {

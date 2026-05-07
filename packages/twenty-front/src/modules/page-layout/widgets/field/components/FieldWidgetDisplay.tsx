@@ -1,5 +1,7 @@
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { getInternalEntityRelationFieldBehavior } from '@/internal-entity/utils/getInternalEntityRelationFieldBehavior';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useIsRecordReadOnly } from '@/object-record/read-only/hooks/useIsRecordReadOnly';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
@@ -40,6 +42,7 @@ export const FieldWidgetDisplay = ({
   isInSidePanel,
 }: FieldWidgetDisplayProps) => {
   const widget = useCurrentWidget();
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const [fieldWidgetHover, setFieldWidgetHover] = useAtomComponentState(
     fieldWidgetHoverComponentState,
@@ -65,6 +68,13 @@ export const FieldWidgetDisplay = ({
 
   const handleMouseEnter = () => setFieldWidgetHover(true);
   const handleMouseLeave = () => setFieldWidgetHover(false);
+  const internalEntityRelationBehavior = getInternalEntityRelationFieldBehavior(
+    {
+      fieldMetadataItem,
+      sourceObjectMetadataId: objectMetadataItem.id,
+      objectMetadataItems,
+    },
+  );
 
   return (
     <RecordFieldsScopeContextProvider value={{ scopeInstanceId: instanceId }}>
@@ -87,6 +97,10 @@ export const FieldWidgetDisplay = ({
                 fieldDefinition,
                 useUpdateRecord: useUpdateOneObjectRecordMutation,
                 isDisplayModeFixHeight: false,
+                overridenIsFieldEmpty:
+                  internalEntityRelationBehavior?.shouldDisplayContentWhenEmpty
+                    ? false
+                    : undefined,
                 isRecordFieldReadOnly: isRecordFieldReadOnly({
                   isRecordReadOnly,
                   isSystemObject: objectMetadataItem.isSystem,
