@@ -32,11 +32,11 @@ const StyledWrapper = styled.div`
 const StyledScrollArea = styled.div`
   box-sizing: border-box;
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[8]};
   overflow-y: auto;
   padding: ${themeCssVariables.spacing[6]};
-  flex: 1;
 `;
 
 const StyledYear = styled.span`
@@ -59,8 +59,12 @@ export const GroupCalendarEventsCard = () => {
     navigateToday,
   } = useGroupCalendarEvents();
 
-  const { calendarEventsByDayTime, daysByMonthTime, monthTimes, monthTimesByYear } =
-    useCalendarEvents(calendarEvents);
+  const {
+    calendarEventsByDayTime,
+    daysByMonthTime,
+    monthTimes,
+    monthTimesByYear,
+  } = useCalendarEvents(calendarEvents);
 
   return (
     <StyledWrapper>
