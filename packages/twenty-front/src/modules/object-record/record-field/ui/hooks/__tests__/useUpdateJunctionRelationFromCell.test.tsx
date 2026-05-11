@@ -76,7 +76,9 @@ describe('useUpdateJunctionRelationFromCell', () => {
     jest.clearAllMocks();
 
     (useObjectMetadataItems as jest.Mock).mockReturnValue({
-      objectMetadataItems: [{ id: 'person-metadata-id', nameSingular: 'person' }],
+      objectMetadataItems: [
+        { id: 'person-metadata-id', nameSingular: 'person' },
+      ],
     });
 
     (getJunctionConfig as jest.Mock).mockReturnValue({
@@ -174,25 +176,25 @@ describe('useUpdateJunctionRelationFromCell', () => {
       await updatePromise;
     });
 
-    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toMatchObject(
-      {
-        id: recordId,
-        __typename: 'Person',
-        [fieldName]: [
-          {
-            id: 'junction-record-id',
-            __typename: 'PersonInternalEntity',
-            personId: recordId,
-            internalEntityId: targetRecordId,
-            internalEntity: {
-              id: targetRecordId,
-              __typename: 'InternalEntity',
-              name: 'WEKNOW',
-            },
+    expect(
+      store.get(recordStoreFamilyState.atomFamily(recordId)),
+    ).toMatchObject({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [
+        {
+          id: 'junction-record-id',
+          __typename: 'PersonInternalEntity',
+          personId: recordId,
+          internalEntityId: targetRecordId,
+          internalEntity: {
+            id: targetRecordId,
+            __typename: 'InternalEntity',
+            name: 'WEKNOW',
           },
-        ],
-      },
-    );
+        },
+      ],
+    });
   });
 
   it('should keep the source record unchanged when the junction mutation fails', async () => {

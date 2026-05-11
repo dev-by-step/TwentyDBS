@@ -24,11 +24,6 @@ export const registerEntityFilterBuilder = (
   objectNameSingular: string,
   builder: EntityFilterBuilder,
 ): void => {
-  if (entityFilterRegistry.has(objectNameSingular)) {
-    console.warn(
-      `Filter builder for '${objectNameSingular}' already exists. Overwriting.`,
-    );
-  }
   entityFilterRegistry.set(objectNameSingular, builder);
 };
 
@@ -61,11 +56,6 @@ export const buildEntityScopedRecordFilter = ({
   const buildEntityFilter = entityFilterRegistry.get(objectNameSingular);
 
   if (!isDefined(buildEntityFilter)) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(
-        `No entity filter builder registered for object: '${objectNameSingular}'`,
-      );
-    }
     return normalizedFilter;
   }
 

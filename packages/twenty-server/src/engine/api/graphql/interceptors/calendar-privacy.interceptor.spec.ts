@@ -17,7 +17,9 @@ describe('CalendarPrivacyInterceptor', () => {
     applyInternalEntityPrivacyToTimelineCalendarEvents: jest.fn(),
   } as unknown as jest.Mocked<CalendarPrivacyService>;
 
-  const interceptor = new CalendarPrivacyInterceptor(mockCalendarPrivacyService);
+  const interceptor = new CalendarPrivacyInterceptor(
+    mockCalendarPrivacyService,
+  );
 
   const mockExecutionContext = {} as ExecutionContext;
 

@@ -413,7 +413,11 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     );
 
     expect(result).toEqual([]);
-    expect(mockGlobalWorkspaceOrmManager.executeInWorkspaceContext).not.toHaveBeenCalled();
-    expect(mockCalendarPrivacyService.getCalendarEventMaskMap).not.toHaveBeenCalled();
+    expect(
+      mockGlobalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).not.toHaveBeenCalled();
+    expect(
+      mockCalendarPrivacyService.getCalendarEventMaskMap,
+    ).not.toHaveBeenCalled();
   });
 });

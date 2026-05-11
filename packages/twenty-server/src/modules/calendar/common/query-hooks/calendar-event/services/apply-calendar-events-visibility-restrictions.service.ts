@@ -85,7 +85,8 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
 
         for (const association of calendarChannelCalendarEventsAssociations) {
           const associations =
-            associationsByCalendarEventId.get(association.calendarEventId) ?? [];
+            associationsByCalendarEventId.get(association.calendarEventId) ??
+            [];
 
           associations.push(association);
           associationsByCalendarEventId.set(
@@ -95,12 +96,12 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
         }
 
         const currentUserWorkspaceId = isDefined(userId)
-          ? (
+          ? ((
               await this.userWorkspaceRepository.findOne({
                 where: { userId, workspaceId },
                 select: ['id'],
               })
-            )?.id ?? null
+            )?.id ?? null)
           : null;
 
         const connectedAccountIds = [
@@ -147,8 +148,9 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
             continue;
           }
 
-          const isOwnedByCurrentUser = calendarChannels.some((calendarChannel) =>
-            ownedConnectedAccountIds.has(calendarChannel.connectedAccountId),
+          const isOwnedByCurrentUser = calendarChannels.some(
+            (calendarChannel) =>
+              ownedConnectedAccountIds.has(calendarChannel.connectedAccountId),
           );
 
           if (isOwnedByCurrentUser) {
@@ -177,7 +179,9 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
 
         const calendarEventMaskMap =
           await this.calendarPrivacyService.getCalendarEventMaskMap({
-            calendarEventIds: calendarEvents.map((calendarEvent) => calendarEvent.id),
+            calendarEventIds: calendarEvents.map(
+              (calendarEvent) => calendarEvent.id,
+            ),
             workspaceId,
             currentUserEntityId,
             currentUserId: userId,
