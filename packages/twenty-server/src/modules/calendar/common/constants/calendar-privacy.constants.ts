@@ -1,0 +1,1 @@
+export const CALENDAR_PRIVACY_OCCUPIED_TITLE = 'Occupé';
