@@ -194,6 +194,8 @@ export const useUpdateJunctionRelationFromCell = ({
           [targetJoinColumnName]: morphItem.recordId,
         };
 
+        await createJunctionRecord(newJunctionRecordForApi);
+
         store.set(
           recordStoreFamilyState.atomFamily(recordId),
           (currentRecord: Record<string, unknown> | null | undefined) => {
@@ -212,8 +214,6 @@ export const useUpdateJunctionRelationFromCell = ({
             } as ObjectRecord;
           },
         );
-
-        await createJunctionRecord(newJunctionRecordForApi);
       }
     },
     [
