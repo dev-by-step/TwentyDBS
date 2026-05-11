@@ -358,6 +358,21 @@ export class TimelineCalendarEventService {
       ]),
     );
 
+    const allPersonIds = [
+      ...new Set(
+        events.flatMap((event) =>
+          event.calendarEventParticipants
+            .map((p) => p.personId)
+            .filter((id): id is string => id != null),
+        ),
+      ),
+    ];
+
+    const personEntityColorMap = await this.buildPersonEntityColorMap({
+      workspaceId,
+      personIds: allPersonIds,
+    });
+
     return events
       .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
       .map((event) => {
@@ -417,7 +432,73 @@ export class TimelineCalendarEventService {
           location: event.location ?? null,
           conferenceSolution: event.conferenceSolution ?? null,
           conferenceLink: null,
+          entityColor:
+            event.calendarEventParticipants
+              .map((p) =>
+                p.personId != null
+                  ? (personEntityColorMap.get(p.personId) ?? null)
+                  : null,
+              )
+              .find((color) => color != null) ?? null,
         };
       });
+  }
+
+  private async buildPersonEntityColorMap({
+    workspaceId,
+    personIds,
+  }: {
+    workspaceId: string;
+    personIds: string[];
+  }): Promise<Map<string, string>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const membershipRepo = await this.globalWorkspaceOrmManager.getRepository<{
+      personId: string;
+      internalEntityId: string;
+    }>(workspaceId, 'personEntityMembership', {
+      shouldBypassPermissionChecks: true,
+    });
+
+    const memberships = await membershipRepo.find({
+      where: { personId: In(personIds) },
+      select: { personId: true, internalEntityId: true },
+    });
+
+    const internalEntityIds = [
+      ...new Set(memberships.map((m) => m.internalEntityId)),
+    ];
+
+    if (internalEntityIds.length === 0) {
+      return new Map();
+    }
+
+    const internalEntityRepo =
+      await this.globalWorkspaceOrmManager.getRepository<{
+        id: string;
+        color: string;
+      }>(workspaceId, 'internalEntity', {
+        shouldBypassPermissionChecks: true,
+      });
+
+    const internalEntities = await internalEntityRepo.find({
+      where: { id: In(internalEntityIds) },
+      select: { id: true, color: true },
+    });
+
+    const entityColorById = new Map(
+      internalEntities.map((e) => [e.id, e.color]),
+    );
+
+    return new Map(
+      memberships
+        .map((m): [string, string | undefined] => [
+          m.personId,
+          entityColorById.get(m.internalEntityId),
+        ])
+        .filter((entry): entry is [string, string] => entry[1] != null),
+    );
   }
 }

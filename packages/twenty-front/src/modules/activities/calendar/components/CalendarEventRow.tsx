@@ -32,11 +32,15 @@ const StyledContainer = styled.div<{ showTitle?: boolean }>`
   position: relative;
 `;
 
-const StyledAttendanceIndicator = styled.div<{ active?: boolean }>`
-  background-color: ${({ active }) =>
-    active
+const StyledAttendanceIndicator = styled.div<{
+  active?: boolean;
+  entityColor?: string | null;
+}>`
+  background-color: ${({ active, entityColor }) =>
+    entityColor ??
+    (active
       ? themeCssVariables.tag.background.red
-      : themeCssVariables.tag.background.gray};
+      : themeCssVariables.tag.background.gray)};
   border-radius: ${themeCssVariables.border.radius.xs};
   height: 100%;
   width: ${themeCssVariables.spacing[1]};
@@ -106,7 +110,10 @@ export const CalendarEventRow = ({
           : undefined
       }
     >
-      <StyledAttendanceIndicator active={isCurrentWorkspaceMemberAttending} />
+      <StyledAttendanceIndicator
+        active={isCurrentWorkspaceMemberAttending}
+        entityColor={calendarEvent.entityColor}
+      />
       <StyledLabels>
         <StyledTime>
           {startTimeLabel}
