@@ -1,7 +1,7 @@
 import { UseGuards, UseInterceptors } from '@nestjs/common';
 import { Args, ArgsType, Field, Int, Query } from '@nestjs/graphql';
 
-import { Max } from 'class-validator';
+import { IsOptional, Max } from 'class-validator';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { TIMELINE_CALENDAR_EVENTS_MAX_PAGE_SIZE } from 'src/engine/core-modules/calendar/constants/calendar.constants';
@@ -52,6 +52,24 @@ class GetTimelineCalendarEventsFromOpportunityIdArgs {
   @Field(() => Int)
   @Max(TIMELINE_CALENDAR_EVENTS_MAX_PAGE_SIZE)
   pageSize: number;
+}
+
+@ArgsType()
+class GetGroupTimelineCalendarEventsArgs {
+  @Field(() => Int)
+  page: number;
+
+  @Field(() => Int)
+  @Max(TIMELINE_CALENDAR_EVENTS_MAX_PAGE_SIZE)
+  pageSize: number;
+
+  @Field(() => Date, { nullable: true })
+  @IsOptional()
+  startDate?: Date;
+
+  @Field(() => Date, { nullable: true })
+  @IsOptional()
+  endDate?: Date;
 }
 
 @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
@@ -111,17 +129,31 @@ export class TimelineCalendarEventResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ) {
-    const timelineCalendarEvents =
-      await this.timelineCalendarEventService.getCalendarEventsFromOpportunityId(
-        {
-          currentWorkspaceMemberId: workspaceMemberId,
-          opportunityId,
-          workspaceId: workspace.id,
-          page,
-          pageSize,
-        },
-      );
+    return this.timelineCalendarEventService.getCalendarEventsFromOpportunityId(
+      {
+        currentWorkspaceMemberId: workspaceMemberId,
+        opportunityId,
+        workspaceId: workspace.id,
+        page,
+        pageSize,
+      },
+    );
+  }
 
-    return timelineCalendarEvents;
+  @Query(() => TimelineCalendarEventsWithTotalDTO)
+  async getGroupTimelineCalendarEvents(
+    @Args()
+    { page, pageSize, startDate, endDate }: GetGroupTimelineCalendarEventsArgs,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ) {
+    return this.timelineCalendarEventService.getGroupCalendarEvents({
+      currentWorkspaceMemberId: workspaceMemberId,
+      workspaceId: workspace.id,
+      page,
+      pageSize,
+      startDate,
+      endDate,
+    });
   }
 }
