@@ -62,4 +62,7 @@ export class TimelineCalendarEventDTO {
 
   @Field(() => CalendarChannelVisibility)
   visibility: CalendarChannelVisibility;
+
+  @Field({ nullable: true })
+  entityColor: string | null;
 }
