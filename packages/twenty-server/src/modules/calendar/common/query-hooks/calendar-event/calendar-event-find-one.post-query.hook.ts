@@ -51,6 +51,8 @@ export class CalendarEventFindOnePostQueryHook
       payload,
       workspace.id,
       userId,
+      isUserContext ? authContext.user.entityId : undefined,
+      isUserContext ? authContext.workspaceMemberId : undefined,
     );
   }
 }

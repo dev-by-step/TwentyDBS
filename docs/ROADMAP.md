@@ -1,9 +1,10 @@
 # Roadmap — Definition of Done par Carte
 
-> Mise à jour doc au 2026-04-29, alignée sur l'état réel du code local.
-> Cartes 2 et 3 sont implémentées. La carte 1 est en place côté schéma / seed /
-> hooks, mais la migration CSV locale reste partiellement validée sur le dataset
-> seed Apple car ses opportunités ne correspondent pas aux 10 UUID du CSV réel.
+> Mise à jour doc au 2026-05-11, alignée sur l'état réel du code local.
+> Cartes 2, 3 et 4 sont implémentées. La carte 1 est en place côté schéma /
+> seed / hooks, mais la migration CSV locale reste partiellement validée sur le
+> dataset seed Apple car ses opportunités ne correspondent pas aux 10 UUID du
+> CSV réel.
 
 ---
 
@@ -169,15 +170,30 @@ Le script doit être **idempotent** (rejouable sans doublon) et s'exécuter **ap
 
 ### Fichiers attendus / modifiés
 - `packages/twenty-front/src/modules/object-record/` (composant de champ M2M)
-- Mutations GraphQL : `addEntityToContact`, `removeEntityFromContact`
+- Mutations GraphQL génériques existantes de création / suppression du record de jonction
 
 ### Critères d'Acceptation
-- [ ] La fiche `Person` affiche les entités associées sous forme de badges cliquables
-- [ ] Un bouton "Ajouter une entité" ouvre un sélecteur (dropdown)
-- [ ] Cliquer sur un badge existant propose la suppression (avec confirmation)
-- [ ] Les mutations sont atomiques (pas de state intermédiaire incohérent)
-- [ ] Un contact peut appartenir à 1 à N entités simultanément
-- [ ] `npx nx typecheck twenty-front` passe sans erreur
+- [x] La fiche `Person` affiche les entités associées sous forme de badges cliquables
+- [x] Un bouton "Ajouter une entité" ouvre un sélecteur (dropdown)
+- [x] Cliquer sur un badge existant propose la suppression (avec confirmation)
+- [x] Les mutations sont atomiques (pas de state intermédiaire incohérent)
+- [x] Un contact peut appartenir à 1 à N entités simultanément
+- [x] `npx nx typecheck twenty-front` passe sans erreur
+
+> Validation locale du 2026-05-11 :
+> - la fiche `Person` affiche les entités via les composants dédiés
+>   `InternalEntityRelationFieldDisplay` et `InternalEntityRelationPicker` ;
+> - l'ajout / la suppression de relation passent par les mutations génériques
+>   de record de jonction déjà présentes dans l'application ;
+> - la mise à jour du store local sur ajout est déclenchée uniquement après
+>   succès de la mutation de création, ce qui évite tout état intermédiaire
+>   incohérent ;
+> - tests ciblés passés :
+>   `useUpdateJunctionRelationFromCell.test.tsx`,
+>   `InternalEntityRelationPicker.test.tsx`,
+>   `PageLayoutRelationWidgetsSyncEffect.test.tsx`,
+>   `usePageLayoutWithRelationWidgets.test.tsx` ;
+> - `npx nx typecheck twenty-front` passe localement.
 
 ---
 
@@ -190,18 +206,38 @@ Le script doit être **idempotent** (rejouable sans doublon) et s'exécuter **ap
 - Enregistrement dans le module GraphQL (pas global)
 
 ### Critères d'Acceptation
-- [ ] L'intercepteur détecte si `entity_id` du créneau ≠ `entity_id` de l'utilisateur requêtant
-- [ ] Si différent : `title`, `description`, `attendees` sont remplacés par `"Occupé"` / `null`
-- [ ] Les champs `startAt`, `endAt` restent visibles (pour la planification)
-- [ ] Un créneau de la même entité passe sans transformation
-- [ ] Les tests unitaires couvrent les deux cas (même entité, entité différente)
-- [ ] `npx nx typecheck twenty-server` passe sans erreur
+- [x] L'intercepteur détecte si `entity_id` du créneau ≠ `entity_id` de l'utilisateur requêtant
+- [x] Si différent : `title`, `description`, `attendees` sont remplacés par `"Occupé"` / `null`
+- [x] Les champs `startAt`, `endAt` restent visibles (pour la planification)
+- [x] Un créneau de la même entité passe sans transformation
+- [x] Les tests unitaires couvrent les deux cas (même entité, entité différente)
+- [x] `npx nx typecheck twenty-server` passe sans erreur
+
+> Validation locale du 2026-05-11 :
+> - l'anonymisation inter-entités est appliquée à la timeline GraphQL via
+>   `CalendarPrivacyInterceptor` et réutilisée aussi dans les hooks calendrier
+>   workspace pour garder une règle homogène ;
+> - le masquage conserve `startAt` et `endAt`, et anonymise aussi les champs
+>   sensibles dérivés (`location`, `conferenceSolution`, `conferenceLink`,
+>   participants) pour éviter les fuites par métadonnées ;
+> - la résolution de l'entité requêtante supporte plusieurs sources de contexte
+>   (`user.entityId`, `user.id`, `workspaceMemberId`) ;
+> - si l'identité du requêtant est partielle mais non résoluble, le service
+>   masque par défaut plutôt que de divulguer des données ;
+> - les vérifications de propriété de calendrier sont batchées pour éviter les
+>   requêtes N+1 dans les hooks de visibilité ;
+> - tests ciblés passés :
+>   `calendar-privacy.service.spec.ts`,
+>   `calendar-privacy.interceptor.spec.ts`,
+>   `apply-calendar-events-visibility-restrictions.service.spec.ts`,
+>   `timeline-calendar-event.service.spec.ts` ;
+> - `npx nx typecheck twenty-server` passe localement.
 
 ---
 
 ## Carte 6 — `6-visualisation-calendrier-groupe` : Multi-Stream Calendar
 
-**Objectif :** Vue calendrier affichant les créneaux de toutes les entités, avec code couleur.
+**Objectif :** ETQU utilisateur, je peux visualiser la charge globale du groupe sur un seul calendrier.
 
 ### Fichiers attendus / modifiés
 - `packages/twenty-front/src/modules/activities/calendar/` (extension ou nouveau composant)
@@ -209,29 +245,25 @@ Le script doit être **idempotent** (rejouable sans doublon) et s'exécuter **ap
 - Query GQL fusionnant les 4 flux
 
 ### Critères d'Acceptation
-- [ ] La vue calendrier affiche les créneaux des 4 entités simultanément
-- [ ] Chaque entité a une couleur distincte (définie par `InternalEntity.color`)
-- [ ] La légende des couleurs est visible
-- [ ] Les créneaux d'autres entités respectent la règle de la Carte 5 (anonymisation)
+- [ ] La vue calendrier affiche les créneaux occupés des 4 entités sur un seul calendrier
+- [ ] Je peux voir les créneaux de mes collègues des 3 autres sociétés dans la vue groupe
+- [ ] Les créneaux d'autres entités respectent la règle de la Carte 5 (anonymisation du détail, conservation des horaires)
 - [ ] La vue supporte les modes Jour, Semaine, Mois
 - [ ] `npx nx typecheck twenty-front` passe sans erreur
 
 ---
 
-## Carte 7 — `7-badging-kanban-reporting` : Visual Badges & Dashboard
+## Carte 7 — `7-identification-porteur-calendrier` : Entity Ownership on Calendar
 
-**Objectif :** Badge couleur sur chaque carte Kanban + Dashboard avec métriques agrégées par entité.
+**Objectif :** ETQU utilisateur, je peux identifier le porteur d'un projet sur le calendrier grâce à une couleur associée à la société responsable.
 
 ### Fichiers attendus / modifiés
-- `packages/twenty-front/src/modules/views/` (composant Kanban card extension)
-- Nouveau composant : `entity-dashboard.component.tsx`
+- `packages/twenty-front/src/modules/activities/calendar/` (customisation du rendu des créneaux)
+- Mapping / usage de `InternalEntity.color` sur les événements calendrier
 
 ### Critères d'Acceptation
-- [ ] Chaque carte Kanban affiche un badge couleur correspondant à son entité
-- [ ] Le badge est non-intrusif (coin supérieur droit, petit)
-- [ ] Une page Dashboard liste les 4 entités avec :
-  - Nombre de contacts
-  - Nombre de deals (par statut)
-  - Valeur pipeline totale
-- [ ] Les métriques sont calculées côté serveur (pas de calcul frontend sur des listes entières)
+- [ ] Chaque créneau du calendrier affiche une bordure de couleur correspondant à la société responsable
+- [ ] La couleur provient de `InternalEntity.color`
+- [ ] Le repère visuel reste visible même quand le détail du créneau est anonymisé par la Carte 5
+- [ ] Je peux identifier rapidement quelle société porte le créneau depuis la vue calendrier
 - [ ] `npx nx typecheck twenty-front` passe sans erreur

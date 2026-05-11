@@ -45,20 +45,20 @@ export class TimelineCalendarEventDTO {
   @Field()
   endsAt: Date;
 
-  @Field()
-  description: string;
+  @Field({ nullable: true })
+  description: string | null;
 
-  @Field()
-  location: string;
+  @Field({ nullable: true })
+  location: string | null;
 
-  @Field()
-  conferenceSolution: string;
+  @Field({ nullable: true })
+  conferenceSolution: string | null;
 
-  @Field(() => LinksMetadataDTO)
-  conferenceLink: LinksMetadataDTO;
+  @Field(() => LinksMetadataDTO, { nullable: true })
+  conferenceLink: LinksMetadataDTO | null;
 
-  @Field(() => [TimelineCalendarEventParticipantDTO])
-  participants: TimelineCalendarEventParticipantDTO[];
+  @Field(() => [TimelineCalendarEventParticipantDTO], { nullable: true })
+  participants: TimelineCalendarEventParticipantDTO[] | null;
 
   @Field(() => CalendarChannelVisibility)
   visibility: CalendarChannelVisibility;
