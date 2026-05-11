@@ -9,6 +9,7 @@ import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-chan
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
+import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
 
 import { ApplyCalendarEventsVisibilityRestrictionsService } from './apply-calendar-events-visibility-restrictions.service';
 
@@ -64,6 +65,11 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     find: jest.fn(),
   };
 
+  const mockCalendarPrivacyService = {
+    getCalendarEventMaskMap: jest.fn().mockResolvedValue(new Map()),
+    applyInternalEntityPrivacyToWorkspaceCalendarEvents: jest.fn(),
+  };
+
   const mockGlobalWorkspaceOrmManager = {
     getRepository: jest.fn().mockImplementation((workspaceId, name) => {
       if (name === 'calendarChannelEventAssociation') {
@@ -98,6 +104,10 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
           provide: getRepositoryToken(CalendarChannelEntity),
           useValue: mockCalendarChannelRepository,
         },
+        {
+          provide: CalendarPrivacyService,
+          useValue: mockCalendarPrivacyService,
+        },
       ],
     }).compile();
 
@@ -125,6 +135,7 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       {
         id: '1',
         visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+        connectedAccountId: 'connected-account-1',
       },
     ]);
 
@@ -161,6 +172,7 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       {
         id: '1',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-1',
       },
     ]);
 
@@ -201,6 +213,7 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       {
         id: '1',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-1',
       },
     ]);
 
@@ -208,7 +221,9 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       id: 'user-workspace-id',
     });
 
-    mockConnectedAccountRepository.find.mockResolvedValue([{ id: '1' }]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1' },
+    ]);
 
     const result = await service.applyCalendarEventsVisibilityRestrictions(
       calendarEvents,
@@ -241,6 +256,7 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     mockCalendarChannelRepository.find.mockResolvedValue([
       {
         id: '1',
+        connectedAccountId: 'connected-account-1',
       },
     ]);
 
@@ -289,20 +305,23 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       {
         id: '1',
         visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+        connectedAccountId: 'connected-account-1',
       },
       {
         id: '2',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-2',
       },
       {
         id: '3',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-3',
       },
     ]);
 
-    mockConnectedAccountRepository.find
-      .mockResolvedValueOnce([]) // request for calendar event 3
-      .mockResolvedValueOnce([{ id: '1' }]); // request for calendar event 2
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-2' },
+    ]);
 
     const result = await service.applyCalendarEventsVisibilityRestrictions(
       calendarEvents,
@@ -347,14 +366,17 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       {
         id: '1',
         visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+        connectedAccountId: 'connected-account-1',
       },
       {
         id: '2',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-2',
       },
       {
         id: '3',
         visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-3',
       },
     ]);
 
@@ -381,5 +403,17 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       },
     ]);
     expect(mockConnectedAccountRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('should return early when there are no calendar events to process', async () => {
+    const result = await service.applyCalendarEventsVisibilityRestrictions(
+      [],
+      'test-workspace-id',
+      'user-id',
+    );
+
+    expect(result).toEqual([]);
+    expect(mockGlobalWorkspaceOrmManager.executeInWorkspaceContext).not.toHaveBeenCalled();
+    expect(mockCalendarPrivacyService.getCalendarEventMaskMap).not.toHaveBeenCalled();
   });
 });

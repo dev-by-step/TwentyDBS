@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, UseInterceptors } from '@nestjs/common';
 import { Args, ArgsType, Field, Int, Query } from '@nestjs/graphql';
 
 import { Max } from 'class-validator';
@@ -13,6 +13,7 @@ import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/c
 import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { CalendarPrivacyInterceptor } from 'src/engine/api/graphql/interceptors/calendar-privacy.interceptor';
 
 @ArgsType()
 class GetTimelineCalendarEventsFromPersonIdArgs {
@@ -54,6 +55,7 @@ class GetTimelineCalendarEventsFromOpportunityIdArgs {
 }
 
 @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
+@UseInterceptors(CalendarPrivacyInterceptor)
 @CoreResolver(() => TimelineCalendarEventsWithTotalDTO)
 export class TimelineCalendarEventResolver {
   constructor(
