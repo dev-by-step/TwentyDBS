@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
@@ -14,11 +14,11 @@ import { type GroupCalendarViewMode } from '@/activities/group-calendar/types/Gr
 
 const StyledContainer = styled.div`
   align-items: center;
+  border-bottom: 1px solid ${themeCssVariables.border.color.light};
   display: flex;
   gap: ${themeCssVariables.spacing[2]};
   justify-content: space-between;
   padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
 `;
 
 const StyledLeft = styled.div`
@@ -71,12 +71,6 @@ const StyledViewModeButton = styled.button<{ isActive: boolean }>`
   }
 `;
 
-const VIEW_MODES: { label: string; mode: GroupCalendarViewMode }[] = [
-  { label: 'Jour', mode: 'DAY' },
-  { label: 'Semaine', mode: 'WEEK' },
-  { label: 'Mois', mode: 'MONTH' },
-];
-
 const formatPeriodLabel = (
   viewMode: GroupCalendarViewMode,
   selectedDate: Date,
@@ -112,47 +106,57 @@ export const GroupCalendarTopBar = ({
   onPrev,
   onNext,
   onToday,
-}: GroupCalendarTopBarProps) => (
-  <StyledContainer>
-    <StyledLeft>
-      <IconCalendar size={themeCssVariables.icon.size.md} />
-      <StyledPeriodLabel>
-        {formatPeriodLabel(viewMode, selectedDate)}
-      </StyledPeriodLabel>
-    </StyledLeft>
+}: GroupCalendarTopBarProps) => {
+  const { t } = useLingui();
 
-    <StyledRight>
-      <Button
-        size="small"
-        variant="tertiary"
-        Icon={IconChevronLeft}
-        onClick={onPrev}
-      />
-      <Button
-        size="small"
-        variant="tertiary"
-        title={t`Aujourd'hui`}
-        onClick={onToday}
-      />
-      <Button
-        size="small"
-        variant="tertiary"
-        Icon={IconChevronRight}
-        onClick={onNext}
-      />
+  const viewModes: { label: string; mode: GroupCalendarViewMode }[] = [
+    { label: t`Jour`, mode: 'DAY' },
+    { label: t`Semaine`, mode: 'WEEK' },
+    { label: t`Mois`, mode: 'MONTH' },
+  ];
 
-      <StyledViewModeSelector>
-        {VIEW_MODES.map(({ label, mode }) => (
-          <StyledViewModeButton
-            key={mode}
-            isActive={viewMode === mode}
-            onClick={() => onViewModeChange(mode)}
-            type="button"
-          >
-            {label}
-          </StyledViewModeButton>
-        ))}
-      </StyledViewModeSelector>
-    </StyledRight>
-  </StyledContainer>
-);
+  return (
+    <StyledContainer>
+      <StyledLeft>
+        <IconCalendar size={themeCssVariables.icon.size.md} />
+        <StyledPeriodLabel>
+          {formatPeriodLabel(viewMode, selectedDate)}
+        </StyledPeriodLabel>
+      </StyledLeft>
+
+      <StyledRight>
+        <Button
+          size="small"
+          variant="tertiary"
+          Icon={IconChevronLeft}
+          onClick={onPrev}
+        />
+        <Button
+          size="small"
+          variant="tertiary"
+          title={t`Aujourd'hui`}
+          onClick={onToday}
+        />
+        <Button
+          size="small"
+          variant="tertiary"
+          Icon={IconChevronRight}
+          onClick={onNext}
+        />
+
+        <StyledViewModeSelector>
+          {viewModes.map(({ label, mode }) => (
+            <StyledViewModeButton
+              key={mode}
+              isActive={viewMode === mode}
+              onClick={() => onViewModeChange(mode)}
+              type="button"
+            >
+              {label}
+            </StyledViewModeButton>
+          ))}
+        </StyledViewModeSelector>
+      </StyledRight>
+    </StyledContainer>
+  );
+};

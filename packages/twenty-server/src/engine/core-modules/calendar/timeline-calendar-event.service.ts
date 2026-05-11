@@ -6,6 +6,7 @@ import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/
 import {
   Any,
   Between,
+  type FindOperator,
   In,
   LessThan,
   MoreThanOrEqual,
@@ -125,16 +126,7 @@ export class TimelineCalendarEventService {
             'calendarEvent',
           );
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dateWhere: Record<string, any> = {};
-
-        if (startDate != null && endDate != null) {
-          dateWhere.startsAt = Between(startDate, endDate);
-        } else if (startDate != null) {
-          dateWhere.startsAt = MoreThanOrEqual(startDate);
-        } else if (endDate != null) {
-          dateWhere.startsAt = LessThan(endDate);
-        }
+        const dateWhere = this.buildDateWhereClause(startDate, endDate);
 
         const [totalNumberOfCalendarEvents, paginatedIds] = await Promise.all([
           calendarEventRepository.count({ where: dateWhere }),
@@ -257,6 +249,23 @@ export class TimelineCalendarEventService {
     );
   }
 
+  private buildDateWhereClause(
+    startDate?: Date,
+    endDate?: Date,
+  ): { startsAt?: FindOperator<Date> } {
+    if (startDate != null && endDate != null) {
+      return { startsAt: Between(startDate, endDate) };
+    }
+    if (startDate != null) {
+      return { startsAt: MoreThanOrEqual(startDate) };
+    }
+    if (endDate != null) {
+      return { startsAt: LessThan(endDate) };
+    }
+
+    return {};
+  }
+
   private async buildTimelineCalendarEventsFromIds({
     calendarEventRepository,
     ids,
@@ -355,9 +364,7 @@ export class TimelineCalendarEventService {
             p.workspaceMember?.name.firstName ||
             '',
           lastName:
-            p.person?.name?.lastName ||
-            p.workspaceMember?.name.lastName ||
-            '',
+            p.person?.name?.lastName || p.workspaceMember?.name.lastName || '',
           displayName:
             p.person?.name?.firstName ||
             p.person?.name?.lastName ||
@@ -366,8 +373,7 @@ export class TimelineCalendarEventService {
             p.displayName ||
             p.handle ||
             '',
-          avatarUrl:
-            p.person?.avatarUrl || p.workspaceMember?.avatarUrl || '',
+          avatarUrl: p.person?.avatarUrl || p.workspaceMember?.avatarUrl || '',
           handle: p.handle ?? '',
         }));
 

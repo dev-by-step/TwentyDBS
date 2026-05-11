@@ -145,6 +145,7 @@ export const useLoadCurrentUser = () => {
   }, [
     client,
     setCurrentUser,
+    setSelectedEntityId,
     setCurrentWorkspace,
     isOnAWorkspace,
     setCurrentWorkspaceMembers,

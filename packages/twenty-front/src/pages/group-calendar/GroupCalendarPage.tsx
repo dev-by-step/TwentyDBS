@@ -17,11 +17,11 @@ const StyledHeader = styled.div`
 `;
 
 const StyledContent = styled.div`
-  flex: 1;
-  overflow: hidden;
   border: 1px solid ${themeCssVariables.border.color.light};
   border-radius: ${themeCssVariables.border.radius.md};
+  flex: 1;
   margin: 0 ${themeCssVariables.spacing[6]} ${themeCssVariables.spacing[6]};
+  overflow: hidden;
 `;
 
 export const GroupCalendarPage = () => (
