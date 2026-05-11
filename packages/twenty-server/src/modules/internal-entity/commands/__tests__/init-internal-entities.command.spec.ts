@@ -1,14 +1,14 @@
+import { faker } from '@faker-js/faker';
+
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { type WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import {
-  type CsvOpportunityRow,
-  type ImportCsvOpportunitiesParserService,
-} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import { INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 type MockLogger = {
@@ -27,11 +27,18 @@ type InitInternalEntitiesCommandInternals = {
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
   ) => Promise<void>;
+  backfillCompanyMembershipsFromOpportunities: (
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    companyEntityMembershipSqlTable: string,
+  ) => Promise<void>;
+  backfillPersonMembershipsFromCompanies: (
+    dataSource: GlobalWorkspaceDataSource,
+    personSqlTable: string,
+    companyEntityMembershipSqlTable: string,
+    personEntityMembershipSqlTable: string,
+  ) => Promise<void>;
 };
-
-const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440000';
-const OPPORTUNITY_ID = '550e8400-e29b-41d4-a716-446655440001';
-const UNKNOWN_OPPORTUNITY_ID = '550e8400-e29b-41d4-a716-446655440002';
 
 const setCommandLogger = (command: unknown): MockLogger => {
   const logger = {
@@ -46,29 +53,15 @@ const setCommandLogger = (command: unknown): MockLogger => {
 };
 
 describe('InitInternalEntitiesCommand', () => {
-  const opportunityRow: CsvOpportunityRow = {
-    id: OPPORTUNITY_ID,
-    name: 'Deal A',
-    entityName: 'WEKNOW',
-    amount: 1200,
-    currency: 'EUR',
-    companyId: null,
-    personId: null,
-    stage: 'NEW',
-  };
+  const buildCommandContext = (csvRows = [buildCsvOpportunityRow()]) => {
+    const workspaceId = faker.string.uuid();
+    const opportunityId = faker.string.uuid();
 
-  const unknownEntityRow: CsvOpportunityRow = {
-    ...opportunityRow,
-    id: UNKNOWN_OPPORTUNITY_ID,
-    entityName: 'UNKNOWN',
-  };
-
-  const buildCommandContext = (csvRows: CsvOpportunityRow[] = []) => {
     const importCsvOpportunitiesParserService = {
       readCsvOpportunities: jest.fn().mockResolvedValue(csvRows),
     };
     const dataSource = {
-      query: jest.fn().mockResolvedValue([{ id: OPPORTUNITY_ID }]),
+      query: jest.fn().mockResolvedValue([{ id: opportunityId }]),
     };
     const command = new InitInternalEntitiesCommand(
       {} as WorkspaceIteratorService,
@@ -80,6 +73,8 @@ describe('InitInternalEntitiesCommand', () => {
     const logger = setCommandLogger(command);
 
     return {
+      workspaceId,
+      opportunityId,
       command,
       commandInternals:
         command as unknown as InitInternalEntitiesCommandInternals,
@@ -91,13 +86,13 @@ describe('InitInternalEntitiesCommand', () => {
   };
 
   it('should seed internal entities in a single upsert query', async () => {
-    const { commandInternals, dataSource, dataSourceMock } =
+    const { commandInternals, dataSource, dataSourceMock, workspaceId } =
       buildCommandContext();
 
     await commandInternals.seedInternalEntities(
       dataSource,
       '"workspace_abc"."internalEntity"',
-      WORKSPACE_ID,
+      workspaceId,
     );
 
     expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
@@ -116,7 +111,7 @@ describe('InitInternalEntitiesCommand', () => {
         INTERNAL_ENTITY_SEEDS.WEKNOW.id,
         INTERNAL_ENTITY_SEEDS.WEKNOW.name,
         INTERNAL_ENTITY_SEEDS.WEKNOW.color,
-        WORKSPACE_ID,
+        workspaceId,
       ]),
     );
     expect(queryRunner).toBeUndefined();
@@ -124,6 +119,12 @@ describe('InitInternalEntitiesCommand', () => {
   });
 
   it('should backfill opportunities in one batch and skip unknown entities', async () => {
+    const opportunityRow = buildCsvOpportunityRow({
+      entityName: 'WEKNOW',
+    });
+    const unknownEntityRow = buildCsvOpportunityRow({
+      entityName: 'UNKNOWN',
+    });
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext([opportunityRow, unknownEntityRow]);
 
@@ -146,7 +147,7 @@ describe('InitInternalEntitiesCommand', () => {
     expect(query).toContain('RETURNING opportunity.id');
     expect(query).not.toContain('ANGLE_INTELLIGENCE');
     expect(parameters).toStrictEqual([
-      OPPORTUNITY_ID,
+      opportunityRow.id,
       INTERNAL_ENTITY_SEEDS.WEKNOW.id,
     ]);
     expect(queryRunner).toBeUndefined();
@@ -157,6 +158,7 @@ describe('InitInternalEntitiesCommand', () => {
   });
 
   it('should not run a fallback update when no CSV entity can be resolved', async () => {
+    const unknownEntityRow = buildCsvOpportunityRow({ entityName: 'UNKNOWN' });
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext([unknownEntityRow]);
 
@@ -168,6 +170,102 @@ describe('InitInternalEntitiesCommand', () => {
     expect(dataSourceMock.query).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
       'InternalEntity inconnue(s) dans le CSV: UNKNOWN. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.',
+    );
+  });
+
+  it('should backfill company memberships from tagged opportunities', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+    const companyId = faker.string.uuid();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([
+        {
+          recordId: companyId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await commandInternals.backfillCompanyMembershipsFromOpportunities(
+      dataSource,
+      '"workspace_abc"."opportunity"',
+      '"workspace_abc"."companyEntityMembership"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+
+    const [selectQuery, selectParameters, selectQueryRunner, selectOptions] =
+      dataSourceMock.query.mock.calls[0];
+
+    expect(selectQuery).toContain('SELECT DISTINCT opportunity."companyId"');
+    expect(selectQuery).toContain('opportunity."internalEntityId"');
+    expect(selectParameters).toStrictEqual([]);
+    expect(selectQueryRunner).toBeUndefined();
+    expect(selectOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+
+    const [insertQuery, insertParameters, insertQueryRunner, insertOptions] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(insertQuery).toContain(
+      'INSERT INTO "workspace_abc"."companyEntityMembership"',
+    );
+    expect(insertQuery).toContain('"companyId"');
+    expect(insertQuery).toContain('source.internal_entity_id');
+    expect(insertParameters).toHaveLength(3);
+    expect(insertParameters[1]).toBe(companyId);
+    expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
+    expect(insertQueryRunner).toBeUndefined();
+    expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 membership(s) candidat(s) traité(s) pour Company <- Opportunity',
+    );
+  });
+
+  it('should backfill person memberships from tagged companies', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+    const personId = faker.string.uuid();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([
+        {
+          recordId: personId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await commandInternals.backfillPersonMembershipsFromCompanies(
+      dataSource,
+      '"workspace_abc"."person"',
+      '"workspace_abc"."companyEntityMembership"',
+      '"workspace_abc"."personEntityMembership"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+
+    const [selectQuery] = dataSourceMock.query.mock.calls[0];
+
+    expect(selectQuery).toContain('SELECT DISTINCT person."id" AS "recordId"');
+    expect(selectQuery).toContain(
+      'INNER JOIN "workspace_abc"."companyEntityMembership" company_membership',
+    );
+
+    const [insertQuery, insertParameters, insertQueryRunner, insertOptions] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(insertQuery).toContain(
+      'INSERT INTO "workspace_abc"."personEntityMembership"',
+    );
+    expect(insertQuery).toContain('"personId"');
+    expect(insertParameters).toHaveLength(3);
+    expect(insertParameters[1]).toBe(personId);
+    expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
+    expect(insertQueryRunner).toBeUndefined();
+    expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 membership(s) candidat(s) traité(s) pour Person <- Company',
     );
   });
 });

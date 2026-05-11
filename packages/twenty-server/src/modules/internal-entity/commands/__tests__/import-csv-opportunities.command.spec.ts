@@ -1,14 +1,14 @@
 import { type QueryRunner } from 'typeorm';
 
+import { faker } from '@faker-js/faker';
+
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
 import { ImportCsvOpportunitiesCommand } from 'src/modules/internal-entity/commands/import-csv-opportunities.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import {
-  type CsvOpportunityRow,
-  type ImportCsvOpportunitiesParserService,
-} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import { INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 type MockLogger = {
@@ -32,10 +32,6 @@ type DataSourceQueryCall = [
   queryRunner?: QueryRunner,
   options?: unknown,
 ];
-
-const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440000';
-const OPPORTUNITY_ID = '550e8400-e29b-41d4-a716-446655440001';
-const UNKNOWN_OPPORTUNITY_ID = '550e8400-e29b-41d4-a716-446655440002';
 
 const buildQueryRunner = (): MockQueryRunner => {
   const queryRunner = {
@@ -69,24 +65,21 @@ const setCommandLogger = (command: unknown): MockLogger => {
 };
 
 describe('ImportCsvOpportunitiesCommand', () => {
-  const opportunityRow: CsvOpportunityRow = {
-    id: OPPORTUNITY_ID,
-    name: 'Deal A',
-    entityName: 'WEKNOW',
-    amount: 1200,
-    currency: 'EUR',
-    companyId: null,
-    personId: null,
-    stage: 'NEW',
-  };
-
-  const unknownEntityRow: CsvOpportunityRow = {
-    ...opportunityRow,
-    id: UNKNOWN_OPPORTUNITY_ID,
-    entityName: 'UNKNOWN',
-  };
-
   const buildCommandContext = () => {
+    const workspaceId = faker.string.uuid();
+    const opportunityId = faker.string.uuid();
+    const unknownOpportunityId = faker.string.uuid();
+
+    const opportunityRow = buildCsvOpportunityRow({
+      id: opportunityId,
+      name: 'Deal A',
+      entityName: 'WEKNOW',
+    });
+    const unknownEntityRow = buildCsvOpportunityRow({
+      id: unknownOpportunityId,
+      entityName: 'UNKNOWN',
+    });
+
     const objectMetadataService = {
       findOneWithinWorkspace: jest.fn().mockResolvedValue({
         nameSingular: 'opportunity',
@@ -103,7 +96,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
       query: jest.fn(async (query: string) => {
         if (query.includes('INSERT INTO')) {
-          return [{ id: OPPORTUNITY_ID }];
+          return [{ id: opportunityId }];
         }
 
         if (query.includes('COUNT(*)')) {
@@ -121,6 +114,9 @@ describe('ImportCsvOpportunitiesCommand', () => {
     const logger = setCommandLogger(command);
 
     return {
+      workspaceId,
+      opportunityId,
+      unknownOpportunityId,
       command,
       dataSource: dataSource as unknown as GlobalWorkspaceDataSource,
       dataSourceMock: dataSource,
@@ -139,10 +135,13 @@ describe('ImportCsvOpportunitiesCommand', () => {
       logger,
       objectMetadataService,
       queryRunner,
+      workspaceId,
+      opportunityId,
+      unknownOpportunityId,
     } = buildCommandContext();
 
     await command.runOnWorkspace({
-      workspaceId: WORKSPACE_ID,
+      workspaceId,
       dataSource,
       options: {},
       index: 0,
@@ -150,7 +149,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
     });
 
     expect(objectMetadataService.findOneWithinWorkspace).toHaveBeenCalledWith(
-      WORKSPACE_ID,
+      workspaceId,
       {
         where: { nameSingular: 'opportunity' },
       },
@@ -175,20 +174,20 @@ describe('ImportCsvOpportunitiesCommand', () => {
     );
 
     expect(advisoryLockCall?.[1]).toStrictEqual([
-      `import-csv-opportunities:${WORKSPACE_ID}`,
+      `import-csv-opportunities:${workspaceId}`,
     ]);
     expect(insertCall?.[0]).toContain('ON CONFLICT (id) DO NOTHING');
     expect(insertCall?.[0]).toContain('RETURNING id');
     expect(insertCall?.[1]).toStrictEqual([
-      OPPORTUNITY_ID,
+      opportunityId,
       'Deal A',
       INTERNAL_ENTITY_SEEDS.WEKNOW.id,
     ]);
     expect(insertCall?.[2]).toBe(queryRunner);
     expect(insertCall?.[3]).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
-    expect(verificationCall?.[1]).toStrictEqual([[OPPORTUNITY_ID]]);
+    expect(verificationCall?.[1]).toStrictEqual([[opportunityId]]);
     expect(logger.warn).toHaveBeenCalledWith(
-      `InternalEntity UNKNOWN introuvable, opportunité ${UNKNOWN_OPPORTUNITY_ID} ignorée`,
+      `InternalEntity UNKNOWN introuvable, opportunité ${unknownOpportunityId} ignorée`,
     );
   });
 
@@ -210,7 +209,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
   });
 
   it('should rollback and release the query runner when the insert fails', async () => {
-    const { command, dataSource, dataSourceMock, queryRunner } =
+    const { command, dataSource, dataSourceMock, queryRunner, workspaceId } =
       buildCommandContext();
     const insertError = new Error('insert failed');
 
@@ -224,7 +223,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
 
     await expect(
       command.runOnWorkspace({
-        workspaceId: WORKSPACE_ID,
+        workspaceId,
         dataSource,
         options: {},
         index: 0,
