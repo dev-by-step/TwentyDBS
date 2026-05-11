@@ -32,9 +32,6 @@ export const useEntityFilter = () => {
 
   const setMyCompanyView = useCallback(() => {
     if (!isMyCompanyViewAvailable) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Cannot set My Company view: user has no entityId');
-      }
       return;
     }
     setSelectedEntityId(currentUserEntityId);
