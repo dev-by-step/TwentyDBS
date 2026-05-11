@@ -6,7 +6,7 @@ import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/
 import {
   Any,
   Between,
-  type FindOperator,
+  type FindOptionsWhere,
   In,
   LessThan,
   MoreThanOrEqual,
@@ -252,15 +252,21 @@ export class TimelineCalendarEventService {
   private buildDateWhereClause(
     startDate?: Date,
     endDate?: Date,
-  ): { startsAt?: FindOperator<Date> } {
+  ): FindOptionsWhere<CalendarEventWorkspaceEntity> {
     if (startDate != null && endDate != null) {
-      return { startsAt: Between(startDate, endDate) };
+      return {
+        startsAt: Between(startDate, endDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
     }
     if (startDate != null) {
-      return { startsAt: MoreThanOrEqual(startDate) };
+      return {
+        startsAt: MoreThanOrEqual(startDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
     }
     if (endDate != null) {
-      return { startsAt: LessThan(endDate) };
+      return {
+        startsAt: LessThan(endDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
     }
 
     return {};
