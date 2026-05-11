@@ -16,6 +16,12 @@ import {
   Route,
 } from 'react-router-dom';
 
+const GroupCalendarPage = lazy(() =>
+  import('~/pages/group-calendar/GroupCalendarPage').then((module) => ({
+    default: module.GroupCalendarPage,
+  })),
+);
+
 const RecordIndexPage = lazy(() =>
   import('~/pages/object-record/RecordIndexPage').then((module) => ({
     default: module.RecordIndexPage,
@@ -210,6 +216,14 @@ export const useCreateAppRouter = (
             }
           />
           <Route path={indexAppPath.getIndexAppPath()} element={<></>} />
+          <Route
+            path={AppPath.GroupCalendarPage}
+            element={
+              <LazyRoute>
+                <GroupCalendarPage />
+              </LazyRoute>
+            }
+          />
           <Route
             path={AppPath.RecordIndexPage}
             element={
