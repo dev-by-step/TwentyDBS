@@ -85,7 +85,10 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
     >;
     typeOptions: { settings?: FlatFieldMetadata['settings'] };
   }) {
-    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
+    const isOneToManyRelation =
+      fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY;
+
+    if (isOneToManyRelation) {
       if (
         !(
           'junctionTargetFieldId' in fieldMetadata.settings &&

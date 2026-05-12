@@ -4,6 +4,11 @@ import { faker } from '@faker-js/faker';
 import { unparse } from 'papaparse';
 
 import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import {
+  buildRawCsvOpportunityRow,
+  RAW_CSV_COLUMNS,
+  type RawCsvOpportunityRow,
+} from 'src/modules/internal-entity/__tests__/factories/raw-csv-opportunity-row.factory';
 
 jest.mock('node:fs/promises', () => ({
   access: jest.fn(),
@@ -11,36 +16,11 @@ jest.mock('node:fs/promises', () => ({
   stat: jest.fn(),
 }));
 
-const CSV_COLUMNS = [
-  'Id',
-  'Nom',
-  'Société',
-  'Montant / Amount',
-  'Montant / Currency',
-  'Entreprise Id',
-  'Point de contact Id',
-  'Étape',
-] as const;
-
-type CsvRawRow = Record<(typeof CSV_COLUMNS)[number], string>;
-
-const buildCsvRow = (overrides: Partial<CsvRawRow> = {}): CsvRawRow => ({
-  Id: faker.string.uuid(),
-  Nom: faker.commerce.productName(),
-  Société: JSON.stringify(['WEKNOW']),
-  'Montant / Amount': String(faker.number.int({ min: 100, max: 100_000 })),
-  'Montant / Currency': 'EUR',
-  'Entreprise Id': '',
-  'Point de contact Id': '',
-  Étape: 'NEW',
-  ...overrides,
-});
-
-const buildCsv = (rows: CsvRawRow[]): string =>
+const buildCsv = (rows: RawCsvOpportunityRow[]): string =>
   unparse(rows, {
     delimiter: ',',
     header: true,
-    columns: [...CSV_COLUMNS],
+    columns: [...RAW_CSV_COLUMNS],
   });
 
 describe('ImportCsvOpportunitiesParserService', () => {
@@ -64,49 +44,40 @@ describe('ImportCsvOpportunitiesParserService', () => {
   };
 
   it('should parse and validate CSV opportunities', async () => {
-    const opportunityId = faker.string.uuid();
-    const secondOpportunityId = faker.string.uuid();
-    const companyId = faker.string.uuid();
-    const personId = faker.string.uuid();
+    const row1 = buildRawCsvOpportunityRow({
+      Nom: 'Deal A',
+      Société: JSON.stringify(['WEKNOW']),
+      'Montant / Amount': '1200',
+      'Montant / Currency': 'USD',
+      'Entreprise Id': faker.string.uuid(),
+      'Point de contact Id': faker.string.uuid(),
+      Étape: 'NEW',
+    });
+    const row2 = buildRawCsvOpportunityRow({
+      Nom: 'Deal B',
+      Société: JSON.stringify([' DEVBYSTEP ']),
+      'Montant / Amount': '',
+      'Montant / Currency': 'EUR',
+      'Entreprise Id': '',
+      'Point de contact Id': '',
+      Étape: 'QUALIFIED',
+    });
 
-    mockCsvFile(
-      buildCsv([
-        buildCsvRow({
-          Id: opportunityId,
-          Nom: 'Deal A',
-          Société: JSON.stringify(['WEKNOW']),
-          'Montant / Amount': '1200',
-          'Montant / Currency': 'USD',
-          'Entreprise Id': companyId,
-          'Point de contact Id': personId,
-          Étape: 'NEW',
-        }),
-        buildCsvRow({
-          Id: secondOpportunityId,
-          Nom: 'Deal B',
-          Société: JSON.stringify([' DEVBYSTEP ']),
-          'Montant / Amount': '',
-          'Montant / Currency': 'EUR',
-          'Entreprise Id': '',
-          'Point de contact Id': '',
-          Étape: 'QUALIFIED',
-        }),
-      ]),
-    );
+    mockCsvFile(buildCsv([row1, row2]));
 
     await expect(service.readCsvOpportunities()).resolves.toStrictEqual([
       {
-        id: opportunityId,
+        id: row1.Id,
         name: 'Deal A',
         entityName: 'WEKNOW',
         amount: 1200,
         currency: 'USD',
-        companyId,
-        personId,
+        companyId: row1['Entreprise Id'],
+        personId: row1['Point de contact Id'],
         stage: 'NEW',
       },
       {
-        id: secondOpportunityId,
+        id: row2.Id,
         name: 'Deal B',
         entityName: 'DEVBYSTEP',
         amount: 0,
@@ -119,9 +90,9 @@ describe('ImportCsvOpportunitiesParserService', () => {
   });
 
   it('should reject missing required headers', async () => {
-    const opportunityId = faker.string.uuid();
+    const rowId = faker.string.uuid();
 
-    mockCsvFile(`Id,Nom,Étape\n${opportunityId},Deal A,NEW`);
+    mockCsvFile(`Id,Nom,Étape\n${rowId},Deal A,NEW`);
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
       'Colonnes obligatoires manquantes dans le CSV: Société',
@@ -129,7 +100,7 @@ describe('ImportCsvOpportunitiesParserService', () => {
   });
 
   it('should reject invalid opportunity UUIDs', async () => {
-    mockCsvFile(buildCsv([buildCsvRow({ Id: 'not-a-uuid' })]));
+    mockCsvFile(buildCsv([buildRawCsvOpportunityRow({ Id: 'not-a-uuid' })]));
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
       'Id ligne 2 invalide: not-a-uuid',
@@ -137,17 +108,17 @@ describe('ImportCsvOpportunitiesParserService', () => {
   });
 
   it('should reject duplicate opportunity IDs', async () => {
-    const opportunityId = faker.string.uuid();
+    const duplicateId = faker.string.uuid();
 
     mockCsvFile(
       buildCsv([
-        buildCsvRow({ Id: opportunityId, Nom: 'Deal A' }),
-        buildCsvRow({ Id: opportunityId, Nom: 'Deal B' }),
+        buildRawCsvOpportunityRow({ Id: duplicateId, Nom: 'Deal A' }),
+        buildRawCsvOpportunityRow({ Id: duplicateId, Nom: 'Deal B' }),
       ]),
     );
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
-      `Id opportunité dupliqué dans le CSV: ${opportunityId}`,
+      `Id opportunité dupliqué dans le CSV: ${duplicateId}`,
     );
   });
 

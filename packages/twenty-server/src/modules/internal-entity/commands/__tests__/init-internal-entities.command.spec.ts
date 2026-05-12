@@ -6,6 +6,10 @@ import { type WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/me
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
+import {
+  buildCompanyRecord,
+  buildPersonRecord,
+} from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
 import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
@@ -176,12 +180,12 @@ describe('InitInternalEntitiesCommand', () => {
   it('should backfill company memberships from tagged opportunities', async () => {
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext();
-    const companyId = faker.string.uuid();
+    const company = buildCompanyRecord();
 
     dataSourceMock.query
       .mockResolvedValueOnce([
         {
-          recordId: companyId,
+          recordId: company.id,
           internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
         },
       ])
@@ -213,7 +217,7 @@ describe('InitInternalEntitiesCommand', () => {
     expect(insertQuery).toContain('"companyId"');
     expect(insertQuery).toContain('source.internal_entity_id');
     expect(insertParameters).toHaveLength(3);
-    expect(insertParameters[1]).toBe(companyId);
+    expect(insertParameters[1]).toBe(company.id);
     expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
     expect(insertQueryRunner).toBeUndefined();
     expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
@@ -225,12 +229,12 @@ describe('InitInternalEntitiesCommand', () => {
   it('should backfill person memberships from tagged companies', async () => {
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext();
-    const personId = faker.string.uuid();
+    const person = buildPersonRecord();
 
     dataSourceMock.query
       .mockResolvedValueOnce([
         {
-          recordId: personId,
+          recordId: person.id,
           internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
         },
       ])
@@ -260,7 +264,7 @@ describe('InitInternalEntitiesCommand', () => {
     );
     expect(insertQuery).toContain('"personId"');
     expect(insertParameters).toHaveLength(3);
-    expect(insertParameters[1]).toBe(personId);
+    expect(insertParameters[1]).toBe(person.id);
     expect(insertParameters[2]).toBe(INTERNAL_ENTITY_SEEDS.WEKNOW.id);
     expect(insertQueryRunner).toBeUndefined();
     expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);

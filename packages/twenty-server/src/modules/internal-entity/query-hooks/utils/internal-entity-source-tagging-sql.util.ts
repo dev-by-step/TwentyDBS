@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { quoteSqlIdentifierOrThrow } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
+
 export type InternalEntityMembershipInsertMapping = {
   recordId: string;
   internalEntityId: string;
@@ -64,14 +66,16 @@ export const buildMembershipInsertQuery = ({
   sourceJoinColumnName: string;
   valuesSql: string;
 }): string => {
+  const quotedJoinColumn = quoteSqlIdentifierOrThrow(sourceJoinColumnName);
+
   return `INSERT INTO ${membershipSqlTable}
-     ("id", "${sourceJoinColumnName}", "internalEntityId", "createdAt", "updatedAt", "position")
+     ("id", ${quotedJoinColumn}, "internalEntityId", "createdAt", "updatedAt", "position")
    SELECT source.id, source.record_id, source.internal_entity_id, NOW(), NOW(), 0
    FROM (VALUES ${valuesSql}) AS source(id, record_id, internal_entity_id)
    WHERE NOT EXISTS (
      SELECT 1
      FROM ${membershipSqlTable} existing
-     WHERE existing."${sourceJoinColumnName}" = source.record_id
+     WHERE existing.${quotedJoinColumn} = source.record_id
        AND existing."internalEntityId" = source.internal_entity_id
        AND existing."deletedAt" IS NULL
    )

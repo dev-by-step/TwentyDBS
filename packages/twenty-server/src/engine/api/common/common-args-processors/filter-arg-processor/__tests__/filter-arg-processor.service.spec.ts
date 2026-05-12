@@ -1,5 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
+import { faker } from '@faker-js/faker';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 
 import { fieldMetadataConfigByFieldName } from 'src/engine/api/common/common-args-processors/data-arg-processor/__tests__/constants/field-metadata-config-by-field-name.constant';
@@ -315,10 +316,11 @@ describe('FilterArgProcessorService', () => {
         imageIdentifierFieldMetadataUniversalIdentifier: null,
       } as unknown as FlatObjectMetadata;
 
+      const entityId = faker.string.uuid();
       const result = filterArgProcessorService.process({
         filter: {
           internalEntitiesId: {
-            in: ['550e8400-e29b-41d4-a716-446655440001'],
+            in: [entityId],
           },
         },
         flatObjectMetadata,
@@ -326,7 +328,7 @@ describe('FilterArgProcessorService', () => {
       });
 
       expect(result).toEqual({
-        internalEntitiesId: { in: ['550e8400-e29b-41d4-a716-446655440001'] },
+        internalEntitiesId: { in: [entityId] },
       });
     });
   });
