@@ -1,6 +1,8 @@
+import { faker } from '@faker-js/faker';
+
 import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 
-const ENTITY_ID = '20202020-0000-4000-8000-000000000001';
+const ENTITY_ID = faker.string.uuid();
 
 describe('buildEntityScopedRecordFilter', () => {
   it('keeps the original filter in group view', () => {

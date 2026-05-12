@@ -7,7 +7,7 @@ import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { useLastAuthenticatedWorkspaceDomain } from '@/domain-manager/hooks/useLastAuthenticatedWorkspaceDomain';
-import { selectedEntityIdAtom } from '@/entity-filter/states/selectedEntityIdAtom';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
 import { useInitializeFormatPreferences } from '@/localization/hooks/useInitializeFormatPreferences';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -28,7 +28,7 @@ import { dynamicActivate } from '~/utils/i18n/dynamicActivate';
 
 export const useLoadCurrentUser = () => {
   const setCurrentUser = useSetAtomState(currentUserState);
-  const setSelectedEntityId = useSetAtomState(selectedEntityIdAtom);
+  const setSelectedEntityId = useSetAtomState(selectedEntityIdState);
   const setAvailableWorkspaces = useSetAtomState(availableWorkspacesState);
   const setCurrentWorkspaceMember = useSetAtomState(
     currentWorkspaceMemberState,

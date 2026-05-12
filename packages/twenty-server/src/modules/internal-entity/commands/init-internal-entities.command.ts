@@ -97,11 +97,13 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId: validatedWorkspaceId,
       nameSingular: 'person',
     });
-    const personEntityMembershipTableName = await resolveObjectTableNameOrThrow({
-      objectMetadataService: this.objectMetadataService,
-      workspaceId: validatedWorkspaceId,
-      nameSingular: 'personEntityMembership',
-    });
+    const personEntityMembershipTableName = await resolveObjectTableNameOrThrow(
+      {
+        objectMetadataService: this.objectMetadataService,
+        workspaceId: validatedWorkspaceId,
+        nameSingular: 'personEntityMembership',
+      },
+    );
     const companyEntityMembershipTableName =
       await resolveObjectTableNameOrThrow({
         objectMetadataService: this.objectMetadataService,
@@ -116,7 +118,10 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       schemaName,
       opportunityTableName,
     );
-    const personSqlTable = buildWorkspaceSqlTableName(schemaName, personTableName);
+    const personSqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      personTableName,
+    );
     const personEntityMembershipSqlTable = buildWorkspaceSqlTableName(
       schemaName,
       personEntityMembershipTableName,
@@ -518,16 +523,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     opportunitySqlTable: string,
     companyEntityMembershipSqlTable: string,
   ): Promise<void> {
-    const mappings =
-      await this.selectDistinctRecordInternalEntityMappings(
-        dataSource,
-        `SELECT DISTINCT opportunity."companyId" AS "recordId",
+    const mappings = await this.selectDistinctRecordInternalEntityMappings(
+      dataSource,
+      `SELECT DISTINCT opportunity."companyId" AS "recordId",
                 opportunity."internalEntityId" AS "internalEntityId"
          FROM ${opportunitySqlTable} opportunity
          WHERE opportunity."companyId" IS NOT NULL
            AND opportunity."internalEntityId" IS NOT NULL
            AND opportunity."deletedAt" IS NULL`,
-      );
+    );
 
     await this.insertMembershipMappings({
       dataSource,
@@ -543,16 +547,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     opportunitySqlTable: string,
     personEntityMembershipSqlTable: string,
   ): Promise<void> {
-    const mappings =
-      await this.selectDistinctRecordInternalEntityMappings(
-        dataSource,
-        `SELECT DISTINCT opportunity."pointOfContactId" AS "recordId",
+    const mappings = await this.selectDistinctRecordInternalEntityMappings(
+      dataSource,
+      `SELECT DISTINCT opportunity."pointOfContactId" AS "recordId",
                 opportunity."internalEntityId" AS "internalEntityId"
          FROM ${opportunitySqlTable} opportunity
          WHERE opportunity."pointOfContactId" IS NOT NULL
            AND opportunity."internalEntityId" IS NOT NULL
            AND opportunity."deletedAt" IS NULL`,
-      );
+    );
 
     await this.insertMembershipMappings({
       dataSource,
@@ -569,10 +572,9 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     personEntityMembershipSqlTable: string,
     companyEntityMembershipSqlTable: string,
   ): Promise<void> {
-    const mappings =
-      await this.selectDistinctRecordInternalEntityMappings(
-        dataSource,
-        `SELECT DISTINCT person."companyId" AS "recordId",
+    const mappings = await this.selectDistinctRecordInternalEntityMappings(
+      dataSource,
+      `SELECT DISTINCT person."companyId" AS "recordId",
                 person_membership."internalEntityId" AS "internalEntityId"
          FROM ${personSqlTable} person
          INNER JOIN ${personEntityMembershipSqlTable} person_membership
@@ -580,7 +582,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           AND person_membership."deletedAt" IS NULL
          WHERE person."companyId" IS NOT NULL
            AND person."deletedAt" IS NULL`,
-      );
+    );
 
     await this.insertMembershipMappings({
       dataSource,
@@ -597,10 +599,9 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     companyEntityMembershipSqlTable: string,
     personEntityMembershipSqlTable: string,
   ): Promise<void> {
-    const mappings =
-      await this.selectDistinctRecordInternalEntityMappings(
-        dataSource,
-        `SELECT DISTINCT person."id" AS "recordId",
+    const mappings = await this.selectDistinctRecordInternalEntityMappings(
+      dataSource,
+      `SELECT DISTINCT person."id" AS "recordId",
                 company_membership."internalEntityId" AS "internalEntityId"
          FROM ${personSqlTable} person
          INNER JOIN ${companyEntityMembershipSqlTable} company_membership
@@ -608,7 +609,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           AND company_membership."deletedAt" IS NULL
          WHERE person."companyId" IS NOT NULL
            AND person."deletedAt" IS NULL`,
-      );
+    );
 
     await this.insertMembershipMappings({
       dataSource,

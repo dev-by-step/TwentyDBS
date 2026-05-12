@@ -64,9 +64,9 @@ export class GraphqlQueryFilterFieldParser {
     useDirectTableReference = false,
   ): void {
     const fieldMetadataId =
-      this.fieldIdByName[`${key}`] ||
-      this.fieldIdByJoinColumnName[`${key}`] ||
-      this.oneToManyRelationFieldIdByFilterKey[`${key}`];
+      this.fieldIdByName[key] ||
+      this.fieldIdByJoinColumnName[key] ||
+      this.oneToManyRelationFieldIdByFilterKey[key];
 
     const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
       flatEntityId: fieldMetadataId,
@@ -78,7 +78,7 @@ export class GraphqlQueryFilterFieldParser {
     }
 
     if (
-      this.oneToManyRelationFieldIdByFilterKey[`${key}`] === fieldMetadata.id &&
+      this.oneToManyRelationFieldIdByFilterKey[key] === fieldMetadata.id &&
       isFlatFieldMetadataOfType(fieldMetadata, FieldMetadataType.RELATION) &&
       fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY
     ) {

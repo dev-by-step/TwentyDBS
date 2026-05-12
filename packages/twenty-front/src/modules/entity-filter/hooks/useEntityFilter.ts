@@ -3,7 +3,7 @@ import {
   ENTITY_FILTER_VIEW_MODE,
   type EntityFilterViewMode,
 } from '@/entity-filter/constants/entityFilterViewMode';
-import { selectedEntityIdAtom } from '@/entity-filter/states/selectedEntityIdAtom';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useCallback } from 'react';
@@ -22,8 +22,9 @@ const useMyCompanyViewAvailability = (currentUserEntityId: string | null) => {
 
 export const useEntityFilter = () => {
   const currentUser = useAtomStateValue(currentUserState);
-  const [selectedEntityId, setSelectedEntityId] =
-    useAtomState(selectedEntityIdAtom);
+  const [selectedEntityId, setSelectedEntityId] = useAtomState(
+    selectedEntityIdState,
+  );
 
   const currentUserEntityId = currentUser?.entityId ?? null;
   const isMyCompanyViewAvailable =
