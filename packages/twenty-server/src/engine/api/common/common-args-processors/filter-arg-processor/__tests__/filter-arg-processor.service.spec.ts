@@ -1,6 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { faker } from '@faker-js/faker';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 
 import { fieldMetadataConfigByFieldName } from 'src/engine/api/common/common-args-processors/data-arg-processor/__tests__/constants/field-metadata-config-by-field-name.constant';
@@ -10,6 +9,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 
 import { failingFilterInputsByFieldMetadataType } from './constants/failing-filter-inputs-by-field-metadata-type.constant';
+import { buildInternalEntity } from './factories/internal-entity.factory';
 import { successfulFilterInputsByFieldMetadataType } from './constants/successful-filter-inputs-by-field-metadata-type.constant';
 
 describe('FilterArgProcessorService', () => {
@@ -316,11 +316,11 @@ describe('FilterArgProcessorService', () => {
         imageIdentifierFieldMetadataUniversalIdentifier: null,
       } as unknown as FlatObjectMetadata;
 
-      const entityId = faker.string.uuid();
+      const internalEntity = buildInternalEntity();
       const result = filterArgProcessorService.process({
         filter: {
           internalEntitiesId: {
-            in: [entityId],
+            in: [internalEntity.id],
           },
         },
         flatObjectMetadata,
@@ -328,7 +328,7 @@ describe('FilterArgProcessorService', () => {
       });
 
       expect(result).toEqual({
-        internalEntitiesId: { in: [entityId] },
+        internalEntitiesId: { in: [internalEntity.id] },
       });
     });
   });

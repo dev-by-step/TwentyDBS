@@ -1,10 +1,9 @@
-import { faker } from '@faker-js/faker';
-
 import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
-
-const ENTITY_ID = faker.string.uuid();
+import { buildInternalEntity } from '@/entity-filter/utils/__tests__/factories/internal-entity.factory';
 
 describe('buildEntityScopedRecordFilter', () => {
+  const internalEntity = buildInternalEntity();
+
   it('keeps the original filter in group view', () => {
     const filter = { name: { ilike: '%acme%' } };
 
@@ -31,25 +30,25 @@ describe('buildEntityScopedRecordFilter', () => {
     expect(
       buildEntityScopedRecordFilter({
         objectNameSingular: 'opportunity',
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
-    ).toEqual({ internalEntityId: { eq: ENTITY_ID } });
+    ).toEqual({ internalEntityId: { eq: internalEntity.id } });
   });
 
   it('scopes people and companies through their internal entity memberships', () => {
     expect(
       buildEntityScopedRecordFilter({
         objectNameSingular: 'person',
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
-    ).toEqual({ internalEntitiesId: { in: [ENTITY_ID] } });
+    ).toEqual({ internalEntitiesId: { in: [internalEntity.id] } });
 
     expect(
       buildEntityScopedRecordFilter({
         objectNameSingular: 'company',
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
-    ).toEqual({ internalEntitiesId: { in: [ENTITY_ID] } });
+    ).toEqual({ internalEntitiesId: { in: [internalEntity.id] } });
   });
 
   it('combines an existing filter with the entity filter', () => {
@@ -57,12 +56,12 @@ describe('buildEntityScopedRecordFilter', () => {
       buildEntityScopedRecordFilter({
         objectNameSingular: 'opportunity',
         filter: { deletedAt: { is: 'NULL' } },
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
     ).toEqual({
       and: [
         { deletedAt: { is: 'NULL' } },
-        { internalEntityId: { eq: ENTITY_ID } },
+        { internalEntityId: { eq: internalEntity.id } },
       ],
     });
   });
@@ -72,9 +71,9 @@ describe('buildEntityScopedRecordFilter', () => {
       buildEntityScopedRecordFilter({
         objectNameSingular: 'company',
         filter: {},
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
-    ).toEqual({ internalEntitiesId: { in: [ENTITY_ID] } });
+    ).toEqual({ internalEntitiesId: { in: [internalEntity.id] } });
   });
 
   it('does not scope unrelated objects', () => {
@@ -84,7 +83,7 @@ describe('buildEntityScopedRecordFilter', () => {
       buildEntityScopedRecordFilter({
         objectNameSingular: 'task',
         filter,
-        selectedEntityId: ENTITY_ID,
+        selectedEntityId: internalEntity.id,
       }),
     ).toBe(filter);
   });

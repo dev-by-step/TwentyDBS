@@ -140,20 +140,22 @@ export class InternalEntitySourceTaggingService {
       schemaName,
       membershipTableName,
     );
-    const { valuesSql, parameters } = buildMembershipInsertBatch({
+    const { valuesSql, values } = buildMembershipInsertBatch({
       recordIds,
       internalEntityId,
+    });
+    const membershipInsertQuery = buildMembershipInsertQuery({
+      membershipSqlTable,
+      sourceJoinColumnName: membershipConfig.sourceJoinColumnName,
+      valuesSql,
+      values,
     });
     const dataSource =
       this.globalWorkspaceDataSourceService.getGlobalWorkspaceDataSource();
 
     await dataSource.query(
-      buildMembershipInsertQuery({
-        membershipSqlTable,
-        sourceJoinColumnName: membershipConfig.sourceJoinColumnName,
-        valuesSql,
-      }),
-      parameters,
+      membershipInsertQuery.text,
+      membershipInsertQuery.values,
       undefined,
       INTERNAL_ENTITY_SOURCE_TAGGING_QUERY_OPTIONS,
     );

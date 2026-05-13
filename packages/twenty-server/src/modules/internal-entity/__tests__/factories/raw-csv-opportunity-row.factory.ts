@@ -29,3 +29,31 @@ export const buildRawCsvOpportunityRow = (
   Étape: 'NEW',
   ...overrides,
 });
+
+export const serializeRawCsvOpportunityRow = (
+  row: RawCsvOpportunityRow,
+  columns: readonly (keyof RawCsvOpportunityRow)[] = RAW_CSV_COLUMNS,
+): string =>
+  columns
+    .map((column) => {
+      const value = row[column];
+
+      if (value.includes(',') || value.includes('"')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+
+      return value;
+    })
+    .join(',');
+
+export const buildRawCsvOpportunityCsv = ({
+  rows,
+  columns = RAW_CSV_COLUMNS,
+}: {
+  rows: RawCsvOpportunityRow[];
+  columns?: readonly (keyof RawCsvOpportunityRow)[];
+}): string =>
+  [
+    columns.join(','),
+    ...rows.map((row) => serializeRawCsvOpportunityRow(row, columns)),
+  ].join('\n');
