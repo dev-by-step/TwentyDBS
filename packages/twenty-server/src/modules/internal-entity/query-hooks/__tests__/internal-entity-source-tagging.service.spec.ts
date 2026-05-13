@@ -1,11 +1,16 @@
 import { type ObjectRecord } from 'twenty-shared/types';
 
-import { faker } from '@faker-js/faker';
-
 import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
-import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSourceService } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.service';
+import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
+import { buildWorkspaceAuthContext } from 'src/modules/internal-entity/__tests__/factories/workspace-auth-context.factory';
+import {
+  buildCompanyRecord,
+  buildOpportunityRecord,
+  buildPersonRecord,
+  buildWorkspaceRecord,
+} from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InternalEntitySourceTaggingService } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service';
 
 type MockDataSource = {
@@ -26,11 +31,11 @@ const buildObjectMetadataService = () => ({
 });
 
 const buildServiceContext = () => {
-  const workspaceId = faker.string.uuid();
-  const internalEntityId = faker.string.uuid();
+  const workspace = buildWorkspaceRecord();
+  const internalEntity = buildInternalEntitySeed();
 
   const dataSource: MockDataSource = {
-    query: jest.fn().mockResolvedValue([{ id: internalEntityId }]),
+    query: jest.fn().mockResolvedValue([{ id: internalEntity.id }]),
   };
   const globalWorkspaceDataSourceService = {
     getGlobalWorkspaceDataSource: jest.fn().mockReturnValue(dataSource),
@@ -41,34 +46,19 @@ const buildServiceContext = () => {
     objectMetadataService as unknown as ObjectMetadataService,
   );
 
-  const makeAuthContext = ({
-    entityId = internalEntityId,
-  }: {
-    entityId?: string | null;
-  } = {}): WorkspaceAuthContext =>
-    ({
-      type: 'user',
-      workspace: {
-        id: workspaceId,
-      },
-      user: {
-        id: faker.string.uuid(),
-        entityId,
-      },
-      userWorkspaceId: faker.string.uuid(),
-      workspaceMemberId: faker.string.uuid(),
-      workspaceMember: {
-        id: faker.string.uuid(),
-      },
-    }) as WorkspaceAuthContext;
+  const makeAuthContext = ({ entityId = internalEntity.id } = {}) =>
+    buildWorkspaceAuthContext({
+      entityId,
+      workspaceId: workspace.id,
+    });
 
   return {
     dataSource,
     globalWorkspaceDataSourceService,
     objectMetadataService,
     service,
-    workspaceId,
-    internalEntityId,
+    workspaceId: workspace.id,
+    internalEntityId: internalEntity.id,
     makeAuthContext,
   };
 };
@@ -141,13 +131,13 @@ describe('InternalEntitySourceTaggingService', () => {
   it('should create person membership rows after records are created', async () => {
     const { dataSource, service, internalEntityId, makeAuthContext } =
       buildServiceContext();
-    const personId = faker.string.uuid();
-    const otherPersonId = faker.string.uuid();
+    const person = buildPersonRecord();
+    const otherPerson = buildPersonRecord();
 
     await service.createMembershipsForRecords({
       authContext: makeAuthContext(),
       objectName: 'person',
-      records: [{ id: personId }, { id: otherPersonId }] as ObjectRecord[],
+      records: [{ id: person.id }, { id: otherPerson.id }] as ObjectRecord[],
     });
 
     const [query, parameters, queryRunner, options] = dataSource.query.mock
@@ -158,9 +148,9 @@ describe('InternalEntitySourceTaggingService', () => {
     expect(query).toContain('"personId"');
     expect(query).toContain('"internalEntityId"');
     expect(parameters).toHaveLength(6);
-    expect(parameters[1]).toBe(personId);
+    expect(parameters[1]).toBe(person.id);
     expect(parameters[2]).toBe(internalEntityId);
-    expect(parameters[4]).toBe(otherPersonId);
+    expect(parameters[4]).toBe(otherPerson.id);
     expect(parameters[5]).toBe(internalEntityId);
     expect(queryRunner).toBeUndefined();
     expect(options).toEqual({ shouldBypassPermissionChecks: true });
@@ -169,13 +159,13 @@ describe('InternalEntitySourceTaggingService', () => {
   it('should create company membership rows after records are created', async () => {
     const { dataSource, service, internalEntityId, makeAuthContext } =
       buildServiceContext();
-    const companyId = faker.string.uuid();
-    const otherCompanyId = faker.string.uuid();
+    const company = buildCompanyRecord();
+    const otherCompany = buildCompanyRecord();
 
     await service.createMembershipsForRecords({
       authContext: makeAuthContext(),
       objectName: 'company',
-      records: [{ id: companyId }, { id: otherCompanyId }] as ObjectRecord[],
+      records: [{ id: company.id }, { id: otherCompany.id }] as ObjectRecord[],
     });
 
     const [query, parameters, queryRunner, options] = dataSource.query.mock
@@ -186,9 +176,9 @@ describe('InternalEntitySourceTaggingService', () => {
     expect(query).toContain('"companyId"');
     expect(query).toContain('"internalEntityId"');
     expect(parameters).toHaveLength(6);
-    expect(parameters[1]).toBe(companyId);
+    expect(parameters[1]).toBe(company.id);
     expect(parameters[2]).toBe(internalEntityId);
-    expect(parameters[4]).toBe(otherCompanyId);
+    expect(parameters[4]).toBe(otherCompany.id);
     expect(parameters[5]).toBe(internalEntityId);
     expect(queryRunner).toBeUndefined();
     expect(options).toEqual({ shouldBypassPermissionChecks: true });
@@ -196,12 +186,12 @@ describe('InternalEntitySourceTaggingService', () => {
 
   it('should not create membership rows for opportunities', async () => {
     const { dataSource, service, makeAuthContext } = buildServiceContext();
-    const opportunityId = faker.string.uuid();
+    const opportunity = buildOpportunityRecord();
 
     await service.createMembershipsForRecords({
       authContext: makeAuthContext(),
       objectName: 'opportunity',
-      records: [{ id: opportunityId }] as ObjectRecord[],
+      records: [{ id: opportunity.id }] as ObjectRecord[],
     });
 
     expect(dataSource.query).not.toHaveBeenCalled();

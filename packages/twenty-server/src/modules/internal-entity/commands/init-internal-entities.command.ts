@@ -649,18 +649,20 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
-    const { valuesSql, parameters } = buildMembershipInsertBatchFromMappings({
+    const { valuesSql, values } = buildMembershipInsertBatchFromMappings({
       mappings,
+    });
+    const membershipInsertQuery = buildMembershipInsertQuery({
+      membershipSqlTable,
+      sourceJoinColumnName,
+      valuesSql,
+      values,
     });
 
     await this.runAdminQuery(
       dataSource,
-      buildMembershipInsertQuery({
-        membershipSqlTable,
-        sourceJoinColumnName,
-        valuesSql,
-      }),
-      parameters,
+      membershipInsertQuery.text,
+      membershipInsertQuery.values,
     );
 
     this.logger.log(

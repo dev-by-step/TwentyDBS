@@ -87,14 +87,13 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
   }) {
     const isOneToManyRelation =
       fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY;
+    const hasOneToManyRelationJunctionTargetFieldId =
+      isDefined(fieldMetadata.settings) &&
+      'junctionTargetFieldId' in fieldMetadata.settings &&
+      typeof fieldMetadata.settings.junctionTargetFieldId === 'string';
 
     if (isOneToManyRelation) {
-      if (
-        !(
-          'junctionTargetFieldId' in fieldMetadata.settings &&
-          typeof fieldMetadata.settings.junctionTargetFieldId === 'string'
-        )
-      ) {
+      if (!hasOneToManyRelationJunctionTargetFieldId) {
         return {};
       }
 
