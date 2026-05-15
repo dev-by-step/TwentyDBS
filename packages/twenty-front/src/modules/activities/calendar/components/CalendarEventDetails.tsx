@@ -107,6 +107,7 @@ export const CalendarEventDetails = ({
   const standardFieldOrder = [
     'startsAt',
     'endsAt',
+    'sharingScope',
     'conferenceLink',
     'location',
     'description',

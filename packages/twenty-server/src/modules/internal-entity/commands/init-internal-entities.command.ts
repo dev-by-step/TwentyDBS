@@ -13,6 +13,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { RoleService } from 'src/engine/metadata-modules/role/role.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
@@ -57,6 +58,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly importCsvOpportunitiesParserService: ImportCsvOpportunitiesParserService,
+    private readonly roleService: RoleService,
   ) {
     super(workspaceIteratorService);
   }
@@ -79,6 +81,9 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     );
     const schemaName = getWorkspaceSchemaName(validatedWorkspaceId);
 
+    await this.roleService.createEntityManagerRole({
+      workspaceId: validatedWorkspaceId,
+    });
     await this.ensureMetadataSchema(validatedWorkspaceId);
     const internalEntityTableName = await resolveObjectTableNameOrThrow({
       objectMetadataService: this.objectMetadataService,

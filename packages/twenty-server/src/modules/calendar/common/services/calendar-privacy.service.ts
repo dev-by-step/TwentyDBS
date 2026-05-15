@@ -11,6 +11,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
+import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
 import { CALENDAR_PRIVACY_OCCUPIED_TITLE } from 'src/modules/calendar/common/constants/calendar-privacy.constants';
 import { type CalendarChannelEventAssociationWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-channel-event-association.workspace-entity';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
@@ -60,15 +61,43 @@ export class CalendarPrivacyService {
             currentWorkspaceMemberId,
           });
 
+        const calendarEventRepository =
+          await this.globalWorkspaceOrmManager.getRepository<{
+            id: string;
+            sharingScope: string | null;
+          }>(workspaceId, 'calendarEvent', {
+            shouldBypassPermissionChecks: true,
+          });
+        const calendarEvents = await calendarEventRepository.find({
+          where: {
+            id: In(calendarEventIds),
+          },
+          select: {
+            id: true,
+            sharingScope: true,
+          },
+        });
+        const publicCalendarEventIds = new Set(
+          calendarEvents
+            .filter(
+              (calendarEvent) =>
+                calendarEvent.sharingScope ===
+                CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC,
+            )
+            .map((calendarEvent) => calendarEvent.id),
+        );
+
         if (!isDefined(resolvedCurrentUserEntityId)) {
           const hasRequesterIdentityHints =
             isDefined(currentUserEntityId) ||
             isDefined(currentUserId) ||
             isDefined(currentWorkspaceMemberId);
 
-          return this.createCalendarEventMaskMap(
+          return this.createCalendarEventMaskMapWithPredicate(
             calendarEventIds,
-            hasRequesterIdentityHints,
+            (calendarEventId) =>
+              !publicCalendarEventIds.has(calendarEventId) &&
+              hasRequesterIdentityHints,
           );
         }
 
@@ -230,6 +259,11 @@ export class CalendarPrivacyService {
         }
 
         for (const calendarEventId of calendarEventIds) {
+          if (publicCalendarEventIds.has(calendarEventId)) {
+            defaultMaskMap.set(calendarEventId, false);
+            continue;
+          }
+
           const ownerEntityIds =
             ownerEntityIdsByCalendarEventId.get(calendarEventId);
 
@@ -314,6 +348,18 @@ export class CalendarPrivacyService {
   ) {
     return new Map(
       calendarEventIds.map((calendarEventId) => [calendarEventId, shouldMask]),
+    );
+  }
+
+  private createCalendarEventMaskMapWithPredicate(
+    calendarEventIds: string[],
+    shouldMaskPredicate: (calendarEventId: string) => boolean,
+  ) {
+    return new Map(
+      calendarEventIds.map((calendarEventId) => [
+        calendarEventId,
+        shouldMaskPredicate(calendarEventId),
+      ]),
     );
   }
 

@@ -172,6 +172,10 @@ export class DevSeederPermissionsService {
       workspaceId,
       ownerFlatApplication: workspaceCustomFlatApplication,
     });
+    await this.roleService.createEntityManagerRole({
+      workspaceId,
+      ownerFlatApplication: workspaceCustomFlatApplication,
+    });
 
     await this.coreDataSource
       .getRepository(WorkspaceEntity)

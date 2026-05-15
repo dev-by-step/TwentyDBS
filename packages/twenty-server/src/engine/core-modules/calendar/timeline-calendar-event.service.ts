@@ -22,6 +22,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
 import { type OpportunityWorkspaceEntity } from 'src/modules/opportunity/standard-objects/opportunity.workspace-entity';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
@@ -31,6 +32,7 @@ import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-membe
 export class TimelineCalendarEventService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly calendarPrivacyService: CalendarPrivacyService,
     @InjectRepository(CalendarChannelEntity)
     private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
     @InjectRepository(ConnectedAccountEntity)
@@ -372,6 +374,12 @@ export class TimelineCalendarEventService {
       workspaceId,
       personIds: allPersonIds,
     });
+    const calendarEventMaskMap =
+      await this.calendarPrivacyService.getCalendarEventMaskMap({
+        calendarEventIds: events.map((event) => event.id),
+        workspaceId,
+        currentWorkspaceMemberId,
+      });
 
     return events
       .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
@@ -398,19 +406,20 @@ export class TimelineCalendarEventService {
           handle: p.handle ?? '',
         }));
 
-        const hasFullAccess = event.calendarChannelEventAssociations.some(
-          (assoc) => {
+        const hasFullAccessFromCalendarChannel =
+          event.calendarChannelEventAssociations.some((assoc) => {
             const ch = calendarChannelMap.get(assoc.calendarChannelId);
 
             return (
               ch?.visibility === 'SHARE_EVERYTHING' || ch?.isOwnedByCurrentUser
             );
-          },
-        );
+          });
+        const shouldMask = calendarEventMaskMap.get(event.id) ?? false;
 
-        const visibility = hasFullAccess
-          ? CalendarChannelVisibility.SHARE_EVERYTHING
-          : CalendarChannelVisibility.METADATA;
+        const visibility =
+          hasFullAccessFromCalendarChannel || !shouldMask
+            ? CalendarChannelVisibility.SHARE_EVERYTHING
+            : CalendarChannelVisibility.METADATA;
 
         return {
           ...omit(event, [

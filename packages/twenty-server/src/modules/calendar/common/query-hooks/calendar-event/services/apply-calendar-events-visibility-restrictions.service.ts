@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import { CalendarChannelVisibility } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
@@ -103,6 +102,10 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
               })
             )?.id ?? null)
           : null;
+        const hasRequesterEntityContext =
+          isDefined(userId) ||
+          isDefined(currentUserEntityId) ||
+          isDefined(currentWorkspaceMemberId);
 
         const connectedAccountIds = [
           ...new Set(
@@ -127,6 +130,17 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
                 ).map((connectedAccount) => connectedAccount.id),
               )
             : new Set<string>();
+
+        const calendarEventMaskMap =
+          await this.calendarPrivacyService.getCalendarEventMaskMap({
+            calendarEventIds: calendarEvents.map(
+              (calendarEvent) => calendarEvent.id,
+            ),
+            workspaceId,
+            currentUserEntityId,
+            currentUserId: userId,
+            currentWorkspaceMemberId,
+          });
 
         for (let i = calendarEvents.length - 1; i >= 0; i--) {
           const associations =
@@ -153,7 +167,9 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
               ownedConnectedAccountIds.has(calendarChannel.connectedAccountId),
           );
 
-          if (isOwnedByCurrentUser) {
+          const shouldMask = calendarEventMaskMap.get(calendarEvents[i].id) ?? false;
+
+          if (hasShareEverythingVisibility || isOwnedByCurrentUser) {
             continue;
           }
 
@@ -163,10 +179,15 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
           );
 
           if (hasMetadataVisibility) {
-            calendarEvents[i].title =
-              FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
-            calendarEvents[i].description =
-              FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
+            if (!hasRequesterEntityContext) {
+              calendarEventMaskMap.set(calendarEvents[i].id, true);
+              continue;
+            }
+
+            if (!shouldMask) {
+              continue;
+            }
+
             continue;
           }
 
@@ -176,17 +197,6 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
         if (calendarEvents.length === 0) {
           return calendarEvents;
         }
-
-        const calendarEventMaskMap =
-          await this.calendarPrivacyService.getCalendarEventMaskMap({
-            calendarEventIds: calendarEvents.map(
-              (calendarEvent) => calendarEvent.id,
-            ),
-            workspaceId,
-            currentUserEntityId,
-            currentUserId: userId,
-            currentWorkspaceMemberId,
-          });
 
         this.calendarPrivacyService.applyInternalEntityPrivacyToWorkspaceCalendarEvents(
           calendarEvents,

@@ -150,6 +150,10 @@ export class WorkspaceManagerService {
       workspaceId,
       ownerFlatApplication: workspaceCustomFlatApplication,
     });
+    await this.roleService.createEntityManagerRole({
+      workspaceId,
+      ownerFlatApplication: workspaceCustomFlatApplication,
+    });
 
     await this.workspaceRepository.update(workspaceId, {
       defaultRoleId: memberRole.id,

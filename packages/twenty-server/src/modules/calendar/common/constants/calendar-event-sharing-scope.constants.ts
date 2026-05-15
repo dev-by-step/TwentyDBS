@@ -1,0 +1,7 @@
+export const CALENDAR_EVENT_SHARING_SCOPE = {
+  ENTITY_ONLY: 'ENTITY_ONLY',
+  WORKSPACE_PUBLIC: 'WORKSPACE_PUBLIC',
+} as const;
+
+export type CalendarEventSharingScope =
+  (typeof CALENDAR_EVENT_SHARING_SCOPE)[keyof typeof CALENDAR_EVENT_SHARING_SCOPE];

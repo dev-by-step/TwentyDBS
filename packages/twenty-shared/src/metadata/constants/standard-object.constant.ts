@@ -598,6 +598,9 @@ export const STANDARD_OBJECTS = {
       conferenceLink: {
         universalIdentifier: '20202020-35da-43ef-9ca0-e936e9dc237b',
       },
+      sharingScope: {
+        universalIdentifier: '20202020-a4c2-4a67-8f15-58f39d9d7a4e',
+      },
       calendarChannelEventAssociations: {
         universalIdentifier: '20202020-bdf8-4572-a2cc-ecbb6bcc3a02',
       },

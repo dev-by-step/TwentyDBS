@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
+import { RoleModule } from 'src/engine/metadata-modules/role/role.module';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
@@ -15,6 +16,7 @@ import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity
     ObjectMetadataModule,
     FieldMetadataModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
+    RoleModule,
   ],
   providers: [
     InitInternalEntitiesCommand,
