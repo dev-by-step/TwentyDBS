@@ -10,8 +10,10 @@ import {
   type CreateOneResolverArgs,
 } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
-import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  type UserWorkspaceAuthContext,
+  type WorkspaceAuthContext,
+} from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import {
@@ -25,6 +27,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { ENTITY_MANAGER_ROLE_LABEL } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 const SUPPORTED_CALENDAR_MUTATION_OBJECT_NAMES = [
   'calendarChannelEventAssociation',
@@ -49,6 +52,7 @@ export class CalendarEventMutationPermissionService {
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async validateCreatePayload(
@@ -64,10 +68,6 @@ export class CalendarEventMutationPermissionService {
       return payload;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return payload;
-    }
-
     if (objectName === 'calendarChannelEventAssociation') {
       const calendarChannelId = this.extractStringValue(
         payload.data,
@@ -75,9 +75,11 @@ export class CalendarEventMutationPermissionService {
       );
 
       if (isDefined(calendarChannelId)) {
-        await this.assertCalendarChannelMutationAllowed(authContext, [
-          calendarChannelId,
-        ], msg`Only the channel owner, the entity manager, or an administrator can create this calendar link.`);
+        await this.assertCalendarChannelMutationAllowed(
+          authContext,
+          [calendarChannelId],
+          msg`Only the channel owner, the entity manager, or the platform administrator can create this calendar link.`,
+        );
       }
 
       return payload;
@@ -113,10 +115,6 @@ export class CalendarEventMutationPermissionService {
       return payload;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return payload;
-    }
-
     for (const data of payload.data) {
       await this.validateCreatePayload(authContext, objectName, {
         data,
@@ -139,10 +137,6 @@ export class CalendarEventMutationPermissionService {
       return;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return;
-    }
-
     if (objectName === 'calendarEvent') {
       await this.assertCalendarEventMutationAllowed(authContext, recordId);
 
@@ -151,11 +145,11 @@ export class CalendarEventMutationPermissionService {
 
     if (objectName === 'calendarChannelEventAssociation') {
       const associationRepository =
-        await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-          authContext.workspace.id,
-          'calendarChannelEventAssociation',
-          { shouldBypassPermissionChecks: true },
-        );
+        await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(authContext.workspace.id, 'calendarChannelEventAssociation', {
+          shouldBypassPermissionChecks: true,
+        });
       const association = await associationRepository.findOne({
         where: { id: recordId },
       });
@@ -166,31 +160,36 @@ export class CalendarEventMutationPermissionService {
 
       if (!isDefined(calendarChannelId)) {
         this.throwPermissionDenied(
-          msg`Only the channel owner, the entity manager, or an administrator can modify this calendar link.`,
+          msg`Only the channel owner, the entity manager, or the platform administrator can modify this calendar link.`,
         );
       }
 
-      await this.assertCalendarChannelMutationAllowed(authContext, [
-        calendarChannelId,
-      ], msg`Only the channel owner, the entity manager, or an administrator can modify this calendar link.`);
+      await this.assertCalendarChannelMutationAllowed(
+        authContext,
+        [calendarChannelId],
+        msg`Only the channel owner, the entity manager, or the platform administrator can modify this calendar link.`,
+      );
 
       return;
     }
 
     const participantRepository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        authContext.workspace.id,
-        'calendarEventParticipant',
-        { shouldBypassPermissionChecks: true },
-      );
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(authContext.workspace.id, 'calendarEventParticipant', {
+        shouldBypassPermissionChecks: true,
+      });
     const participant = await participantRepository.findOne({
       where: { id: recordId },
     });
-    const calendarEventId = this.extractStringValue(participant, 'calendarEventId');
+    const calendarEventId = this.extractStringValue(
+      participant,
+      'calendarEventId',
+    );
 
     if (!isDefined(calendarEventId)) {
       this.throwPermissionDenied(
-        msg`Only the event author, the entity manager, or an administrator can modify this event participant.`,
+        msg`Only the event author, the entity manager, or the platform administrator can modify this event participant.`,
       );
     }
 
@@ -209,12 +208,8 @@ export class CalendarEventMutationPermissionService {
       return;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return;
-    }
-
     this.throwPermissionDenied(
-      msg`Bulk calendar mutations are reserved to administrators.`,
+      msg`Bulk calendar mutations are disabled for scoped calendar records.`,
     );
   }
 
@@ -223,25 +218,28 @@ export class CalendarEventMutationPermissionService {
     calendarEventId: string,
   ): Promise<void> {
     const calendarEventRepository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        authContext.workspace.id,
-        'calendarEvent',
-        { shouldBypassPermissionChecks: true },
-      );
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(authContext.workspace.id, 'calendarEvent', {
+        shouldBypassPermissionChecks: true,
+      });
     const calendarEvent = await calendarEventRepository.findOne({
       where: { id: calendarEventId },
     });
 
-    if (this.extractWorkspaceMemberId(calendarEvent?.createdBy) === authContext.workspaceMemberId) {
+    if (
+      this.extractWorkspaceMemberId(calendarEvent?.createdBy) ===
+      authContext.workspaceMemberId
+    ) {
       return;
     }
 
     const associationRepository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        authContext.workspace.id,
-        'calendarChannelEventAssociation',
-        { shouldBypassPermissionChecks: true },
-      );
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(authContext.workspace.id, 'calendarChannelEventAssociation', {
+        shouldBypassPermissionChecks: true,
+      });
     const associations = await associationRepository.find({
       where: {
         calendarEventId,
@@ -252,15 +250,16 @@ export class CalendarEventMutationPermissionService {
       ...new Set(
         associations
           .map((association) => association.calendarChannelId)
-          .filter((calendarChannelId): calendarChannelId is string =>
-            typeof calendarChannelId === 'string',
+          .filter(
+            (calendarChannelId): calendarChannelId is string =>
+              typeof calendarChannelId === 'string',
           ),
       ),
     ];
 
     if (calendarChannelIds.length === 0) {
       this.throwPermissionDenied(
-        msg`Only the event author, the entity manager, or an administrator can modify this event.`,
+        msg`Only the event author, the entity manager, or the platform administrator can modify this event.`,
       );
     }
 
@@ -273,7 +272,7 @@ export class CalendarEventMutationPermissionService {
   private async assertCalendarChannelMutationAllowed(
     authContext: UserWorkspaceAuthContext,
     calendarChannelIds: string[],
-    permissionDeniedMessage = msg`Only the event author, the entity manager, or an administrator can modify this event.`,
+    permissionDeniedMessage = msg`Only the event author, the entity manager, or the platform administrator can modify this event.`,
   ): Promise<void> {
     if (calendarChannelIds.length === 0) {
       this.throwPermissionDenied(permissionDeniedMessage);
@@ -322,7 +321,7 @@ export class CalendarEventMutationPermissionService {
       return;
     }
 
-    if (!(await this.isEntityManager(authContext))) {
+    if (!(await this.canManageScopedCalendarRecords(authContext))) {
       this.throwPermissionDenied(permissionDeniedMessage);
     }
 
@@ -330,22 +329,28 @@ export class CalendarEventMutationPermissionService {
       authContext.workspace.id,
       connectedAccounts,
     );
-    const currentEntityId = this.normalizeEntityId(authContext.user.entityId);
+    const { activeEntityId } =
+      await this.workspaceMemberInternalEntityService.resolveContext({
+        workspaceId: authContext.workspace.id,
+        workspaceMemberId: authContext.workspaceMemberId,
+        fallbackEntityId: authContext.user.entityId,
+        requestedActiveEntityId: authContext.activeInternalEntityId,
+      });
 
-    if (!isDefined(currentEntityId)) {
+    if (!isDefined(activeEntityId)) {
       this.throwPermissionDenied(
-        msg`Your profile is not attached to an internal entity.`,
+        msg`Your profile is not attached to an active internal entity.`,
       );
     }
 
-    if (ownerEntityIds.has(currentEntityId)) {
+    if (ownerEntityIds.has(activeEntityId)) {
       return;
     }
 
     this.throwPermissionDenied(permissionDeniedMessage);
   }
 
-  private async isSuperAdmin(
+  private async isPlatformAdmin(
     authContext: UserWorkspaceAuthContext,
   ): Promise<boolean> {
     if (authContext.user.canAccessFullAdminPanel) {
@@ -358,6 +363,16 @@ export class CalendarEventMutationPermissionService {
       (role) =>
         role.universalIdentifier === STANDARD_ROLE.admin.universalIdentifier,
     );
+  }
+
+  private async canManageScopedCalendarRecords(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<boolean> {
+    if (await this.isPlatformAdmin(authContext)) {
+      return true;
+    }
+
+    return this.isEntityManager(authContext);
   }
 
   private async isEntityManager(
@@ -374,12 +389,11 @@ export class CalendarEventMutationPermissionService {
   }
 
   private async getUserWorkspaceRoles(authContext: UserWorkspaceAuthContext) {
-    const rolesByUserWorkspace = await this.userRoleService.getRolesByUserWorkspaces(
-      {
+    const rolesByUserWorkspace =
+      await this.userRoleService.getRolesByUserWorkspaces({
         userWorkspaceIds: [authContext.userWorkspaceId],
         workspaceId: authContext.workspace.id,
-      },
-    );
+      });
 
     return rolesByUserWorkspace.get(authContext.userWorkspaceId) ?? [];
   }
@@ -425,6 +439,20 @@ export class CalendarEventMutationPermissionService {
             select: ['id', 'entityId'],
           })
         : [];
+    const workspaceMemberRepository =
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(workspaceId, 'workspaceMember', { shouldBypassPermissionChecks: true });
+    const workspaceMembers =
+      userIds.length > 0
+        ? await workspaceMemberRepository.find({
+            where: {
+              userId: {
+                in: userIds,
+              },
+            },
+          })
+        : [];
 
     const ownerUserIdByWorkspaceId = new Map(
       userWorkspaces.map((userWorkspace) => [
@@ -432,17 +460,53 @@ export class CalendarEventMutationPermissionService {
         userWorkspace.userId,
       ]),
     );
+    const ownerWorkspaceMemberIdByUserId = new Map(
+      workspaceMembers
+        .map((workspaceMember) => {
+          const workspaceMemberId = this.extractStringValue(
+            workspaceMember,
+            'id',
+          );
+          const userId = this.extractStringValue(workspaceMember, 'userId');
+
+          return isDefined(workspaceMemberId) && isDefined(userId)
+            ? ([userId, workspaceMemberId] as const)
+            : null;
+        })
+        .filter(isDefined),
+    );
+    const fallbackEntityIdByWorkspaceMemberId = new Map(
+      users
+        .map((user) => {
+          const workspaceMemberId = ownerWorkspaceMemberIdByUserId.get(user.id);
+
+          return isDefined(workspaceMemberId)
+            ? ([workspaceMemberId, user.entityId ?? null] as const)
+            : null;
+        })
+        .filter(isDefined),
+    );
+    const ownerWorkspaceMemberIds = connectedAccounts
+      .map((connectedAccount) =>
+        ownerUserIdByWorkspaceId.get(connectedAccount.userWorkspaceId ?? ''),
+      )
+      .filter(isDefined)
+      .map((ownerUserId) => ownerWorkspaceMemberIdByUserId.get(ownerUserId))
+      .filter(isDefined);
+    const ownerContexts =
+      await this.workspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds(
+        {
+          workspaceId,
+          workspaceMemberIds: ownerWorkspaceMemberIds,
+          fallbackEntityIdByWorkspaceMemberId,
+        },
+      );
 
     return new Set(
-      connectedAccounts
-        .map((connectedAccount) =>
-          ownerUserIdByWorkspaceId.get(connectedAccount.userWorkspaceId ?? ''),
-        )
-        .filter(isDefined)
-        .map((ownerUserId) =>
-          this.normalizeEntityId(
-            users.find((user) => user.id === ownerUserId)?.entityId ?? null,
-          ),
+      ownerWorkspaceMemberIds
+        .map(
+          (workspaceMemberId) =>
+            ownerContexts.get(workspaceMemberId)?.currentEntityId ?? null,
         )
         .filter(isDefined),
     );
@@ -464,10 +528,7 @@ export class CalendarEventMutationPermissionService {
       : null;
   }
 
-  private extractStringValue(
-    data: unknown,
-    fieldName: string,
-  ): string | null {
+  private extractStringValue(data: unknown, fieldName: string): string | null {
     if (!isDefined(data) || typeof data !== 'object' || !(fieldName in data)) {
       return null;
     }
@@ -477,15 +538,9 @@ export class CalendarEventMutationPermissionService {
     return typeof value === 'string' && value.length > 0 ? value : null;
   }
 
-  private normalizeEntityId(entityId?: string | null): string | null {
-    if (!isDefined(entityId) || entityId.trim().length === 0) {
-      return null;
-    }
-
-    return entityId.toLowerCase();
-  }
-
-  private throwPermissionDenied(userFriendlyMessage?: ReturnType<typeof msg>): never {
+  private throwPermissionDenied(
+    userFriendlyMessage?: ReturnType<typeof msg>,
+  ): never {
     throw new PermissionsException(
       PermissionsExceptionMessage.PERMISSION_DENIED,
       PermissionsExceptionCode.PERMISSION_DENIED,

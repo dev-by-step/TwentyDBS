@@ -1,6 +1,6 @@
-import { COMPANY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { COMPANY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
 import { NOTE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/note-data-seeds.constant';
-import { PERSON_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
+import { PERSON_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 
 type NoteTargetDataSeed = {
   id: string;
@@ -43,33 +43,29 @@ const NOTE_TARGET_DATA_SEED_IDS = GENERATE_NOTE_TARGET_IDS();
 const GENERATE_NOTE_TARGET_SEEDS = (): NoteTargetDataSeed[] => {
   const NOTE_TARGET_SEEDS: NoteTargetDataSeed[] = [];
 
-  for (let INDEX = 1; INDEX <= 1200; INDEX++) {
+  PERSON_DATA_SEEDS.forEach((person, index) => {
+    const noteIndex = index + 1;
+
     NOTE_TARGET_SEEDS.push({
-      id: NOTE_TARGET_DATA_SEED_IDS[`ID_${INDEX}`],
-      noteId: NOTE_DATA_SEED_IDS[`ID_${INDEX}`],
-      targetPersonId:
-        PERSON_DATA_SEED_IDS[
-          `ID_${INDEX}` as keyof typeof PERSON_DATA_SEED_IDS
-        ],
+      id: NOTE_TARGET_DATA_SEED_IDS[`ID_${noteIndex}`],
+      noteId: NOTE_DATA_SEED_IDS[`ID_${noteIndex}`],
+      targetPersonId: person.id,
       targetCompanyId: null,
       targetOpportunityId: null,
     });
-  }
+  });
 
-  for (let INDEX = 1201; INDEX <= 1800; INDEX++) {
-    const COMPANY_INDEX = INDEX - 1200;
+  COMPANY_DATA_SEEDS.forEach((company, index) => {
+    const noteIndex = PERSON_DATA_SEEDS.length + index + 1;
 
     NOTE_TARGET_SEEDS.push({
-      id: NOTE_TARGET_DATA_SEED_IDS[`ID_${INDEX}`],
-      noteId: NOTE_DATA_SEED_IDS[`ID_${INDEX}`],
+      id: NOTE_TARGET_DATA_SEED_IDS[`ID_${noteIndex}`],
+      noteId: NOTE_DATA_SEED_IDS[`ID_${noteIndex}`],
       targetPersonId: null,
-      targetCompanyId:
-        COMPANY_DATA_SEED_IDS[
-          `ID_${COMPANY_INDEX}` as keyof typeof COMPANY_DATA_SEED_IDS
-        ],
+      targetCompanyId: company.id,
       targetOpportunityId: null,
     });
-  }
+  });
 
   return NOTE_TARGET_SEEDS;
 };

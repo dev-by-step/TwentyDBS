@@ -3,8 +3,8 @@ import { type ObjectRecord } from 'twenty-shared/types';
 import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSourceService } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.service';
-import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
 import { buildWorkspaceAuthContext } from 'src/modules/internal-entity/__tests__/factories/workspace-auth-context.factory';
+import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/factories/internal-entity-test.factory';
 import {
   buildCompanyRecord,
   buildOpportunityRecord,
@@ -12,6 +12,7 @@ import {
   buildWorkspaceRecord,
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InternalEntitySourceTaggingService } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service';
+import { type WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 type MockDataSource = {
   query: jest.Mock;
@@ -44,10 +45,32 @@ const buildServiceContext = () => {
   const service = new InternalEntitySourceTaggingService(
     globalWorkspaceDataSourceService as unknown as GlobalWorkspaceDataSourceService,
     objectMetadataService as unknown as ObjectMetadataService,
+    {
+      resolveContext: jest.fn(
+        async ({
+          fallbackEntityId,
+          requestedActiveEntityId,
+        }: {
+          fallbackEntityId?: string | null;
+          requestedActiveEntityId?: string | null;
+        }) => ({
+          currentEntityId: fallbackEntityId ?? null,
+          activeEntityId: requestedActiveEntityId ?? fallbackEntityId ?? null,
+          entityIds: fallbackEntityId ? [fallbackEntityId] : [],
+        }),
+      ),
+    } as unknown as WorkspaceMemberInternalEntityService,
   );
 
-  const makeAuthContext = ({ entityId = internalEntity.id } = {}) =>
+  const makeAuthContext = ({
+    activeInternalEntityId,
+    entityId = internalEntity.id,
+  }: {
+    activeInternalEntityId?: string | null;
+    entityId?: string | null;
+  } = {}) =>
     buildWorkspaceAuthContext({
+      activeInternalEntityId,
       entityId,
       workspaceId: workspace.id,
     });
@@ -106,6 +129,35 @@ describe('InternalEntitySourceTaggingService', () => {
       { name: 'Opportunity A', internalEntityId },
       { name: 'Opportunity B', internalEntityId },
     ]);
+  });
+
+  it('should use the active internal entity for opportunity create payloads', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const activeEntityId = buildInternalEntitySeed().id;
+    const authContext = makeAuthContext({
+      activeInternalEntityId: activeEntityId,
+    });
+
+    const payload = await service.tagCreateOnePayload(
+      authContext,
+      'opportunity',
+      {
+        data: {
+          name: 'Opportunity A',
+        },
+      },
+    );
+
+    expect(payload.data).toMatchObject({
+      name: 'Opportunity A',
+      internalEntityId: activeEntityId,
+    });
+    expect(dataSource.query).toHaveBeenCalledWith(
+      expect.stringContaining('"internalEntity"'),
+      [activeEntityId],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
   });
 
   it('should validate person create payloads and fail when the user has no internal entity', async () => {

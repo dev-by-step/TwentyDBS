@@ -22,6 +22,7 @@ export interface UserWorkspaceAuthContext extends BaseWorkspaceAuthContext {
   type: 'user';
   userWorkspaceId: NonNullable<RawAuthContext['userWorkspaceId']>;
   user: NonNullable<RawAuthContext['user']>;
+  activeInternalEntityId?: RawAuthContext['activeInternalEntityId'];
   workspaceMemberId: NonNullable<RawAuthContext['workspaceMemberId']>;
   workspaceMember: NonNullable<RawAuthContext['workspaceMember']>;
 }

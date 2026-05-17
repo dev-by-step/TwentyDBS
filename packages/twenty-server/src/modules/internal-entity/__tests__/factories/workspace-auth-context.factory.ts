@@ -6,9 +6,11 @@ import {
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 
 export const buildWorkspaceAuthContext = ({
+  activeInternalEntityId,
   entityId,
   workspaceId,
 }: {
+  activeInternalEntityId?: string | null;
   entityId?: string | null;
   workspaceId?: string;
 } = {}): WorkspaceAuthContext => {
@@ -27,5 +29,6 @@ export const buildWorkspaceAuthContext = ({
     userWorkspaceId: workspaceMember.id,
     workspaceMemberId: workspaceMember.id,
     workspaceMember,
-  } as WorkspaceAuthContext;
+    activeInternalEntityId,
+  } as unknown as WorkspaceAuthContext;
 };

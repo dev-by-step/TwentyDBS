@@ -9,6 +9,7 @@ import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadat
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { ImportCsvOpportunitiesCommand } from 'src/modules/internal-entity/commands/import-csv-opportunities.command';
 import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
   imports: [
@@ -17,11 +18,13 @@ import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity
     FieldMetadataModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     RoleModule,
+    WorkspaceMemberInternalEntityModule,
   ],
   providers: [
     InitInternalEntitiesCommand,
     ImportCsvOpportunitiesCommand,
     ImportCsvOpportunitiesParserService,
   ],
+  exports: [WorkspaceMemberInternalEntityModule],
 })
 export class InternalEntityModule {}

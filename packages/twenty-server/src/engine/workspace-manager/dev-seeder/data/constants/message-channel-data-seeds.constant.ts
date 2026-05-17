@@ -3,6 +3,10 @@ import {
   MessageChannelType,
   MessageChannelVisibility,
 } from 'twenty-shared/types';
+import {
+  PRIMARY_DEV_WORKSPACE_SHARED_HANDLES,
+  PRIMARY_DEV_WORKSPACE_USERS,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { CONNECTED_ACCOUNT_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/connected-account-data-seeds.constant';
 
 type MessageChannelDataSeed = {
@@ -58,7 +62,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.TIM,
-    handle: 'tim@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -71,7 +75,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.JONY,
-    handle: 'jony.ive@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -84,7 +88,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.PHIL,
-    handle: 'phil.schiler@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -97,7 +101,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.JANE,
-    handle: 'jane.austen@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.JANE.email,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -110,7 +114,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.TIM, // Use TIM's connected account for shared inbox
-    handle: 'support@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.CONTACT,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -123,7 +127,7 @@ export const MESSAGE_CHANNEL_DATA_SEEDS: MessageChannelDataSeed[] = [
     isContactAutoCreationEnabled: true,
     type: MessageChannelType.EMAIL,
     connectedAccountId: CONNECTED_ACCOUNT_DATA_SEED_IDS.TIM, // Use TIM's connected account for shared inbox
-    handle: 'sales@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.SALES,
     isSyncEnabled: true,
     visibility: MessageChannelVisibility.SHARE_EVERYTHING,
     syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,

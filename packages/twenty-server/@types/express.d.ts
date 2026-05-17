@@ -19,6 +19,7 @@ declare module 'express-serve-static-core' {
     workspace?: FlatWorkspace;
     workspaceId?: string;
     workspaceMetadataVersion?: number;
+    activeInternalEntityId?: string | null;
     workspaceMemberId?: string;
     workspaceMember?: WorkspaceMemberWorkspaceEntity;
     userWorkspaceId?: string;

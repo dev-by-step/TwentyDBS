@@ -1,11 +1,9 @@
 import { isDefined } from 'twenty-shared/utils';
 
 import { COMPANY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { INTERNAL_ENTITY_DEMO_RECORDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/internal-entity-demo-records.constant';
 import { PERSON_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
-import {
-  WORKSPACE_MEMBER_DATA_SEED_IDS,
-  WORKSPACE_MEMBER_DATA_SEEDS,
-} from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+import { WORKSPACE_MEMBER_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
 type OpportunityDataSeed = {
   id: string;
@@ -60,111 +58,139 @@ const GENERATE_OPPORTUNITY_IDS = (): Record<string, string> => {
 
 export const OPPORTUNITY_DATA_SEED_IDS = GENERATE_OPPORTUNITY_IDS();
 
-// Credible opportunity names for Apple selling to various companies
+// Curated opportunity names for a shared B2B CRM used across internal entities.
 const OPPORTUNITY_TEMPLATES = [
-  { name: 'Enterprise iPad Deployment', amount: 2500000, stage: 'PROPOSAL' },
-  { name: 'MacBook Pro Fleet Upgrade', amount: 1800000, stage: 'MEETING' },
-  { name: 'iPhone Corporate Program', amount: 3200000, stage: 'NEW' },
-  { name: 'Apple TV+ Enterprise License', amount: 450000, stage: 'SCREENING' },
-  { name: 'Mac Studio Creative Suite', amount: 890000, stage: 'PROPOSAL' },
-  { name: 'iPad Pro Design Team Setup', amount: 670000, stage: 'MEETING' },
-  { name: 'Apple Watch Corporate Wellness', amount: 320000, stage: 'NEW' },
+  { name: 'Atlas CRM Rollout', amount: 2500000, stage: 'PROPOSAL' },
+  { name: 'Orbis Data Platform Migration', amount: 1800000, stage: 'MEETING' },
+  { name: 'Groupe Sales Hub Deployment', amount: 3200000, stage: 'NEW' },
+  { name: 'Shared Calendar Governance', amount: 450000, stage: 'SCREENING' },
   {
-    name: 'iMac Office Workstation Refresh',
+    name: 'Multi-entity Permissions Rollout',
+    amount: 890000,
+    stage: 'PROPOSAL',
+  },
+  { name: 'Contact Repository Cleanup', amount: 670000, stage: 'MEETING' },
+  { name: 'Workspace Analytics Dashboard', amount: 320000, stage: 'NEW' },
+  {
+    name: 'Customer 360 Data Model',
     amount: 1200000,
     stage: 'CUSTOMER',
   },
-  { name: 'Apple One Business Bundle', amount: 180000, stage: 'PROPOSAL' },
-  { name: 'MacBook Air Remote Work Package', amount: 950000, stage: 'MEETING' },
-  { name: 'Apple Pencil Educational License', amount: 85000, stage: 'NEW' },
   {
-    name: 'Mac Pro Video Production Setup',
+    name: 'Pipeline Forecasting Automation',
+    amount: 180000,
+    stage: 'PROPOSAL',
+  },
+  { name: 'Executive Reporting Pack', amount: 950000, stage: 'MEETING' },
+  { name: 'Lead Routing Rules Setup', amount: 85000, stage: 'NEW' },
+  {
+    name: 'Opportunity Review Workflow',
     amount: 2100000,
     stage: 'SCREENING',
   },
-  { name: 'iPhone SE Frontline Workers', amount: 780000, stage: 'PROPOSAL' },
-  { name: 'Apple CarPlay Integration', amount: 1500000, stage: 'MEETING' },
-  { name: 'iPad Air Retail Deployment', amount: 620000, stage: 'NEW' },
-  { name: 'Apple Music Business License', amount: 95000, stage: 'CUSTOMER' },
-  { name: 'Mac mini Server Infrastructure', amount: 430000, stage: 'PROPOSAL' },
-  { name: 'Apple Arcade Enterprise Gaming', amount: 75000, stage: 'SCREENING' },
-  { name: 'iPhone 15 Pro Executive Program', amount: 540000, stage: 'MEETING' },
-  { name: 'Apple Fitness+ Corporate Wellness', amount: 125000, stage: 'NEW' },
-  { name: 'iPad Mini Field Operations', amount: 380000, stage: 'PROPOSAL' },
+  { name: 'Group Calendar Adoption Plan', amount: 780000, stage: 'PROPOSAL' },
+  { name: 'Entity-level Access Audit', amount: 1500000, stage: 'MEETING' },
+  { name: 'Internal Entity Directory', amount: 620000, stage: 'NEW' },
+  { name: 'Client Onboarding Automation', amount: 95000, stage: 'CUSTOMER' },
+  { name: 'RevOps Process Mapping', amount: 430000, stage: 'PROPOSAL' },
   {
-    name: 'Apple News+ Business Subscription',
+    name: 'Cross-entity Opportunity Sharing',
+    amount: 75000,
+    stage: 'SCREENING',
+  },
+  { name: 'Commercial Data Quality Sprint', amount: 540000, stage: 'MEETING' },
+  { name: 'Shared Inbox Governance', amount: 125000, stage: 'NEW' },
+  {
+    name: 'Procurement Workflow Digitization',
+    amount: 380000,
+    stage: 'PROPOSAL',
+  },
+  {
+    name: 'Key Account Steering Toolkit',
     amount: 45000,
     stage: 'CUSTOMER',
   },
-  { name: 'MacBook Pro M3 Developer Team', amount: 1600000, stage: 'MEETING' },
   {
-    name: 'Apple Vision Pro Prototype Lab',
+    name: 'Multi-brand Contact Unification',
+    amount: 1600000,
+    stage: 'MEETING',
+  },
+  {
+    name: 'Sales Compensation Reporting',
     amount: 850000,
     stage: 'SCREENING',
   },
-  { name: 'iPhone Photography Workshop', amount: 65000, stage: 'NEW' },
-  { name: 'Apple Store Corporate Training', amount: 155000, stage: 'PROPOSAL' },
-  { name: 'iPad Kiosk Solution Deployment', amount: 290000, stage: 'MEETING' },
+  { name: 'Business Review Automation', amount: 65000, stage: 'NEW' },
   {
-    name: 'Apple Pay Enterprise Integration',
+    name: 'Forecast Reliability Initiative',
+    amount: 155000,
+    stage: 'PROPOSAL',
+  },
+  { name: 'Support Queue Routing', amount: 290000, stage: 'MEETING' },
+  {
+    name: 'Partner Pipeline Tracking',
     amount: 720000,
     stage: 'CUSTOMER',
   },
-  { name: 'Mac Studio Animation Pipeline', amount: 1350000, stage: 'PROPOSAL' },
-  { name: 'Apple Configurator MDM Setup', amount: 210000, stage: 'SCREENING' },
+  { name: 'Calendar Privacy Hardening', amount: 1350000, stage: 'PROPOSAL' },
+  { name: 'CRM Mobile Rollout', amount: 210000, stage: 'SCREENING' },
   {
-    name: 'iPhone Accessibility Features Training',
+    name: 'KPI Scorecard Standardization',
     amount: 85000,
     stage: 'NEW',
   },
-  { name: 'Apple Business Manager License', amount: 180000, stage: 'MEETING' },
-  { name: 'iPad Pro AR Development Kit', amount: 490000, stage: 'PROPOSAL' },
-  { name: 'Apple School Manager Education', amount: 320000, stage: 'CUSTOMER' },
-  { name: 'MacBook Air Student Program', amount: 750000, stage: 'MEETING' },
-  { name: 'Apple Watch Health Monitoring', amount: 280000, stage: 'SCREENING' },
-  { name: 'iPhone Security Audit Services', amount: 195000, stage: 'NEW' },
+  { name: 'Customer Success Handover Flow', amount: 180000, stage: 'MEETING' },
   {
-    name: 'Apple TV Digital Signage Solution',
+    name: 'Entity Manager Training Program',
+    amount: 490000,
+    stage: 'PROPOSAL',
+  },
+  { name: 'Shared Meeting Notes Workspace', amount: 320000, stage: 'CUSTOMER' },
+  { name: 'Renewal Risk Monitoring', amount: 750000, stage: 'MEETING' },
+  { name: 'Bid Desk Workflow Design', amount: 280000, stage: 'SCREENING' },
+  { name: 'Referral Tracking Setup', amount: 195000, stage: 'NEW' },
+  {
+    name: 'Executive Deal Review Cadence',
     amount: 340000,
     stage: 'PROPOSAL',
   },
-  { name: 'Mac Pro Rendering Farm Setup', amount: 2800000, stage: 'MEETING' },
+  { name: 'Contract Approval Workflow', amount: 2800000, stage: 'MEETING' },
   {
-    name: 'Apple Pencil Digital Art License',
+    name: 'Group Activity Timeline',
     amount: 120000,
     stage: 'CUSTOMER',
   },
-  { name: 'iPad Point of Sale Integration', amount: 580000, stage: 'PROPOSAL' },
+  { name: 'Account Segmentation Model', amount: 580000, stage: 'PROPOSAL' },
   {
-    name: 'Apple Maps Business Integration',
+    name: 'Duplicate Detection Program',
     amount: 165000,
     stage: 'SCREENING',
   },
-  { name: 'iPhone App Development Workshop', amount: 95000, stage: 'NEW' },
+  { name: 'Stakeholder Mapping Sprint', amount: 95000, stage: 'NEW' },
   {
-    name: 'Apple Silicon Migration Consulting',
+    name: 'Sales Playbook Migration',
     amount: 420000,
     stage: 'MEETING',
   },
   {
-    name: 'iPad Inventory Management System',
+    name: 'Revenue Attribution Cleanup',
     amount: 350000,
     stage: 'PROPOSAL',
   },
   {
-    name: 'Apple Podcast Enterprise Hosting',
+    name: 'Marketing to Sales Handoff',
     amount: 75000,
     stage: 'CUSTOMER',
   },
   {
-    name: 'MacBook Pro Creative Cloud Bundle',
+    name: 'Calendar Visibility Pilot',
     amount: 1100000,
     stage: 'MEETING',
   },
-  { name: 'Apple ID Enterprise SSO Setup', amount: 240000, stage: 'SCREENING' },
-  { name: 'iPhone Field Service Optimization', amount: 680000, stage: 'NEW' },
+  { name: 'Entity-based Territory Design', amount: 240000, stage: 'SCREENING' },
+  { name: 'Portfolio Steering Dashboard', amount: 680000, stage: 'NEW' },
   {
-    name: 'Apple Retail Partnership Program',
+    name: 'Group CRM Stabilization',
     amount: 1950000,
     stage: 'PROPOSAL',
   },
@@ -172,25 +198,43 @@ const OPPORTUNITY_TEMPLATES = [
 
 const GENERATE_OPPORTUNITY_SEEDS = (): OpportunityDataSeed[] => {
   const OPPORTUNITY_SEEDS: OpportunityDataSeed[] = [];
+  const COMPANY_RECORD_COUNT = INTERNAL_ENTITY_DEMO_RECORDS.length;
 
   for (let INDEX = 1; INDEX <= 50; INDEX++) {
     const TEMPLATE_INDEX = (INDEX - 1) % OPPORTUNITY_TEMPLATES.length;
     const TEMPLATE = OPPORTUNITY_TEMPLATES[TEMPLATE_INDEX];
-
     const DAYS_AHEAD = Math.floor(Math.random() * 90) + 1;
     const CLOSE_DATE = new Date();
 
     CLOSE_DATE.setDate(CLOSE_DATE.getDate() + DAYS_AHEAD);
 
-    const workspaceMemberId = Object.values(WORKSPACE_MEMBER_DATA_SEED_IDS)[
-      INDEX % 4
-    ];
+    const demoRecord =
+      INTERNAL_ENTITY_DEMO_RECORDS[(INDEX - 1) % COMPANY_RECORD_COUNT];
+
+    if (!isDefined(demoRecord)) {
+      throw new Error(`Missing demo company mapping for opportunity ${INDEX}`);
+    }
+    const cycleIndex = Math.floor((INDEX - 1) / COMPANY_RECORD_COUNT);
+    const opportunityWorkspaceMemberIds =
+      demoRecord.opportunityWorkspaceMemberIds ?? [demoRecord.workspaceMemberId];
+    const workspaceMemberId =
+      opportunityWorkspaceMemberIds[
+        cycleIndex % opportunityWorkspaceMemberIds.length
+      ];
     const workspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
       (workspaceMember) => workspaceMember.id === workspaceMemberId,
     );
     const workspaceMemberName = isDefined(workspaceMember)
       ? `${workspaceMember?.nameFirstName} ${workspaceMember?.nameLastName}`
-      : 'Unkonwn';
+      : 'Unknown';
+    const contact =
+      demoRecord.contacts[cycleIndex % demoRecord.contacts.length];
+
+    if (!isDefined(contact)) {
+      throw new Error(
+        `Missing demo contact for company ${demoRecord.companyName}`,
+      );
+    }
 
     const rawSeed: OpportunityDataSeed = {
       id: OPPORTUNITY_DATA_SEED_IDS[`ID_${INDEX}`],
@@ -200,15 +244,9 @@ const GENERATE_OPPORTUNITY_SEEDS = (): OpportunityDataSeed[] => {
       closeDate: CLOSE_DATE,
       stage: TEMPLATE.stage,
       position: INDEX,
-      pointOfContactId:
-        PERSON_DATA_SEED_IDS[
-          `ID_${INDEX}` as keyof typeof PERSON_DATA_SEED_IDS
-        ] || PERSON_DATA_SEED_IDS.ID_1,
-      companyId:
-        COMPANY_DATA_SEED_IDS[
-          `ID_${Math.ceil(INDEX / 2)}` as keyof typeof COMPANY_DATA_SEED_IDS
-        ] || COMPANY_DATA_SEED_IDS.ID_1,
-      ownerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
+      pointOfContactId: PERSON_DATA_SEED_IDS[contact.seedKey],
+      companyId: COMPANY_DATA_SEED_IDS[demoRecord.companySeedKey],
+      ownerId: workspaceMemberId,
       createdBySource: 'MANUAL',
       updatedBySource: 'MANUAL',
       createdByWorkspaceMemberId: workspaceMemberId,

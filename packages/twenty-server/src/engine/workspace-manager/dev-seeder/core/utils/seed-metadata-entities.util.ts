@@ -9,6 +9,10 @@ import {
 } from 'twenty-shared/types';
 
 import {
+  PRIMARY_DEV_WORKSPACE_SHARED_HANDLES,
+  PRIMARY_DEV_WORKSPACE_USERS,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
+import {
   SEED_APPLE_WORKSPACE_ID,
   SEED_YCOMBINATOR_WORKSPACE_ID,
 } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
@@ -130,35 +134,35 @@ const seedConnectedAccounts = async ({
   const connectedAccounts = [
     {
       id: ids.connectedAccountIds.TIM,
-      handle: 'tim@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
       provider: 'google',
       userWorkspaceId: ids.userWorkspaceIds.TIM,
       workspaceId,
     },
     {
       id: ids.connectedAccountIds.JONY,
-      handle: 'jony.ive@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
       provider: 'google',
       userWorkspaceId: ids.userWorkspaceIds.JONY,
       workspaceId,
     },
     {
       id: ids.connectedAccountIds.PHIL,
-      handle: 'phil.schiler@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
       provider: 'google',
       userWorkspaceId: ids.userWorkspaceIds.PHIL,
       workspaceId,
     },
     {
       id: ids.connectedAccountIds.JANE,
-      handle: 'jane.austen@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JANE.email,
       provider: 'google',
       userWorkspaceId: ids.userWorkspaceIds.JANE,
       workspaceId,
     },
     {
       id: ids.connectedAccountIds.JANE_DELETABLE,
-      handle: 'jane-deletable@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.ARCHIVE,
       provider: 'google',
       userWorkspaceId: ids.userWorkspaceIds.JANE,
       workspaceId,
@@ -190,7 +194,7 @@ const seedMessageChannels = async ({
   const messageChannels = [
     {
       id: ids.messageChannelIds.TIM,
-      handle: 'tim@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -206,7 +210,7 @@ const seedMessageChannels = async ({
     },
     {
       id: ids.messageChannelIds.JONY,
-      handle: 'jony.ive@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -222,7 +226,7 @@ const seedMessageChannels = async ({
     },
     {
       id: ids.messageChannelIds.PHIL,
-      handle: 'phil.schiler@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -238,7 +242,7 @@ const seedMessageChannels = async ({
     },
     {
       id: ids.messageChannelIds.JANE,
-      handle: 'jane.austen@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JANE.email,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -254,7 +258,7 @@ const seedMessageChannels = async ({
     },
     {
       id: ids.messageChannelIds.SUPPORT,
-      handle: 'support@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.CONTACT,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -270,7 +274,7 @@ const seedMessageChannels = async ({
     },
     {
       id: ids.messageChannelIds.SALES,
-      handle: 'sales@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.SALES,
       visibility: MessageChannelVisibility.SHARE_EVERYTHING,
       type: MessageChannelType.EMAIL,
       syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
@@ -320,7 +324,7 @@ const seedCalendarChannels = async ({
   const calendarChannels = [
     {
       id: ids.calendarChannelIds.TIM,
-      handle: 'tim@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
       visibility: CalendarChannelVisibility.METADATA,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,
@@ -331,7 +335,7 @@ const seedCalendarChannels = async ({
     },
     {
       id: ids.calendarChannelIds.JONY,
-      handle: 'jony@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
       visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,
@@ -342,7 +346,7 @@ const seedCalendarChannels = async ({
     },
     {
       id: ids.calendarChannelIds.PHIL,
-      handle: 'phil@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
       visibility: CalendarChannelVisibility.METADATA,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,
@@ -353,7 +357,7 @@ const seedCalendarChannels = async ({
     },
     {
       id: ids.calendarChannelIds.JANE,
-      handle: 'jane.austen@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_USERS.JANE.email,
       visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,
@@ -364,7 +368,7 @@ const seedCalendarChannels = async ({
     },
     {
       id: ids.calendarChannelIds.COMPANY_MAIN,
-      handle: 'company-main@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.LEADERSHIP,
       visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,
@@ -375,7 +379,7 @@ const seedCalendarChannels = async ({
     },
     {
       id: ids.calendarChannelIds.TEAM_CALENDAR,
-      handle: 'team-calendar@apple.dev',
+      handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.TEAM_CALENDAR,
       visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
       syncStage: 'CALENDAR_EVENT_LIST_FETCH_PENDING',
       isContactAutoCreationEnabled: true,

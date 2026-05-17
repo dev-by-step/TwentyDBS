@@ -5,6 +5,7 @@ type UserAuthContextInput = {
   workspace: NonNullable<RawAuthContext['workspace']>;
   userWorkspaceId: NonNullable<RawAuthContext['userWorkspaceId']>;
   user: NonNullable<RawAuthContext['user']>;
+  activeInternalEntityId?: RawAuthContext['activeInternalEntityId'];
   workspaceMemberId: NonNullable<RawAuthContext['workspaceMemberId']>;
   workspaceMember: NonNullable<RawAuthContext['workspaceMember']>;
   workspaceMetadataVersion?: string;
@@ -18,6 +19,7 @@ export const buildUserAuthContext = (
     workspace: input.workspace,
     userWorkspaceId: input.userWorkspaceId,
     user: input.user,
+    activeInternalEntityId: input.activeInternalEntityId,
     workspaceMemberId: input.workspaceMemberId,
     workspaceMember: input.workspaceMember,
     workspaceMetadataVersion: input.workspaceMetadataVersion,

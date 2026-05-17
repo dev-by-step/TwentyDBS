@@ -14,6 +14,7 @@ import { In, Repository } from 'typeorm';
 import { SupportDriver } from 'src/engine/core-modules/twenty-config/interfaces/support.interface';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
 import {
   AuthException,
@@ -69,6 +70,7 @@ import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { AccountsToReconnectKeys } from 'src/modules/connected-account/types/accounts-to-reconnect-key-value.type';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 const getHMACKey = (email?: string, key?: string | null) => {
@@ -96,6 +98,7 @@ export class UserResolver {
     private readonly workspaceMemberTranspiler: WorkspaceMemberTranspiler,
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   private async getUserWorkspacePermissions({
@@ -206,6 +209,37 @@ export class UserResolver {
     );
 
     return Object.fromEntries(filteredMap);
+  }
+
+  @ResolveField(() => UUIDScalarType, {
+    nullable: true,
+  })
+  async entityId(
+    @Parent() user: UserEntity,
+    @AuthWorkspace({ allowUndefined: true })
+    workspace: WorkspaceEntity | undefined,
+  ): Promise<string | null> {
+    if (!workspace) {
+      return user.entityId ?? null;
+    }
+
+    const workspaceMemberEntity = await this.userService.loadWorkspaceMember(
+      user,
+      workspace,
+    );
+
+    if (!isDefined(workspaceMemberEntity)) {
+      return user.entityId ?? null;
+    }
+
+    const { currentEntityId } =
+      await this.workspaceMemberInternalEntityService.resolveContext({
+        workspaceId: workspace.id,
+        workspaceMemberId: workspaceMemberEntity.id,
+        fallbackEntityId: user.entityId,
+      });
+
+    return currentEntityId;
   }
 
   @ResolveField(() => WorkspaceMemberDTO, {

@@ -37,12 +37,14 @@ import {
   getInternalEntityMembershipConfig,
   isInternalEntitySourceTargetObjectName,
 } from 'src/modules/internal-entity/query-hooks/utils/internal-entity-source-tagging.util';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 @Injectable()
 export class InternalEntitySourceTaggingService {
   constructor(
     private readonly globalWorkspaceDataSourceService: GlobalWorkspaceDataSourceService,
     private readonly objectMetadataService: ObjectMetadataService,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async tagCreateOnePayload(
@@ -120,7 +122,8 @@ export class InternalEntitySourceTaggingService {
       return;
     }
 
-    const internalEntityId = this.getUserInternalEntityIdOrThrow(authContext);
+    const internalEntityId =
+      await this.getUserInternalEntityIdOrThrow(authContext);
     const recordIds = this.extractCreatedRecordIds(records);
 
     if (recordIds.length === 0) {
@@ -176,7 +179,8 @@ export class InternalEntitySourceTaggingService {
   private async resolveAndValidateUserInternalEntityId(
     authContext: WorkspaceAuthContext,
   ): Promise<string> {
-    const internalEntityId = this.getUserInternalEntityIdOrThrow(authContext);
+    const internalEntityId =
+      await this.getUserInternalEntityIdOrThrow(authContext);
     const workspaceId = validateUuidOrThrow(
       authContext.workspace.id,
       'workspaceId',
@@ -218,9 +222,9 @@ export class InternalEntitySourceTaggingService {
     return internalEntityId;
   }
 
-  private getUserInternalEntityIdOrThrow(
+  private async getUserInternalEntityIdOrThrow(
     authContext: WorkspaceAuthContext,
-  ): string {
+  ): Promise<string> {
     if (!isUserAuthContext(authContext)) {
       throw new CommonQueryRunnerException(
         'User authentication is required to tag records with an internal entity',
@@ -231,14 +235,20 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    const internalEntityId = authContext.user.entityId;
+    const { activeEntityId: internalEntityId } =
+      await this.workspaceMemberInternalEntityService.resolveContext({
+        workspaceId: authContext.workspace.id,
+        workspaceMemberId: authContext.workspaceMemberId,
+        fallbackEntityId: authContext.user.entityId,
+        requestedActiveEntityId: authContext.activeInternalEntityId,
+      });
 
     if (!isDefined(internalEntityId) || internalEntityId.length === 0) {
       throw new CommonQueryRunnerException(
-        'User entityId is required to tag records with an internal entity',
+        'An active internal entity is required to tag records with an internal entity',
         CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
         {
-          userFriendlyMessage: msg`Your profile is missing an internal entity. Ask an administrator to assign one before creating records.`,
+          userFriendlyMessage: msg`Your profile is missing an active internal entity. Ask an administrator to assign one before creating records.`,
         },
       );
     }

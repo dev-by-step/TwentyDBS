@@ -13,6 +13,7 @@ import { buildApiKeyAuthContext } from 'src/engine/core-modules/auth/utils/build
 import { buildApplicationAuthContext } from 'src/engine/core-modules/auth/utils/build-application-auth-context.util';
 import { buildPendingActivationUserAuthContext } from 'src/engine/core-modules/auth/utils/build-pending-activation-user-auth-context.util';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
+import { extractActiveInternalEntityIdFromRequest } from 'src/engine/utils/bind-data-to-request-object.util';
 
 @Injectable()
 export class WorkspaceAuthContextMiddleware implements NestMiddleware {
@@ -48,6 +49,9 @@ export class WorkspaceAuthContextMiddleware implements NestMiddleware {
         workspace: req.workspace!,
         userWorkspaceId: req.userWorkspaceId,
         user: req.user,
+        activeInternalEntityId:
+          req.activeInternalEntityId ??
+          extractActiveInternalEntityIdFromRequest(req),
         workspaceMemberId: req.workspaceMemberId,
         workspaceMember: req.workspaceMember,
       });

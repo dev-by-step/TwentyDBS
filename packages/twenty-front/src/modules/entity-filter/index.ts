@@ -1,5 +1,6 @@
 export { EntitySelector } from './components/entity-selector/entity-selector.component';
 export { useEntityFilter } from './hooks/useEntityFilter';
+export { activeEntityIdState } from './states/activeEntityIdState';
 export { selectedEntityIdState } from './states/selectedEntityIdAtom';
 export {
   buildEntityScopedRecordFilter,

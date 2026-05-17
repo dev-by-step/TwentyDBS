@@ -24,12 +24,14 @@ import { InternalEntitySourceTaggingCreateOnePostQueryHook } from 'src/modules/i
 import { InternalEntitySourceTaggingCreateOnePreQueryHook } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging-create-one.pre-query-hook';
 import { InternalEntitySourceTaggingService } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service';
 import { InternalEntityAccessPolicyService } from 'src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
   imports: [
     GlobalWorkspaceDataSourceModule,
     ObjectMetadataModule,
     UserRoleModule,
+    WorkspaceMemberInternalEntityModule,
   ],
   providers: [
     InternalEntityAccessPolicyService,

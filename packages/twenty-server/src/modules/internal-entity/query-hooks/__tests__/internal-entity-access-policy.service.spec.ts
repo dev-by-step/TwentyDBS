@@ -1,23 +1,26 @@
 import { faker } from '@faker-js/faker';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import {
-  PermissionsExceptionCode,
-} from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { ENTITY_MANAGER_ROLE_LABEL } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
 import { InternalEntityAccessPolicyService } from 'src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service';
+import { type WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 const buildServiceContext = ({
   roleLabel,
   roleUniversalIdentifier,
   canAccessFullAdminPanel = false,
+  accessibleEntityIds,
+  activeEntityId,
 }: {
   roleLabel?: string;
   roleUniversalIdentifier?: string;
   canAccessFullAdminPanel?: boolean;
+  accessibleEntityIds?: string[];
+  activeEntityId?: string;
 } = {}) => {
   const workspaceId = faker.string.uuid();
   const entityId = faker.string.uuid();
@@ -105,6 +108,13 @@ const buildServiceContext = ({
   const service = new InternalEntityAccessPolicyService(
     globalWorkspaceOrmManager as unknown as GlobalWorkspaceOrmManager,
     userRoleService as unknown as UserRoleService,
+    {
+      resolveContext: jest.fn().mockResolvedValue({
+        currentEntityId: entityId,
+        activeEntityId: activeEntityId ?? entityId,
+        entityIds: accessibleEntityIds ?? [entityId],
+      }),
+    } as unknown as WorkspaceMemberInternalEntityService,
   );
 
   const authContext: WorkspaceAuthContext = {
@@ -144,13 +154,17 @@ describe('InternalEntityAccessPolicyService', () => {
   it('should scope opportunity findMany queries to the current entity', async () => {
     const { service, authContext, entityId } = buildServiceContext();
 
-    const payload = await service.scopeFindManyPayload(authContext, 'opportunity', {
-      filter: {
-        stage: {
-          eq: 'NEW',
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          stage: {
+            eq: 'NEW',
+          },
         },
       },
-    });
+    );
 
     expect(payload.filter).toEqual({
       and: [
@@ -161,29 +175,44 @@ describe('InternalEntityAccessPolicyService', () => {
         },
         {
           internalEntityId: {
-            eq: entityId,
+            in: [entityId],
           },
         },
       ],
     });
   });
 
-  it('should not scope queries for a superadmin', async () => {
-    const { service, authContext } = buildServiceContext({
+  it('should keep platform administrators scoped to their current entity for CRM data', async () => {
+    const { service, authContext, entityId } = buildServiceContext({
       canAccessFullAdminPanel: true,
     });
 
-    const originalFilter = {
-      stage: {
-        eq: 'NEW',
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          stage: {
+            eq: 'NEW',
+          },
+        },
       },
-    };
+    );
 
-    const payload = await service.scopeFindManyPayload(authContext, 'opportunity', {
-      filter: originalFilter,
+    expect(payload.filter).toEqual({
+      and: [
+        {
+          stage: {
+            eq: 'NEW',
+          },
+        },
+        {
+          internalEntityId: {
+            in: [entityId],
+          },
+        },
+      ],
     });
-
-    expect(payload.filter).toBe(originalFilter);
   });
 
   it('should deny internal entity creation to a standard user', async () => {
@@ -200,9 +229,32 @@ describe('InternalEntityAccessPolicyService', () => {
     });
   });
 
+  it('should allow internal entity creation to a platform administrator', async () => {
+    const { service, authContext } = buildServiceContext({
+      canAccessFullAdminPanel: true,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'internalEntity', {
+        data: {
+          name: 'New Entity',
+        },
+      }),
+    ).resolves.toEqual({
+      data: {
+        name: 'New Entity',
+      },
+    });
+  });
+
   it('should allow an author to update their own opportunity inside the entity', async () => {
-    const { service, authContext, opportunityRepository, entityId, workspaceMemberId } =
-      buildServiceContext();
+    const {
+      service,
+      authContext,
+      opportunityRepository,
+      entityId,
+      workspaceMemberId,
+    } = buildServiceContext();
 
     opportunityRepository.findOne.mockResolvedValue({
       id: faker.string.uuid(),
@@ -272,7 +324,7 @@ describe('InternalEntityAccessPolicyService', () => {
         },
         {
           internalEntityId: {
-            eq: entityId,
+            in: [entityId],
           },
         },
       ],
@@ -301,6 +353,57 @@ describe('InternalEntityAccessPolicyService', () => {
         'updateOne',
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('should allow a platform administrator to update another user opportunity inside the same entity', async () => {
+    const { service, authContext, opportunityRepository, entityId } =
+      buildServiceContext({
+        canAccessFullAdminPanel: true,
+      });
+
+    opportunityRepository.findOne.mockResolvedValue({
+      id: faker.string.uuid(),
+      internalEntityId: entityId,
+      createdBy: {
+        workspaceMemberId: faker.string.uuid(),
+      },
+    });
+
+    await expect(
+      service.assertSingleMutationAllowed(
+        authContext,
+        'opportunity',
+        faker.string.uuid(),
+        'updateOne',
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('should deny a platform administrator from updating another entity opportunity', async () => {
+    const { service, authContext, opportunityRepository } = buildServiceContext(
+      {
+        canAccessFullAdminPanel: true,
+      },
+    );
+
+    opportunityRepository.findOne.mockResolvedValue({
+      id: faker.string.uuid(),
+      internalEntityId: faker.string.uuid(),
+      createdBy: {
+        workspaceMemberId: faker.string.uuid(),
+      },
+    });
+
+    await expect(
+      service.assertSingleMutationAllowed(
+        authContext,
+        'opportunity',
+        faker.string.uuid(),
+        'updateOne',
+      ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
   it('should recognize the entity manager role by universal identifier', async () => {
@@ -332,14 +435,18 @@ describe('InternalEntityAccessPolicyService', () => {
   it('should scope opportunity groupBy queries to the current entity', async () => {
     const { service, authContext, entityId } = buildServiceContext();
 
-    const payload = await service.scopeGroupByPayload(authContext, 'opportunity', {
-      filter: {
-        stage: {
-          eq: 'NEW',
+    const payload = await service.scopeGroupByPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          stage: {
+            eq: 'NEW',
+          },
         },
+        groupBy: [{ stage: true }],
       },
-      groupBy: [{ stage: true }],
-    });
+    );
 
     expect(payload.filter).toEqual({
       and: [
@@ -350,7 +457,7 @@ describe('InternalEntityAccessPolicyService', () => {
         },
         {
           internalEntityId: {
-            eq: entityId,
+            in: [entityId],
           },
         },
       ],
@@ -405,9 +512,11 @@ describe('InternalEntityAccessPolicyService', () => {
   });
 
   it('should deny an entity manager from merging opportunities from another entity', async () => {
-    const { service, authContext, opportunityRepository } = buildServiceContext({
-      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
-    });
+    const { service, authContext, opportunityRepository } = buildServiceContext(
+      {
+        roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      },
+    );
 
     opportunityRepository.findOne.mockResolvedValue({
       id: faker.string.uuid(),
@@ -467,6 +576,23 @@ describe('InternalEntityAccessPolicyService', () => {
         'deleteOne',
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('should deny a platform administrator from creating a membership for another entity', async () => {
+    const { service, authContext } = buildServiceContext({
+      canAccessFullAdminPanel: true,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'personEntityMembership', {
+        data: {
+          personId: faker.string.uuid(),
+          internalEntityId: faker.string.uuid(),
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
   it('should scope note queries to the current workspace member', async () => {
@@ -700,9 +826,81 @@ describe('InternalEntityAccessPolicyService', () => {
     expect(opportunityRepository.find).toHaveBeenCalledWith({
       where: {
         internalEntityId: {
-          eq: entityId,
+          in: [entityId],
         },
       },
+    });
+  });
+
+  it('should scope CRM reads to every accessible entity for multi-entity members', async () => {
+    const primaryEntityId = faker.string.uuid();
+    const secondaryEntityId = faker.string.uuid();
+    const { service, authContext } = buildServiceContext({
+      accessibleEntityIds: [primaryEntityId, secondaryEntityId],
+      activeEntityId: secondaryEntityId,
+    });
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          stage: {
+            eq: 'NEW',
+          },
+        },
+      },
+    );
+
+    expect(payload.filter).toEqual({
+      and: [
+        {
+          stage: {
+            eq: 'NEW',
+          },
+        },
+        {
+          internalEntityId: {
+            in: [primaryEntityId, secondaryEntityId],
+          },
+        },
+      ],
+    });
+  });
+
+  it('should scope CRM bulk mutations to the active entity for multi-entity members', async () => {
+    const secondaryEntityId = faker.string.uuid();
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      accessibleEntityIds: [faker.string.uuid(), secondaryEntityId],
+      activeEntityId: secondaryEntityId,
+    });
+
+    const payload = await service.scopeBulkMutationPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          stage: {
+            eq: 'NEW',
+          },
+        },
+      },
+    );
+
+    expect(payload.filter).toEqual({
+      and: [
+        {
+          stage: {
+            eq: 'NEW',
+          },
+        },
+        {
+          internalEntityId: {
+            in: [secondaryEntityId],
+          },
+        },
+      ],
     });
   });
 

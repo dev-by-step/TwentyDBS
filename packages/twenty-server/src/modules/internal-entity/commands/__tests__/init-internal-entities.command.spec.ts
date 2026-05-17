@@ -4,6 +4,8 @@ import { type WorkspaceIteratorService } from 'src/database/commands/command-run
 import { type FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { type WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { type RoleService } from 'src/engine/metadata-modules/role/role.service';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
 import {
@@ -31,6 +33,11 @@ type InitInternalEntitiesCommandInternals = {
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
   ) => Promise<void>;
+  backfillOpportunitiesFromWorkspaceMembers: (
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    workspaceMemberSqlTable: string,
+  ) => Promise<void>;
   backfillCompanyMembershipsFromOpportunities: (
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
@@ -42,6 +49,17 @@ type InitInternalEntitiesCommandInternals = {
     companyEntityMembershipSqlTable: string,
     personEntityMembershipSqlTable: string,
   ) => Promise<void>;
+  cleanupPrimaryDevWorkspaceMemberships: (args: {
+    workspaceId: string;
+    dataSource: GlobalWorkspaceDataSource;
+    internalEntitySqlTable: string;
+    companySqlTable: string;
+    personSqlTable: string;
+    companyEntityMembershipSqlTable: string;
+    personEntityMembershipSqlTable: string;
+    workspaceMemberSqlTable: string;
+    workspaceMemberEntityMembershipSqlTable: string;
+  }) => Promise<void>;
 };
 
 const setCommandLogger = (command: unknown): MockLogger => {
@@ -73,6 +91,7 @@ describe('InitInternalEntitiesCommand', () => {
       {} as FieldMetadataService,
       {} as WorkspaceManyOrAllFlatEntityMapsCacheService,
       importCsvOpportunitiesParserService as unknown as ImportCsvOpportunitiesParserService,
+      {} as RoleService,
     );
     const logger = setCommandLogger(command);
 
@@ -177,6 +196,39 @@ describe('InitInternalEntitiesCommand', () => {
     );
   });
 
+  it('should backfill remaining opportunities from workspace member entities', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+
+    await commandInternals.backfillOpportunitiesFromWorkspaceMembers(
+      dataSource,
+      '"workspace_abc"."opportunity"',
+      '"workspace_abc"."workspaceMember"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
+
+    const [query, parameters, queryRunner, options] =
+      dataSourceMock.query.mock.calls[0];
+
+    expect(query).toContain(
+      'UPDATE "workspace_abc"."opportunity" AS opportunity',
+    );
+    expect(query).toContain(
+      'LEFT JOIN "workspace_abc"."workspaceMember" created_by_member',
+    );
+    expect(query).toContain('LEFT JOIN core."user" created_by_user');
+    expect(query).toContain(
+      'COALESCE(created_by_user."entityId", owner_user."entityId")',
+    );
+    expect(parameters).toStrictEqual([]);
+    expect(queryRunner).toBeUndefined();
+    expect(options).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 opportunité(s) rattachée(s) via les membres du workspace',
+    );
+  });
+
   it('should backfill company memberships from tagged opportunities', async () => {
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext();
@@ -271,5 +323,77 @@ describe('InitInternalEntitiesCommand', () => {
     expect(logger.log).toHaveBeenCalledWith(
       '1 membership(s) candidat(s) traité(s) pour Person <- Company',
     );
+  });
+
+  it('should prune non canonical demo memberships on the primary dev workspace', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([{ id: faker.string.uuid() }])
+      .mockResolvedValueOnce([{ id: faker.string.uuid() }]);
+
+    await commandInternals.cleanupPrimaryDevWorkspaceMemberships({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      dataSource,
+      internalEntitySqlTable: '"workspace_abc"."internalEntity"',
+      companySqlTable: '"workspace_abc"."company"',
+      personSqlTable: '"workspace_abc"."person"',
+      companyEntityMembershipSqlTable:
+        '"workspace_abc"."companyEntityMembership"',
+      personEntityMembershipSqlTable:
+        '"workspace_abc"."personEntityMembership"',
+      workspaceMemberSqlTable: '"workspace_abc"."workspaceMember"',
+      workspaceMemberEntityMembershipSqlTable:
+        '"workspace_abc"."workspaceMemberEntityMembership"',
+    });
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(5);
+    expect(dataSourceMock.query.mock.calls[0][0]).toContain(
+      'DELETE FROM "workspace_abc"."companyEntityMembership" membership',
+    );
+    expect(dataSourceMock.query.mock.calls[0][0]).toContain(
+      `LOWER(REPLACE(REPLACE(company."name", ' ', ''), '_', ''))`,
+    );
+    expect(dataSourceMock.query.mock.calls[1][0]).toContain(
+      'DELETE FROM "workspace_abc"."personEntityMembership" membership',
+    );
+    expect(dataSourceMock.query.mock.calls[2][0]).toContain(
+      'DELETE FROM "workspace_abc"."workspaceMemberEntityMembership" membership',
+    );
+    expect(dataSourceMock.query.mock.calls[3][0]).toContain(
+      'SELECT workspace_member."id" AS "recordId"',
+    );
+    expect(dataSourceMock.query.mock.calls[4][0]).toContain(
+      'INSERT INTO "workspace_abc"."workspaceMemberEntityMembership"',
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 company entity membership(s) hors règle supprimé(s)',
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      '1 person entity membership(s) hors règle supprimé(s)',
+    );
+  });
+
+  it('should skip demo membership cleanup outside the primary dev workspace', async () => {
+    const { commandInternals, dataSource, dataSourceMock } =
+      buildCommandContext();
+
+    await commandInternals.cleanupPrimaryDevWorkspaceMemberships({
+      workspaceId: faker.string.uuid(),
+      dataSource,
+      internalEntitySqlTable: '"workspace_abc"."internalEntity"',
+      companySqlTable: '"workspace_abc"."company"',
+      personSqlTable: '"workspace_abc"."person"',
+      companyEntityMembershipSqlTable:
+        '"workspace_abc"."companyEntityMembership"',
+      personEntityMembershipSqlTable:
+        '"workspace_abc"."personEntityMembership"',
+      workspaceMemberSqlTable: '"workspace_abc"."workspaceMember"',
+      workspaceMemberEntityMembershipSqlTable:
+        '"workspace_abc"."workspaceMemberEntityMembership"',
+    });
+
+    expect(dataSourceMock.query).not.toHaveBeenCalled();
   });
 });

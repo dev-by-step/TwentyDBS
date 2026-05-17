@@ -6,9 +6,11 @@ import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMemb
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
+import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
 import { useLastAuthenticatedWorkspaceDomain } from '@/domain-manager/hooks/useLastAuthenticatedWorkspaceDomain';
 import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
 import { useInitializeFormatPreferences } from '@/localization/hooks/useInitializeFormatPreferences';
+import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { workspaceAuthBypassProvidersState } from '@/workspace/states/workspaceAuthBypassProvidersState';
@@ -27,8 +29,12 @@ import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
 import { dynamicActivate } from '~/utils/i18n/dynamicActivate';
 
 export const useLoadCurrentUser = () => {
+  const currentUser = useAtomStateValue(currentUserState);
   const setCurrentUser = useSetAtomState(currentUserState);
-  const setSelectedEntityId = useSetAtomState(selectedEntityIdState);
+  const [activeEntityId, setActiveEntityId] = useAtomState(activeEntityIdState);
+  const [selectedEntityId, setSelectedEntityId] = useAtomState(
+    selectedEntityIdState,
+  );
   const setAvailableWorkspaces = useSetAtomState(availableWorkspacesState);
   const setCurrentWorkspaceMember = useSetAtomState(
     currentWorkspaceMemberState,
@@ -72,7 +78,28 @@ export const useLoadCurrentUser = () => {
     let workspaceMember = null;
 
     setCurrentUser(user);
-    setSelectedEntityId(user.entityId ?? null);
+
+    const currentUserEntityId = user.entityId ?? null;
+    const isUserChanged = currentUser?.id !== user.id;
+    const hasActiveEntityId =
+      isDefined(activeEntityId) && activeEntityId.length > 0;
+    const hasSelectedEntityId =
+      isDefined(selectedEntityId) && selectedEntityId.length > 0;
+
+    if (isUserChanged) {
+      setActiveEntityId(currentUserEntityId);
+      setSelectedEntityId(currentUserEntityId);
+    } else {
+      if (!hasActiveEntityId) {
+        setActiveEntityId(
+          hasSelectedEntityId ? selectedEntityId : currentUserEntityId,
+        );
+      }
+
+      if (!hasSelectedEntityId && !hasActiveEntityId) {
+        setSelectedEntityId(currentUserEntityId);
+      }
+    }
 
     if (isDefined(user.workspaceMembers)) {
       setCurrentWorkspaceMembers(user.workspaceMembers);
@@ -144,7 +171,11 @@ export const useLoadCurrentUser = () => {
     };
   }, [
     client,
+    currentUser?.id,
+    activeEntityId,
+    selectedEntityId,
     setCurrentUser,
+    setActiveEntityId,
     setSelectedEntityId,
     setCurrentWorkspace,
     isOnAWorkspace,

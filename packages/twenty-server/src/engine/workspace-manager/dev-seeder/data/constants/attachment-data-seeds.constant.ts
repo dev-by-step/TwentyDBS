@@ -1,9 +1,9 @@
 import { FieldActorSource } from 'twenty-shared/types';
 
-import { COMPANY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { COMPANY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
 import { NOTE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/note-data-seeds.constant';
 import { OPPORTUNITY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/opportunity-data-seeds.constant';
-import { PERSON_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
+import { PERSON_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 import { TASK_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/task-data-seeds.constant';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
@@ -147,8 +147,8 @@ export const generateAttachmentSeedsForWorkspace = (
   const seeds: AttachmentDataSeed[] = [];
   const fileSeedMetadata: AttachmentFileSeedMetadata[] = [];
 
-  const PERSON_IDS = Object.values(PERSON_DATA_SEED_IDS).slice(0, 120);
-  const COMPANY_IDS = Object.values(COMPANY_DATA_SEED_IDS).slice(0, 120);
+  const PERSON_IDS = PERSON_DATA_SEEDS.map((person) => person.id);
+  const COMPANY_IDS = COMPANY_DATA_SEEDS.map((company) => company.id);
   const NOTE_IDS = Object.values(NOTE_DATA_SEED_IDS).slice(0, 80);
   const TASK_IDS = Object.values(TASK_DATA_SEED_IDS).slice(0, 60);
   const OPPORTUNITY_IDS = Object.values(OPPORTUNITY_DATA_SEED_IDS).slice(0, 20);

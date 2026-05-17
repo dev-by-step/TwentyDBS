@@ -4,4 +4,5 @@ export const selectedEntityIdState = createAtomState<string | null>({
   key: 'selectedEntityIdState',
   defaultValue: null,
   useLocalStorage: true,
+  localStorageOptions: { getOnInit: true },
 });

@@ -10,6 +10,7 @@ import { lastShowPageRecordIdState } from '@/object-record/record-field/ui/state
 import { RecordIndexContainer } from '@/object-record/record-index/components/RecordIndexContainer';
 import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@/object-record/record-index/components/RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
+import { RecordIndexInternalEntityViewFieldsSyncEffect } from '@/object-record/record-index/components/RecordIndexInternalEntityViewFieldsSyncEffect';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
 import { RecordIndexPageHeader } from '@/object-record/record-index/components/RecordIndexPageHeader';
 import { useHandleIndexIdentifierClick } from '@/object-record/record-index/hooks/useHandleIndexIdentifierClick';
@@ -109,6 +110,7 @@ export const RecordIndexContainerGater = () => {
             </CommandMenuComponentInstanceContext.Provider>
           </RecordComponentInstanceContextsWrapper>
           <RecordIndexLoadBaseOnContextStoreEffect />
+          <RecordIndexInternalEntityViewFieldsSyncEffect />
         </ViewComponentInstanceContext.Provider>
       </RecordIndexContextProvider>
     </>

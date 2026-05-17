@@ -88,6 +88,7 @@ export class DevSeederService {
       seedBilling: isBillingEnabled,
       appVersion,
       initialCursor,
+      light,
     });
 
     await this.applicationRegistrationService.createCliRegistrationIfNotExists();
@@ -271,11 +272,13 @@ export class DevSeederService {
     appVersion,
     initialCursor,
     seedBilling = true,
+    light = false,
   }: {
     workspaceId: SeededWorkspacesIds;
     appVersion: string;
     initialCursor: { name: string; status: UpgradeMigrationStatus };
     seedBilling?: boolean;
+    light?: boolean;
   }): Promise<void> {
     const schemaName = 'core';
     const createWorkspaceStaticInput =
@@ -306,7 +309,7 @@ export class DevSeederService {
       );
 
       await seedServerId({ queryRunner, schemaName });
-      await seedUsers({ queryRunner, schemaName });
+      await seedUsers({ queryRunner, schemaName, light });
       await seedUserWorkspaces({ queryRunner, schemaName, workspaceId });
 
       await this.applicationService.createTwentyStandardApplication(

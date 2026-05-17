@@ -17,8 +17,10 @@ import {
   type UpdateManyResolverArgs,
 } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
-import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  type UserWorkspaceAuthContext,
+  type WorkspaceAuthContext,
+} from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -35,6 +37,7 @@ import {
   HYBRID_SCOPED_OBJECT_NAME_SET,
   PERSONAL_WORK_OBJECT_NAME_SET,
 } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 type RecordFilter = Record<string, unknown>;
 
@@ -56,11 +59,14 @@ type RecordSummary = {
   relatedWorkspaceMemberIds: string[];
 };
 
+type ScopeMode = 'read' | 'mutation';
+
 @Injectable()
 export class InternalEntityAccessPolicyService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly userRoleService: UserRoleService,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async scopeFindManyPayload(
@@ -71,6 +77,7 @@ export class InternalEntityAccessPolicyService {
     const scopedFilter = await this.buildScopedFilter(
       authContext,
       objectName,
+      'read',
       payload.filter,
     );
 
@@ -92,6 +99,7 @@ export class InternalEntityAccessPolicyService {
     const scopedFilter = await this.buildScopedFilter(
       authContext,
       objectName,
+      'read',
       payload.filter,
     );
 
@@ -113,6 +121,7 @@ export class InternalEntityAccessPolicyService {
     const scopedFilter = await this.buildScopedFilter(
       authContext,
       objectName,
+      'read',
       payload.filter,
     );
 
@@ -157,38 +166,45 @@ export class InternalEntityAccessPolicyService {
       return payload;
     }
 
-    if (!(await this.isSuperAdmin(authContext))) {
-      if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
+    if (objectName === 'internalEntity') {
+      if (!(await this.isPlatformAdmin(authContext))) {
         this.throwPermissionDenied(
-          msg`Only administrators can perform bulk updates on entity configuration.`,
+          msg`Only platform administrators can perform bulk updates on internal entity settings.`,
         );
       }
+    } else if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
+      if (!(await this.canManageEntityScopedRecords(authContext))) {
+        this.throwPermissionDenied(
+          msg`Bulk updates on entity assignments are reserved to entity managers and platform administrators.`,
+        );
+      }
+    }
 
-      if (
-        ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-        !(await this.isEntityManager(authContext))
-      ) {
-        this.throwPermissionDenied(
-          msg`Bulk updates are reserved to entity managers and administrators.`,
-        );
-      }
+    if (
+      ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
+      !(await this.canManageEntityScopedRecords(authContext))
+    ) {
+      this.throwPermissionDenied(
+        msg`Bulk updates are reserved to entity managers and platform administrators.`,
+      );
+    }
 
-      if (PERSONAL_WORK_OBJECT_NAME_SET.has(objectName)) {
-        this.throwPermissionDenied(
-          msg`Bulk updates are not allowed on personal work records.`,
-        );
-      }
+    if (PERSONAL_WORK_OBJECT_NAME_SET.has(objectName)) {
+      this.throwPermissionDenied(
+        msg`Bulk updates are not allowed on personal work records.`,
+      );
+    }
 
-      if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
-        this.throwPermissionDenied(
-          msg`Bulk updates are not allowed on scoped timeline records.`,
-        );
-      }
+    if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
+      this.throwPermissionDenied(
+        msg`Bulk updates are not allowed on scoped timeline records.`,
+      );
     }
 
     const scopedFilter = await this.buildScopedFilter(
       authContext,
       objectName,
+      'mutation',
       payload.filter,
     );
 
@@ -211,13 +227,54 @@ export class InternalEntityAccessPolicyService {
       return payload;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
+    if (!ENTITY_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       return payload;
     }
 
-    if (ENTITY_SCOPED_OBJECT_NAME_SET.has(objectName)) {
+    if (objectName === 'internalEntity') {
+      if (await this.isPlatformAdmin(authContext)) {
+        return payload;
+      }
+
       this.throwPermissionDenied(
-        msg`Duplicate detection on entity-scoped records is reserved to administrators.`,
+        msg`Duplicate detection on internal entities is reserved to platform administrators.`,
+      );
+    }
+
+    if (!(await this.canManageEntityScopedRecords(authContext))) {
+      this.throwPermissionDenied(
+        msg`Duplicate detection on entity-scoped records is reserved to entity managers and platform administrators.`,
+      );
+    }
+
+    const recordIds = payload.ids ?? [];
+
+    if (recordIds.length === 0) {
+      return payload;
+    }
+
+    const activeEntityId = await this.requireActiveEntityId(authContext);
+    const recordSummaries = await Promise.all(
+      recordIds.map((recordId) =>
+        this.resolveRecordSummary({
+          workspaceId: authContext.workspace.id,
+          objectName,
+          recordId,
+        }),
+      ),
+    );
+
+    if (
+      recordSummaries.some(
+        (recordSummary) =>
+          recordSummary.entityIds.length === 0 ||
+          recordSummary.entityIds.some(
+            (recordEntityId) => recordEntityId !== activeEntityId,
+          ),
+      )
+    ) {
+      this.throwPermissionDenied(
+        msg`You can only detect duplicates on records attached to your entity.`,
       );
     }
 
@@ -233,27 +290,23 @@ export class InternalEntityAccessPolicyService {
       return payload;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return payload;
-    }
-
     if (!ENTITY_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       return payload;
     }
 
     if (!ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
-        msg`Only administrators can merge entity configuration records.`,
+        msg`Only entity-scoped CRM records can be merged.`,
       );
     }
 
-    if (!(await this.isEntityManager(authContext))) {
+    if (!(await this.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
-        msg`Only entity managers and administrators can merge entity records.`,
+        msg`Only entity managers and platform administrators can merge entity records.`,
       );
     }
 
-    const currentEntityId = this.requireCurrentEntityId(authContext);
+    const activeEntityId = await this.requireActiveEntityId(authContext);
     const recordSummaries = await Promise.all(
       payload.ids.map((recordId) =>
         this.resolveRecordSummary({
@@ -269,7 +322,7 @@ export class InternalEntityAccessPolicyService {
         (recordSummary) =>
           recordSummary.entityIds.length === 0 ||
           recordSummary.entityIds.some(
-            (recordEntityId) => recordEntityId !== currentEntityId,
+            (recordEntityId) => recordEntityId !== activeEntityId,
           ),
       )
     ) {
@@ -291,10 +344,6 @@ export class InternalEntityAccessPolicyService {
       return;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return;
-    }
-
     const recordSummary = await this.resolveRecordSummary({
       workspaceId: authContext.workspace.id,
       objectName,
@@ -305,7 +354,9 @@ export class InternalEntityAccessPolicyService {
       const currentWorkspaceMemberId =
         this.requireCurrentWorkspaceMemberId(authContext);
 
-      if (recordSummary.createdByWorkspaceMemberId === currentWorkspaceMemberId) {
+      if (
+        recordSummary.createdByWorkspaceMemberId === currentWorkspaceMemberId
+      ) {
         return;
       }
 
@@ -326,15 +377,22 @@ export class InternalEntityAccessPolicyService {
 
     if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
-        msg`Only administrators can modify scoped timeline records.`,
+        msg`Scoped timeline records cannot be modified manually.`,
       );
     }
 
-    const currentEntityId = this.requireCurrentEntityId(authContext);
+    if (
+      objectName === 'internalEntity' &&
+      (await this.isPlatformAdmin(authContext))
+    ) {
+      return;
+    }
+
+    const activeEntityId = await this.requireActiveEntityId(authContext);
 
     if (
       recordSummary.entityIds.length > 0 &&
-      !recordSummary.entityIds.includes(currentEntityId)
+      !recordSummary.entityIds.includes(activeEntityId)
     ) {
       this.throwPermissionDenied(
         msg`You can only mutate records attached to your entity.`,
@@ -342,39 +400,46 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (method === 'updateOne' && (await this.isEntityManager(authContext))) {
-        return;
-      }
-
-      this.throwPermissionDenied(
-        msg`Only administrators can create, restore, delete, or destroy internal entities.`,
-      );
-    }
-
-    if (objectName === 'companyEntityMembership' || objectName === 'personEntityMembership') {
-      if (await this.isEntityManager(authContext)) {
-        return;
-      }
-
-      this.throwPermissionDenied(
-        msg`Only entity managers and administrators can manage entity assignments.`,
-      );
-    }
-
-    if (ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName)) {
-      if (await this.isEntityManager(authContext)) {
-        return;
-      }
-
       if (
-        isDefined(recordSummary.createdByWorkspaceMemberId) &&
-        recordSummary.createdByWorkspaceMemberId === authContext.workspaceMemberId
+        method === 'updateOne' &&
+        (await this.canManageEntityScopedRecords(authContext))
       ) {
         return;
       }
 
       this.throwPermissionDenied(
-        msg`You can only modify records that you created, unless you are an entity manager.`,
+        msg`Only platform administrators can create, restore, delete, or destroy internal entities.`,
+      );
+    }
+
+    if (
+      objectName === 'companyEntityMembership' ||
+      objectName === 'personEntityMembership'
+    ) {
+      if (await this.canManageEntityScopedRecords(authContext)) {
+        return;
+      }
+
+      this.throwPermissionDenied(
+        msg`Only entity managers and platform administrators can manage entity assignments.`,
+      );
+    }
+
+    if (ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName)) {
+      if (await this.canManageEntityScopedRecords(authContext)) {
+        return;
+      }
+
+      if (
+        isDefined(recordSummary.createdByWorkspaceMemberId) &&
+        recordSummary.createdByWorkspaceMemberId ===
+          authContext.workspaceMemberId
+      ) {
+        return;
+      }
+
+      this.throwPermissionDenied(
+        msg`You can only modify records that you created, unless you are an entity manager or a platform administrator.`,
       );
     }
   }
@@ -400,7 +465,7 @@ export class InternalEntityAccessPolicyService {
 
     if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
-        msg`Only administrators can create scoped timeline records manually.`,
+        msg`Scoped timeline records cannot be created manually.`,
       );
     }
 
@@ -408,46 +473,51 @@ export class InternalEntityAccessPolicyService {
       return;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return;
-    }
-
     if (objectName === 'internalEntity') {
+      if (await this.isPlatformAdmin(authContext)) {
+        return;
+      }
+
       this.throwPermissionDenied(
-        msg`Only administrators can create internal entities.`,
+        msg`Only platform administrators can create internal entities.`,
       );
     }
 
-    if (!(await this.isEntityManager(authContext))) {
+    if (!(await this.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
-        msg`Only entity managers and administrators can manage entity assignments.`,
+        msg`Only entity managers and platform administrators can manage entity assignments.`,
       );
     }
+
+    await this.assertMembershipCreateTargetsCurrentEntity(
+      authContext,
+      objectName,
+      payloadData,
+    );
   }
 
   private async buildScopedFilter(
     authContext: WorkspaceAuthContext,
     objectName: string,
+    scopeMode: ScopeMode,
     filter?: RecordFilter,
   ): Promise<RecordFilter | undefined> {
     if (!isUserAuthContext(authContext)) {
       return filter;
     }
 
-    if (await this.isSuperAdmin(authContext)) {
-      return filter;
-    }
-
     const scopeFilter = ENTITY_SCOPED_OBJECT_NAME_SET.has(objectName)
       ? this.getEntityScopeFilter(
           objectName,
-          this.requireCurrentEntityId(authContext),
+          scopeMode === 'read'
+            ? await this.requireAccessibleEntityIds(authContext)
+            : [await this.requireActiveEntityId(authContext)],
         )
       : HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)
         ? await this.getHybridScopeFilter(authContext, objectName)
-      : PERSONAL_WORK_OBJECT_NAME_SET.has(objectName)
-        ? await this.getPersonalScopeFilter(authContext, objectName)
-        : undefined;
+        : PERSONAL_WORK_OBJECT_NAME_SET.has(objectName)
+          ? await this.getPersonalScopeFilter(authContext, objectName)
+          : undefined;
 
     if (!isDefined(scopeFilter)) {
       return filter;
@@ -464,18 +534,18 @@ export class InternalEntityAccessPolicyService {
 
   private getEntityScopeFilter(
     objectName: string,
-    currentEntityId: string,
+    entityIds: string[],
   ): RecordFilter {
     switch (objectName) {
       case 'company':
       case 'person':
-        return { internalEntitiesId: { in: [currentEntityId] } };
+        return { internalEntitiesId: { in: entityIds } };
       case 'companyEntityMembership':
       case 'opportunity':
       case 'personEntityMembership':
-        return { internalEntityId: { eq: currentEntityId } };
+        return { internalEntityId: { in: entityIds } };
       case 'internalEntity':
-        return { id: { eq: currentEntityId } };
+        return { id: { in: entityIds } };
       default:
         return {};
     }
@@ -490,7 +560,9 @@ export class InternalEntityAccessPolicyService {
 
     switch (objectName) {
       case 'note':
-        return this.buildCreatedByWorkspaceMemberFilter(currentWorkspaceMemberId);
+        return this.buildCreatedByWorkspaceMemberFilter(
+          currentWorkspaceMemberId,
+        );
       case 'task':
         return {
           or: [
@@ -536,7 +608,8 @@ export class InternalEntityAccessPolicyService {
 
     const currentWorkspaceMemberId =
       this.requireCurrentWorkspaceMemberId(authContext);
-    const currentEntityId = this.requireCurrentEntityId(authContext);
+    const accessibleEntityIds =
+      await this.requireAccessibleEntityIds(authContext);
     const [noteIds, taskIds, companyIds, personIds, opportunityIds] =
       await Promise.all([
         this.listAccessibleNoteIds(
@@ -551,19 +624,19 @@ export class InternalEntityAccessPolicyService {
           authContext.workspace.id,
           'companyEntityMembership',
           'companyId',
-          currentEntityId,
+          accessibleEntityIds,
         ),
         this.listEntityScopedRecordIds(
           authContext.workspace.id,
           'personEntityMembership',
           'personId',
-          currentEntityId,
+          accessibleEntityIds,
         ),
         this.listEntityScopedRecordIds(
           authContext.workspace.id,
           'opportunity',
           'id',
-          currentEntityId,
+          accessibleEntityIds,
           'internalEntityId',
         ),
       ]);
@@ -580,7 +653,7 @@ export class InternalEntityAccessPolicyService {
     };
   }
 
-  private async isSuperAdmin(
+  private async isPlatformAdmin(
     authContext: UserWorkspaceAuthContext,
   ): Promise<boolean> {
     if (authContext.user.canAccessFullAdminPanel) {
@@ -593,6 +666,16 @@ export class InternalEntityAccessPolicyService {
       (role) =>
         role.universalIdentifier === STANDARD_ROLE.admin.universalIdentifier,
     );
+  }
+
+  private async canManageEntityScopedRecords(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<boolean> {
+    if (await this.isPlatformAdmin(authContext)) {
+      return true;
+    }
+
+    return this.isEntityManager(authContext);
   }
 
   private async isEntityManager(
@@ -609,12 +692,11 @@ export class InternalEntityAccessPolicyService {
   }
 
   private async getUserWorkspaceRoles(authContext: UserWorkspaceAuthContext) {
-    const rolesByUserWorkspace = await this.userRoleService.getRolesByUserWorkspaces(
-      {
+    const rolesByUserWorkspace =
+      await this.userRoleService.getRolesByUserWorkspaces({
         userWorkspaceIds: [authContext.userWorkspaceId],
         workspaceId: authContext.workspace.id,
-      },
-    );
+      });
 
     return rolesByUserWorkspace.get(authContext.userWorkspaceId) ?? [];
   }
@@ -634,16 +716,98 @@ export class InternalEntityAccessPolicyService {
     return authContext.workspaceMemberId;
   }
 
-  private requireCurrentEntityId(authContext: UserWorkspaceAuthContext): string {
-    const currentEntityId = authContext.user.entityId?.toLowerCase();
+  private async requireAccessibleEntityIds(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<string[]> {
+    const { entityIds } = await this.resolveEntityContext(authContext);
 
-    if (!isDefined(currentEntityId) || currentEntityId.length === 0) {
+    if (entityIds.length === 0) {
       this.throwPermissionDenied(
         msg`Your profile is not attached to an internal entity.`,
       );
     }
 
-    return currentEntityId;
+    return entityIds;
+  }
+
+  private async requireActiveEntityId(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<string> {
+    const { activeEntityId } = await this.resolveEntityContext(authContext);
+
+    if (!isDefined(activeEntityId) || activeEntityId.length === 0) {
+      this.throwPermissionDenied(
+        msg`Your profile is not attached to an active internal entity.`,
+      );
+    }
+
+    return activeEntityId;
+  }
+
+  private async resolveEntityContext(authContext: UserWorkspaceAuthContext) {
+    return await this.workspaceMemberInternalEntityService.resolveContext({
+      workspaceId: authContext.workspace.id,
+      workspaceMemberId: authContext.workspaceMemberId,
+      fallbackEntityId: authContext.user.entityId,
+      requestedActiveEntityId: authContext.activeInternalEntityId,
+    });
+  }
+
+  private async assertMembershipCreateTargetsCurrentEntity(
+    authContext: UserWorkspaceAuthContext,
+    objectName: string,
+    payloadData?: Record<string, unknown>,
+  ): Promise<void> {
+    if (
+      !isDefined(payloadData) ||
+      (objectName !== 'companyEntityMembership' &&
+        objectName !== 'personEntityMembership')
+    ) {
+      return;
+    }
+
+    const activeEntityId = await this.requireActiveEntityId(authContext);
+    const targetEntityId = this.extractStringField(
+      payloadData,
+      'internalEntityId',
+    )?.toLowerCase();
+
+    if (!isDefined(targetEntityId) || targetEntityId !== activeEntityId) {
+      this.throwPermissionDenied(
+        msg`You can only manage assignments for your current entity.`,
+      );
+    }
+
+    const sourceRecordId = this.extractStringField(
+      payloadData,
+      objectName === 'companyEntityMembership' ? 'companyId' : 'personId',
+    );
+
+    if (!isDefined(sourceRecordId)) {
+      return;
+    }
+
+    const sourceObjectName =
+      objectName === 'companyEntityMembership' ? 'company' : 'person';
+    const sourceRecordSummary = await this.resolveRecordSummary({
+      workspaceId: authContext.workspace.id,
+      objectName: sourceObjectName,
+      recordId: sourceRecordId,
+    });
+    const isSourceRecordUnassigned = sourceRecordSummary.entityIds.length === 0;
+    const isSourceRecordAlreadyVisibleInCurrentEntity =
+      sourceRecordSummary.entityIds.includes(activeEntityId);
+
+    if (
+      isSourceRecordUnassigned ||
+      isSourceRecordAlreadyVisibleInCurrentEntity
+    ) {
+      return;
+    }
+
+    this.throwPermissionDenied(
+      msg`You can only manage assignments for records already visible in your entity or not yet assigned.`,
+    );
   }
 
   private async resolveRecordSummary({
@@ -664,11 +828,9 @@ export class InternalEntityAccessPolicyService {
         };
       case 'opportunity': {
         const opportunityRepository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'opportunity',
-            { shouldBypassPermissionChecks: true },
-          );
+          await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(workspaceId, 'opportunity', { shouldBypassPermissionChecks: true });
         const record = await opportunityRepository.findOne({
           where: { id: recordId },
         });
@@ -684,11 +846,9 @@ export class InternalEntityAccessPolicyService {
       case 'companyEntityMembership':
       case 'personEntityMembership': {
         const membershipRepository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            objectName,
-            { shouldBypassPermissionChecks: true },
-          );
+          await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(workspaceId, objectName, { shouldBypassPermissionChecks: true });
         const record = await membershipRepository.findOne({
           where: { id: recordId },
         });
@@ -700,12 +860,9 @@ export class InternalEntityAccessPolicyService {
         };
       }
       case 'note': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'note',
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, 'note', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
@@ -719,12 +876,9 @@ export class InternalEntityAccessPolicyService {
         };
       }
       case 'task': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'task',
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, 'task', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
@@ -740,12 +894,9 @@ export class InternalEntityAccessPolicyService {
         };
       }
       case 'attachment': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'attachment',
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, 'attachment', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
@@ -759,12 +910,9 @@ export class InternalEntityAccessPolicyService {
         };
       }
       case 'noteTarget': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'noteTarget',
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, 'noteTarget', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
@@ -786,12 +934,9 @@ export class InternalEntityAccessPolicyService {
         });
       }
       case 'taskTarget': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            'taskTarget',
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, 'taskTarget', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
@@ -814,24 +959,24 @@ export class InternalEntityAccessPolicyService {
       }
       case 'company':
       case 'person': {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-            workspaceId,
-            objectName,
-            { shouldBypassPermissionChecks: true },
-          );
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, objectName, { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
         });
         const membershipsRepository =
-          await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
+          await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(
             workspaceId,
             objectName === 'company'
               ? 'companyEntityMembership'
               : 'personEntityMembership',
             { shouldBypassPermissionChecks: true },
           );
-        const sourceFieldName = objectName === 'company' ? 'companyId' : 'personId';
+        const sourceFieldName =
+          objectName === 'company' ? 'companyId' : 'personId';
         const memberships = await membershipsRepository.find({
           where: {
             [sourceFieldName]: recordId,
@@ -879,7 +1024,10 @@ export class InternalEntityAccessPolicyService {
         recordId: noteId,
       });
 
-      if (recordSummary.createdByWorkspaceMemberId === authContext.workspaceMemberId) {
+      if (
+        recordSummary.createdByWorkspaceMemberId ===
+        authContext.workspaceMemberId
+      ) {
         return;
       }
 
@@ -901,7 +1049,10 @@ export class InternalEntityAccessPolicyService {
         recordId: taskId,
       });
 
-      if (recordSummary.createdByWorkspaceMemberId === authContext.workspaceMemberId) {
+      if (
+        recordSummary.createdByWorkspaceMemberId ===
+        authContext.workspaceMemberId
+      ) {
         return;
       }
 
@@ -915,15 +1066,14 @@ export class InternalEntityAccessPolicyService {
     workspaceId: string,
     workspaceMemberId: string,
   ): Promise<string[]> {
-    const repository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        workspaceId,
-        'note',
-        { shouldBypassPermissionChecks: true },
-      );
-    const records = await (repository as {
-      find: (args: unknown) => Promise<Record<string, unknown>[]>;
-    }).find({
+    const repository = await this.globalWorkspaceOrmManager.getRepository<
+      Record<string, unknown>
+    >(workspaceId, 'note', { shouldBypassPermissionChecks: true });
+    const records = await (
+      repository as {
+        find: (args: unknown) => Promise<Record<string, unknown>[]>;
+      }
+    ).find({
       where: this.buildCreatedByWorkspaceMemberFilter(workspaceMemberId),
     });
 
@@ -936,15 +1086,14 @@ export class InternalEntityAccessPolicyService {
     workspaceId: string,
     workspaceMemberId: string,
   ): Promise<string[]> {
-    const repository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        workspaceId,
-        'task',
-        { shouldBypassPermissionChecks: true },
-      );
-    const records = await (repository as {
-      find: (args: unknown) => Promise<Record<string, unknown>[]>;
-    }).find({
+    const repository = await this.globalWorkspaceOrmManager.getRepository<
+      Record<string, unknown>
+    >(workspaceId, 'task', { shouldBypassPermissionChecks: true });
+    const records = await (
+      repository as {
+        find: (args: unknown) => Promise<Record<string, unknown>[]>;
+      }
+    ).find({
       where: {
         or: [
           this.buildCreatedByWorkspaceMemberFilter(workspaceMemberId),
@@ -962,21 +1111,24 @@ export class InternalEntityAccessPolicyService {
     workspaceId: string,
     objectName: string,
     idFieldName: string,
-    entityId: string,
+    entityIds: string[],
     entityFieldName = 'internalEntityId',
   ): Promise<string[]> {
-    const repository =
-      await this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
-        workspaceId,
-        objectName,
-        { shouldBypassPermissionChecks: true },
-      );
-    const records = await (repository as {
-      find: (args: unknown) => Promise<Record<string, unknown>[]>;
-    }).find({
+    if (entityIds.length === 0) {
+      return [];
+    }
+
+    const repository = await this.globalWorkspaceOrmManager.getRepository<
+      Record<string, unknown>
+    >(workspaceId, objectName, { shouldBypassPermissionChecks: true });
+    const records = await (
+      repository as {
+        find: (args: unknown) => Promise<Record<string, unknown>[]>;
+      }
+    ).find({
       where: {
         [entityFieldName]: {
-          eq: entityId,
+          in: entityIds,
         },
       },
     });
@@ -1040,14 +1192,19 @@ export class InternalEntityAccessPolicyService {
   }
 
   private normalizeWorkspaceMemberIds(workspaceMemberId: unknown): string[] {
-    if (typeof workspaceMemberId !== 'string' || workspaceMemberId.length === 0) {
+    if (
+      typeof workspaceMemberId !== 'string' ||
+      workspaceMemberId.length === 0
+    ) {
       return [];
     }
 
     return [workspaceMemberId];
   }
 
-  private throwPermissionDenied(userFriendlyMessage?: ReturnType<typeof msg>): never {
+  private throwPermissionDenied(
+    userFriendlyMessage?: ReturnType<typeof msg>,
+  ): never {
     throw new PermissionsException(
       PermissionsExceptionMessage.PERMISSION_DENIED,
       PermissionsExceptionCode.PERMISSION_DENIED,

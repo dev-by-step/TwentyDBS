@@ -203,7 +203,7 @@ const seedChatMessages = async ({
         orderIndex: 0,
         type: 'text',
         textContent:
-          "Hello! I'd be happy to help you understand Apple's product roadmap and metrics. Based on your workspace data, I can see you have various projects and initiatives tracked. What specific aspect would you like to explore - product development timelines, user engagement metrics, or revenue targets?",
+          "Hello! I'd be happy to help you understand Twenty DBS's current priorities and metrics. Based on your workspace data, I can see shared commercial activity, entity-level initiatives, and coordination topics across the group. What would you like to explore first: pipeline health, delivery timelines, or team activity?",
         createdAt: new Date(baseTime.getTime() + 5 * 60 * 1000),
       },
       {

@@ -1,5 +1,5 @@
-import { COMPANY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
-import { PERSON_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
+import { COMPANY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { PERSON_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 import { TASK_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/task-data-seeds.constant';
 
 type TaskTargetDataSeed = {
@@ -47,35 +47,29 @@ const TASK_TARGET_DATA_SEED_IDS = GENERATE_TASK_TARGET_IDS();
 const GENERATE_TASK_TARGET_SEEDS = (): TaskTargetDataSeed[] => {
   const TASK_TARGET_SEEDS: TaskTargetDataSeed[] = [];
 
-  // Person task targets (link each person task to its corresponding person)
-  for (let INDEX = 1; INDEX <= 1200; INDEX++) {
+  PERSON_DATA_SEEDS.forEach((person, index) => {
+    const taskIndex = index + 1;
+
     TASK_TARGET_SEEDS.push({
-      id: TASK_TARGET_DATA_SEED_IDS[`ID_${INDEX}`],
-      taskId: TASK_DATA_SEED_IDS[`ID_${INDEX}`],
-      targetPersonId:
-        PERSON_DATA_SEED_IDS[
-          `ID_${INDEX}` as keyof typeof PERSON_DATA_SEED_IDS
-        ],
+      id: TASK_TARGET_DATA_SEED_IDS[`ID_${taskIndex}`],
+      taskId: TASK_DATA_SEED_IDS[`ID_${taskIndex}`],
+      targetPersonId: person.id,
       targetCompanyId: null,
       targetOpportunityId: null,
     });
-  }
+  });
 
-  // Company task targets (link each company task to its corresponding company)
-  for (let INDEX = 1201; INDEX <= 1800; INDEX++) {
-    const COMPANY_INDEX = INDEX - 1200;
+  COMPANY_DATA_SEEDS.forEach((company, index) => {
+    const taskIndex = PERSON_DATA_SEEDS.length + index + 1;
 
     TASK_TARGET_SEEDS.push({
-      id: TASK_TARGET_DATA_SEED_IDS[`ID_${INDEX}`],
-      taskId: TASK_DATA_SEED_IDS[`ID_${INDEX}`],
+      id: TASK_TARGET_DATA_SEED_IDS[`ID_${taskIndex}`],
+      taskId: TASK_DATA_SEED_IDS[`ID_${taskIndex}`],
       targetPersonId: null,
-      targetCompanyId:
-        COMPANY_DATA_SEED_IDS[
-          `ID_${COMPANY_INDEX}` as keyof typeof COMPANY_DATA_SEED_IDS
-        ],
+      targetCompanyId: company.id,
       targetOpportunityId: null,
     });
-  }
+  });
 
   return TASK_TARGET_SEEDS;
 };

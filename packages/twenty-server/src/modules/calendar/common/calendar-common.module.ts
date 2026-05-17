@@ -10,6 +10,7 @@ import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/works
 import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ConnectedAccountModule } from 'src/modules/connected-account/connected-
     ]),
     ConnectedAccountModule,
     MetricsModule,
+    WorkspaceMemberInternalEntityModule,
   ],
   providers: [CalendarChannelSyncStatusService, CalendarPrivacyService],
   exports: [CalendarChannelSyncStatusService, CalendarPrivacyService],

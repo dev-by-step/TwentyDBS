@@ -22,12 +22,14 @@ import { CalendarEventUpdateManyPreQueryHook } from 'src/modules/calendar/common
 import { CalendarEventUpdateOnePreQueryHook } from 'src/modules/calendar/common/query-hooks/calendar-event/calendar-event-update-one.pre-query.hook';
 import { ApplyCalendarEventsVisibilityRestrictionsService } from 'src/modules/calendar/common/query-hooks/calendar-event/services/apply-calendar-events-visibility-restrictions.service';
 import { CalendarEventMutationPermissionService } from 'src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
   imports: [
     CalendarCommonModule,
     GlobalWorkspaceDataSourceModule,
     UserRoleModule,
+    WorkspaceMemberInternalEntityModule,
     TypeOrmModule.forFeature([
       CalendarChannelEntity,
       ConnectedAccountEntity,

@@ -161,6 +161,41 @@ bash packages/twenty-utils/setup-dev-env.sh --reset  # reset complet
 - **Helpers** : utiliser `isDefined()`, `isNonEmptyString()`, `isNonEmptyArray()` depuis `twenty-shared`
 - Composants < 300 lignes, services < 500 lignes
 
+## POINTS DE REVUE RÉCURRENTS À ÉVITER
+
+### Configuration et données
+
+- Ne pas laisser de valeurs métier importantes codées en dur si elles peuvent varier selon le workspace, l'environnement ou l'usage produit
+- Préférer une configuration centralisée via service dédié, constantes mutualisées, `.env` ou paramètres administrables selon le besoin métier
+- Quand une valeur n'existe que pour les tests, ne pas la lier à un faux workspace "réel" : générer une valeur aléatoire ou une factory dédiée
+
+### Tests
+
+- Pas de logique `faker` dispersée directement dans les fichiers de test quand une factory dédiée est appropriée
+- Préférer des factories partagées dans `__tests__/factories/` dès qu'une donnée est réutilisée dans plusieurs tests
+- Une factory doit de préférence générer une entité complète, pas seulement un `id`, pour rendre les tests plus lisibles et réutilisables
+- Les UUIDs de test doivent être générés dynamiquement (`faker.string.uuid()` ou `crypto.randomUUID()`) et non codés en dur, sauf si le test vérifie explicitement une valeur stable
+- Les messages d'erreur attendus dans les tests doivent réutiliser les constantes métier déjà définies dans l'implémentation au lieu de dupliquer des chaînes
+- Pour générer du CSV dans les tests, utiliser une librairie ou un helper typé dédié (ex: `papaparse.unparse`) plutôt que de concaténer des chaînes manuellement
+
+### Lisibilité et maintenabilité
+
+- Extraire les conditions complexes dans des variables nommées avant de les utiliser dans un `if`
+- Extraire les valeurs répétées dans des constantes explicites
+- Éviter les template literals inutiles quand un accès direct ou une concaténation simple suffit
+
+### SQL et sécurité
+
+- Toujours distinguer les identifiants SQL et les données utilisateur :
+  - échapper explicitement les noms de table/colonne autorisés
+  - passer les données via des placeholders (`$1`, `$2`, etc.)
+- Une requête n'est considérée "préparée" que si les valeurs dynamiques sont passées dans `values`, pas interpolées dans `text`
+
+### i18n
+
+- Quand un identifiant i18n explicite est défini, le garder en anglais, stable, sans espaces ni caractères spéciaux
+- Ne pas renommer en masse des clés i18n existantes sans besoin clair de migration
+
 ## TWENTY — ARCHITECTURE BACKEND
 
 - Changement d'entité → générer une **instance command** (`database:migrate:generate --name <name> --type fast|slow`)

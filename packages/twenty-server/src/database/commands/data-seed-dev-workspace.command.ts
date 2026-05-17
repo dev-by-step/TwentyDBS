@@ -31,7 +31,7 @@ export class DataSeedWorkspaceCommand extends CommandRunner {
   @Option({
     flags: '--light',
     description:
-      'Light seed: only seed the Apple workspace (skip YCombinator and the Empty3/Empty4 fixtures used by integration tests), skip demo custom objects (Pet, Survey, etc.) and limit records to 5 per object',
+      'Light seed: only seed the primary Twenty DBS workspace (skip YCombinator and the Empty3/Empty4 fixtures used by integration tests), skip demo custom objects (Pet, Survey, etc.) and limit records to 5 per object',
   })
   parseLight(): boolean {
     return true;
@@ -41,10 +41,10 @@ export class DataSeedWorkspaceCommand extends CommandRunner {
     _passedParams: string[],
     options: DataSeedWorkspaceOptions,
   ): Promise<void> {
-    // --light seeds a single workspace (Apple) for thin dev containers like
-    // twenty-app-dev. The default (no flag) seeds all four workspaces — Apple,
-    // YCombinator and the Empty3/Empty4 fixtures consumed by upgrade-sequence
-    // integration tests.
+    // --light seeds a single primary workspace (Twenty DBS) for thin dev
+    // containers like twenty-app-dev. The default (no flag) seeds all four
+    // workspaces — the primary workspace, YCombinator and the Empty3/Empty4
+    // fixtures consumed by upgrade-sequence integration tests.
     const workspaceIds: SeededWorkspacesIds[] = options.light
       ? [SEED_APPLE_WORKSPACE_ID]
       : [SEED_APPLE_WORKSPACE_ID, SEED_YCOMBINATOR_WORKSPACE_ID];
@@ -66,6 +66,7 @@ export class DataSeedWorkspaceCommand extends CommandRunner {
     } catch (error) {
       this.logger.error(error);
       this.logger.error(error.stack);
+      throw error;
     }
   }
 }

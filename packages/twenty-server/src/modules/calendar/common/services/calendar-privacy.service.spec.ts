@@ -8,9 +8,28 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
 import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 describe('CalendarPrivacyService', () => {
   let service: CalendarPrivacyService;
+
+  const defaultResolveContextImplementation = async ({
+    fallbackEntityId,
+    workspaceMemberId,
+  }: {
+    fallbackEntityId?: string | null;
+    workspaceMemberId?: string;
+  }) => {
+    const resolvedEntityId =
+      fallbackEntityId ??
+      (workspaceMemberId === 'workspace-member-1' ? 'same-entity-id' : null);
+
+    return {
+      currentEntityId: resolvedEntityId,
+      activeEntityId: resolvedEntityId,
+      entityIds: resolvedEntityId ? [resolvedEntityId] : [],
+    };
+  };
 
   const mockCalendarEventAssociationRepository = {
     find: jest.fn(),
@@ -22,6 +41,7 @@ describe('CalendarPrivacyService', () => {
 
   const mockWorkspaceMemberRepository = {
     findOne: jest.fn(),
+    find: jest.fn(),
   };
 
   const mockCalendarChannelRepository = {
@@ -61,9 +81,16 @@ describe('CalendarPrivacyService', () => {
       .fn()
       .mockImplementation((fn: () => any, _authContext?: any) => fn()),
   };
+  const mockWorkspaceMemberInternalEntityService = {
+    resolveContext: jest.fn(defaultResolveContextImplementation),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockWorkspaceMemberInternalEntityService.resolveContext.mockImplementation(
+      defaultResolveContextImplementation,
+    );
+    mockWorkspaceMemberRepository.find.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -88,6 +115,10 @@ describe('CalendarPrivacyService', () => {
           provide: getRepositoryToken(UserEntity),
           useValue: mockUserRepository,
         },
+        {
+          provide: WorkspaceMemberInternalEntityService,
+          useValue: mockWorkspaceMemberInternalEntityService,
+        },
       ],
     }).compile();
 
@@ -96,7 +127,10 @@ describe('CalendarPrivacyService', () => {
 
   it('should not mask a calendar event owned by the same internal entity', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockCalendarEventAssociationRepository.find.mockResolvedValue([
       { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
@@ -109,6 +143,9 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-unresolved', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: 'same-entity-id' },
@@ -125,7 +162,10 @@ describe('CalendarPrivacyService', () => {
 
   it('should mask a calendar event owned by another internal entity', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockCalendarEventAssociationRepository.find.mockResolvedValue([
       { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
@@ -138,6 +178,9 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-unresolved', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: 'other-entity-id' },
@@ -152,9 +195,17 @@ describe('CalendarPrivacyService', () => {
     expect(result.get('calendar-event-1')).toBe(true);
   });
 
-  it('should resolve the requester entity from the current user when entityId is absent from the request context', async () => {
+  it('should not mask a calendar event owned by another accessible internal entity', async () => {
+    mockWorkspaceMemberInternalEntityService.resolveContext.mockResolvedValue({
+      currentEntityId: 'same-entity-id',
+      activeEntityId: 'same-entity-id',
+      entityIds: ['same-entity-id', 'other-entity-id'],
+    });
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockCalendarEventAssociationRepository.find.mockResolvedValue([
       { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
@@ -167,6 +218,44 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-unresolved', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'other-entity-id' },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(false);
+  });
+
+  it('should resolve the requester entity from the current user when entityId is absent from the request context', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      { id: 'channel-1', connectedAccountId: 'connected-account-1' },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find
       .mockResolvedValueOnce([
@@ -190,14 +279,14 @@ describe('CalendarPrivacyService', () => {
 
   it('should resolve the requester entity from the workspace member when the user entity is absent from the request context', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockCalendarEventAssociationRepository.find.mockResolvedValue([
       { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
     ]);
-    mockWorkspaceMemberRepository.findOne.mockResolvedValue({
-      userId: 'owner-user-1',
-    });
     mockCalendarChannelRepository.find.mockResolvedValue([
       { id: 'channel-1', connectedAccountId: 'connected-account-1' },
     ]);
@@ -206,6 +295,9 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
     ]);
     mockUserRepository.findOne.mockResolvedValue({
       entityId: 'same-entity-id',
@@ -221,15 +313,14 @@ describe('CalendarPrivacyService', () => {
     });
 
     expect(result.get('calendar-event-1')).toBe(false);
-    expect(mockWorkspaceMemberRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'workspace-member-1' },
-      select: { userId: true },
-    });
   });
 
   it('should mask a calendar event when the owner entity cannot be resolved', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockCalendarEventAssociationRepository.find.mockResolvedValue([
       { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
@@ -242,6 +333,9 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-unresolved', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: null },
@@ -258,8 +352,14 @@ describe('CalendarPrivacyService', () => {
 
   it('should mask all calendar events when requester identity is present but requester entity cannot be resolved', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
-      { id: 'calendar-event-2', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+      {
+        id: 'calendar-event-2',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     mockUserRepository.findOne.mockResolvedValue(null);
 
@@ -279,8 +379,14 @@ describe('CalendarPrivacyService', () => {
 
   it('should keep calendar events unmasked when requester identity is absent', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
-      { id: 'calendar-event-1', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
-      { id: 'calendar-event-2', sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY },
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+      {
+        id: 'calendar-event-2',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
     ]);
     const result = await service.getCalendarEventMaskMap({
       calendarEventIds: ['calendar-event-1', 'calendar-event-2'],
@@ -313,6 +419,9 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserWorkspaceRepository.find.mockResolvedValue([
       { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: 'other-entity-id' },

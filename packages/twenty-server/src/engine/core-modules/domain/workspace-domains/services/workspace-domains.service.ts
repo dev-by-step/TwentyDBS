@@ -74,7 +74,7 @@ export class WorkspaceDomainsService {
 
     if (workspaces.length > 1) {
       Logger.warn(
-        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. Apple seed workspace will be used as fallback if it found.`,
+        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. The primary development workspace will be used as fallback if it is found.`,
       );
     }
 

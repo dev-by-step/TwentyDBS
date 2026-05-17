@@ -15,6 +15,10 @@ import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/consta
 import { CALENDAR_PRIVACY_OCCUPIED_TITLE } from 'src/modules/calendar/common/constants/calendar-privacy.constants';
 import { type CalendarChannelEventAssociationWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-channel-event-association.workspace-entity';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
+import {
+  type WorkspaceMemberInternalEntityContext,
+  WorkspaceMemberInternalEntityService,
+} from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 type GetCalendarEventMaskMapArgs = {
   calendarEventIds: string[];
@@ -36,6 +40,7 @@ export class CalendarPrivacyService {
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async getCalendarEventMaskMap({
@@ -53,13 +58,16 @@ export class CalendarPrivacyService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const resolvedCurrentUserEntityId =
-          await this.resolveCurrentUserEntityId({
+        const resolvedCurrentUserEntityContext =
+          await this.resolveCurrentUserEntityContext({
             workspaceId,
             currentUserEntityId,
             currentUserId,
             currentWorkspaceMemberId,
           });
+        const accessibleEntityIds = new Set(
+          resolvedCurrentUserEntityContext.entityIds,
+        );
 
         const calendarEventRepository =
           await this.globalWorkspaceOrmManager.getRepository<{
@@ -87,7 +95,7 @@ export class CalendarPrivacyService {
             .map((calendarEvent) => calendarEvent.id),
         );
 
-        if (!isDefined(resolvedCurrentUserEntityId)) {
+        if (accessibleEntityIds.size === 0) {
           const hasRequesterIdentityHints =
             isDefined(currentUserEntityId) ||
             isDefined(currentUserId) ||
@@ -212,24 +220,58 @@ export class CalendarPrivacyService {
           ]),
         );
 
-        const entityIdByUserId = new Map(
-          users.map((user) => [user.id, this.normalizeEntityId(user.entityId)]),
+        const workspaceMemberRepository =
+          await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(workspaceId, 'workspaceMember', {
+            shouldBypassPermissionChecks: true,
+          });
+        const workspaceMembers =
+          userIds.length > 0
+            ? await workspaceMemberRepository.find({
+                where: {
+                  userId: {
+                    in: userIds,
+                  },
+                },
+              })
+            : [];
+        const workspaceMemberIdByUserId = new Map(
+          workspaceMembers
+            .map((workspaceMember) => [
+              this.extractStringField(workspaceMember, 'userId'),
+              this.extractStringField(workspaceMember, 'id'),
+            ])
+            .filter(
+              (entry): entry is [string, string] =>
+                isDefined(entry[0]) && isDefined(entry[1]),
+            ),
         );
 
         const ownerEntityIdByCalendarChannelId = new Map(
-          calendarChannels.map((calendarChannel) => {
-            const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
-              calendarChannel.connectedAccountId,
-            );
-            const userId = isDefined(userWorkspaceId)
-              ? userIdByUserWorkspaceId.get(userWorkspaceId)
-              : undefined;
+          await Promise.all(
+            calendarChannels.map(async (calendarChannel) => {
+              const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
+                calendarChannel.connectedAccountId,
+              );
+              const userId = isDefined(userWorkspaceId)
+                ? userIdByUserWorkspaceId.get(userWorkspaceId)
+                : undefined;
+              const workspaceMemberId = isDefined(userId)
+                ? workspaceMemberIdByUserId.get(userId)
+                : null;
+              const fallbackEntityId =
+                users.find((user) => user.id === userId)?.entityId ?? null;
+              const { currentEntityId } =
+                await this.workspaceMemberInternalEntityService.resolveContext({
+                  workspaceId,
+                  workspaceMemberId,
+                  fallbackEntityId,
+                });
 
-            return [
-              calendarChannel.id,
-              isDefined(userId) ? (entityIdByUserId.get(userId) ?? null) : null,
-            ];
-          }),
+              return [calendarChannel.id, currentEntityId] as const;
+            }),
+          ),
         );
 
         const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
@@ -279,7 +321,7 @@ export class CalendarPrivacyService {
           defaultMaskMap.set(
             calendarEventId,
             [...ownerEntityIds].some(
-              (ownerEntityId) => ownerEntityId !== resolvedCurrentUserEntityId,
+              (ownerEntityId) => !accessibleEntityIds.has(ownerEntityId),
             ),
           );
         }
@@ -363,7 +405,7 @@ export class CalendarPrivacyService {
     );
   }
 
-  private async resolveCurrentUserEntityId({
+  private async resolveCurrentUserEntityContext({
     workspaceId,
     currentUserEntityId,
     currentUserId,
@@ -373,45 +415,31 @@ export class CalendarPrivacyService {
     currentUserEntityId?: string | null;
     currentUserId?: string;
     currentWorkspaceMemberId?: string;
-  }) {
-    const normalizedCurrentUserEntityId =
-      this.normalizeEntityId(currentUserEntityId);
+  }): Promise<WorkspaceMemberInternalEntityContext> {
+    let fallbackEntityId = currentUserEntityId ?? null;
 
-    if (isDefined(normalizedCurrentUserEntityId)) {
-      return normalizedCurrentUserEntityId;
-    }
-
-    let resolvedCurrentUserId = currentUserId;
-
-    if (
-      !isDefined(resolvedCurrentUserId) &&
-      isDefined(currentWorkspaceMemberId)
-    ) {
-      const workspaceMemberRepository =
-        await this.globalWorkspaceOrmManager.getRepository<{
-          id: string;
-          userId: string;
-        }>(workspaceId, 'workspaceMember', {
-          shouldBypassPermissionChecks: true,
-        });
-
-      const workspaceMember = await workspaceMemberRepository.findOne({
-        where: { id: currentWorkspaceMemberId },
-        select: { userId: true },
+    if (!isDefined(fallbackEntityId) && isDefined(currentUserId)) {
+      const currentUser = await this.userRepository.findOne({
+        where: { id: currentUserId },
+        select: ['entityId'],
       });
 
-      resolvedCurrentUserId = workspaceMember?.userId;
+      fallbackEntityId = currentUser?.entityId ?? null;
     }
 
-    if (!isDefined(resolvedCurrentUserId)) {
-      return null;
-    }
-
-    const currentUser = await this.userRepository.findOne({
-      where: { id: resolvedCurrentUserId },
-      select: ['entityId'],
+    return await this.workspaceMemberInternalEntityService.resolveContext({
+      workspaceId,
+      workspaceMemberId: currentWorkspaceMemberId,
+      fallbackEntityId,
     });
+  }
 
-    return this.normalizeEntityId(currentUser?.entityId);
+  private extractStringField(
+    record: Record<string, unknown>,
+    fieldName: string,
+  ) {
+    const value = record[fieldName];
+
+    return typeof value === 'string' && value.length > 0 ? value : null;
   }
 }

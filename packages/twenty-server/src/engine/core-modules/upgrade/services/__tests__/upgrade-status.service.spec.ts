@@ -112,7 +112,9 @@ describe('UpgradeStatusService', () => {
 
   describe('getWorkspaceStatuses', () => {
     it('should return up-to-date for workspace at last command', async () => {
-      workspaceFind.mockResolvedValue([{ id: 'ws-1', displayName: 'Apple' }]);
+      workspaceFind.mockResolvedValue([
+        { id: 'ws-1', displayName: 'Twenty DBS' },
+      ]);
 
       getWorkspaceLastAttemptedCommandName.mockResolvedValue(
         new Map([
@@ -138,8 +140,8 @@ describe('UpgradeStatusService', () => {
 
     it('should return behind for workspace not at last command', async () => {
       workspaceFind.mockResolvedValue([
-        { id: 'ws-1', displayName: 'Apple' },
-        { id: 'ws-2', displayName: 'Google' },
+        { id: 'ws-1', displayName: 'Twenty DBS' },
+        { id: 'ws-2', displayName: 'YCombinator' },
       ]);
 
       getWorkspaceLastAttemptedCommandName.mockResolvedValue(
@@ -177,7 +179,9 @@ describe('UpgradeStatusService', () => {
     });
 
     it('should return behind for workspace with no migration history', async () => {
-      workspaceFind.mockResolvedValue([{ id: 'ws-1', displayName: 'Apple' }]);
+      workspaceFind.mockResolvedValue([
+        { id: 'ws-1', displayName: 'Twenty DBS' },
+      ]);
 
       getWorkspaceLastAttemptedCommandName.mockResolvedValue(new Map());
 
