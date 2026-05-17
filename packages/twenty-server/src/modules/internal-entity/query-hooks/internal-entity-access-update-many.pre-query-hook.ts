@@ -15,7 +15,10 @@ export class InternalEntityAccessUpdateManyPreQueryHook
   async execute(
     authContext: WorkspaceAuthContext,
     objectName: string,
-    payload: UpdateManyResolverArgs<Record<string, unknown>, Record<string, unknown>>,
+    payload: UpdateManyResolverArgs<
+      Record<string, unknown>,
+      Record<string, unknown>
+    >,
   ): Promise<
     UpdateManyResolverArgs<Record<string, unknown>, Record<string, unknown>>
   > {

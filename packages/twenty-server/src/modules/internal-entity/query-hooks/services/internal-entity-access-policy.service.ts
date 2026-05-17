@@ -28,6 +28,7 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import {
   ENTITY_CONFIGURATION_OBJECT_NAME_SET,
@@ -400,10 +401,10 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (
-        method === 'updateOne' &&
-        (await this.canManageEntityScopedRecords(authContext))
-      ) {
+      // Platform admins already returned earlier in this method, so we only
+      // need to check the entity-manager role here (avoids a redundant
+      // isPlatformAdmin lookup inside canManageEntityScopedRecords).
+      if (method === 'updateOne' && (await this.isEntityManager(authContext))) {
         return;
       }
 
@@ -1184,11 +1185,9 @@ export class InternalEntityAccessPolicyService {
   }
 
   private normalizeEntityIds(entityId: unknown): string[] {
-    if (typeof entityId !== 'string' || entityId.length === 0) {
-      return [];
-    }
+    const normalized = normalizeOptionalEntityId(entityId);
 
-    return [entityId.toLowerCase()];
+    return normalized !== null ? [normalized] : [];
   }
 
   private normalizeWorkspaceMemberIds(workspaceMemberId: unknown): string[] {

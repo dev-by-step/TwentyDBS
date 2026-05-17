@@ -7,6 +7,7 @@
  *                              |___/
  */
 
+export { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from './ActiveInternalEntityIdHeaderName';
 export { AUTO_SELECT_FAST_MODEL_ID } from './AutoSelectFastModelId';
 export { AUTO_SELECT_SMART_MODEL_ID } from './AutoSelectSmartModelId';
 export { BACKEND_BATCH_REQUEST_MAX_COUNT } from './BackendBatchRequestMaxCount';

@@ -263,7 +263,9 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    return internalEntityId.toLowerCase();
+    // WorkspaceMemberInternalEntityService normalizes activeEntityId via
+    // normalizeOptionalEntityId (trim + lowercase) before returning it.
+    return internalEntityId;
   }
 
   private async resolveWorkspaceObjectTableName({

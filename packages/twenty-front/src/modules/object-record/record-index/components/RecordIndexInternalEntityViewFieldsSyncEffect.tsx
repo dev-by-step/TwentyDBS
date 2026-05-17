@@ -1,8 +1,6 @@
 import { useContextStoreObjectMetadataItemOrThrow } from '@/context-store/hooks/useContextStoreObjectMetadataItemOrThrow';
-import {
-  DEFAULT_VIEW_FIELD_SIZE,
-  INTERNAL_ENTITY_RELATION_VIEW_FIELD_DEFAULT_SIZE,
-} from '@/internal-entity/constants/InternalEntityRelationViewFieldSize';
+import { INTERNAL_ENTITY_RELATION_VIEW_FIELD_DEFAULT_SIZE } from '@/internal-entity/constants/InternalEntityRelationViewFieldSize';
+import { DEFAULT_VIEW_FIELD_SIZE } from '@/views/constants/DefaultViewFieldSize';
 import { getInternalEntityHiddenFieldMetadataIds } from '@/internal-entity/utils/getInternalEntityHiddenFieldMetadataIds';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { getInternalEntityRelationFieldMetadataItems } from '@/internal-entity/utils/getInternalEntityRelationFieldMetadataItems';
@@ -19,6 +17,7 @@ import { ViewType } from '~/generated-metadata/graphql';
 const pendingInternalEntityViewFieldSyncs = new Set<string>();
 
 export const RecordIndexInternalEntityViewFieldsSyncEffect = () => {
+  // oxlint-disable-next-line twenty/no-state-useref
   const lastSuccessfulSyncKeyRef = useRef<string | null>(null);
   const contextStoreCurrentViewId = useAtomComponentStateValue(
     contextStoreCurrentViewIdComponentState,

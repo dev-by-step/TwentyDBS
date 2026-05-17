@@ -4,7 +4,7 @@ import {
   type EntityFilterViewMode,
 } from '@/entity-filter/constants/entityFilterViewMode';
 import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
-import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useCallback } from 'react';

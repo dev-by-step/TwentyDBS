@@ -8544,9 +8544,10 @@ const COMPANY_DATA_SEEDS_RAW = [
   },
 ];
 
-export const COMPANY_DATA_SEEDS: CompanyDataSeed[] = COMPANY_DATA_SEEDS_RAW
-  .filter((company) => COMPANY_DATA_SEED_DEMO_IDS.has(company.id))
-  .map((company, index) => {
+export const COMPANY_DATA_SEEDS: CompanyDataSeed[] =
+  COMPANY_DATA_SEEDS_RAW.filter((company) =>
+    COMPANY_DATA_SEED_DEMO_IDS.has(company.id),
+  ).map((company, index) => {
     const demoRecord = COMPANY_DATA_SEED_DEMO_RECORDS_BY_ID.get(company.id);
     const createdByWorkspaceMemberId =
       demoRecord?.workspaceMemberId ?? company.createdByWorkspaceMemberId;

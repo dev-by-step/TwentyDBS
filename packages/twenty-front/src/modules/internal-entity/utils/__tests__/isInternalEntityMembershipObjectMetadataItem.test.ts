@@ -6,11 +6,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { FieldMetadataType } from 'twenty-shared/types';
 
-const createRelationField = ({
-  name,
-}: {
-  name: string;
-}): FieldMetadataItem =>
+const createRelationField = ({ name }: { name: string }): FieldMetadataItem =>
   ({
     id: `${name}-field-id`,
     universalIdentifier: `${name}-field-id`,
@@ -38,11 +34,7 @@ const createRelationField = ({
     settings: null,
   }) as unknown as FieldMetadataItem;
 
-const createScalarField = ({
-  name,
-}: {
-  name: string;
-}): FieldMetadataItem =>
+const createScalarField = ({ name }: { name: string }): FieldMetadataItem =>
   ({
     id: `${name}-field-id`,
     universalIdentifier: `${name}-field-id`,
@@ -82,12 +74,12 @@ describe('isInternalEntityMembershipObjectMetadataItem', () => {
       ],
     });
 
-    expect(isInternalEntityMembershipObjectMetadataItem(objectMetadataItem)).toBe(
-      true,
-    );
-    expect(getInternalEntityMembershipSourceObjectName(objectMetadataItem)).toBe(
-      'company',
-    );
+    expect(
+      isInternalEntityMembershipObjectMetadataItem(objectMetadataItem),
+    ).toBe(true);
+    expect(
+      getInternalEntityMembershipSourceObjectName(objectMetadataItem),
+    ).toBe('company');
   });
 
   it('does not detect regular objects that still own a name field', () => {
@@ -99,11 +91,11 @@ describe('isInternalEntityMembershipObjectMetadataItem', () => {
       ],
     });
 
-    expect(isInternalEntityMembershipObjectMetadataItem(objectMetadataItem)).toBe(
-      false,
-    );
-    expect(getInternalEntityMembershipSourceObjectName(objectMetadataItem)).toBe(
-      null,
-    );
+    expect(
+      isInternalEntityMembershipObjectMetadataItem(objectMetadataItem),
+    ).toBe(false);
+    expect(
+      getInternalEntityMembershipSourceObjectName(objectMetadataItem),
+    ).toBe(null);
   });
 });

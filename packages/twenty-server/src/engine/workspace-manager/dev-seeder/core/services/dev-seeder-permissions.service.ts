@@ -114,9 +114,9 @@ export class DevSeederPermissionsService {
 
     const { memberRole, entityManagerRole } =
       await this.initMinimalPermissionsAndActivateWorkspace({
-      workspaceId,
-      workspaceCustomFlatApplication,
-    });
+        workspaceId,
+        workspaceCustomFlatApplication,
+      });
 
     if (memberUserWorkspaceIds.length > 0) {
       await this.userRoleService.assignRoleToManyUserWorkspace({

@@ -7,32 +7,6 @@ export type InternalEntityMembershipInsertMapping = {
   internalEntityId: string;
 };
 
-export const buildMembershipInsertBatch = ({
-  recordIds,
-  internalEntityId,
-}: {
-  recordIds: string[];
-  internalEntityId: string;
-}): {
-  valuesSql: string;
-  values: string[];
-} => {
-  const values: string[] = [];
-  const valuesSql = recordIds
-    .map((recordId, index) => {
-      const offset = index * 3;
-
-      values.push(randomUUID(), recordId, internalEntityId);
-
-      return `($${offset + 1}::uuid, $${offset + 2}::uuid, $${
-        offset + 3
-      }::uuid)`;
-    })
-    .join(', ');
-
-  return { valuesSql, values };
-};
-
 export const buildMembershipInsertBatchFromMappings = ({
   mappings,
 }: {
@@ -56,6 +30,22 @@ export const buildMembershipInsertBatchFromMappings = ({
 
   return { valuesSql, values };
 };
+
+// Convenience wrapper for the common case where every record is tagged with
+// the same internal entity (single-entity source tagging).
+export const buildMembershipInsertBatch = ({
+  recordIds,
+  internalEntityId,
+}: {
+  recordIds: string[];
+  internalEntityId: string;
+}): {
+  valuesSql: string;
+  values: string[];
+} =>
+  buildMembershipInsertBatchFromMappings({
+    mappings: recordIds.map((recordId) => ({ recordId, internalEntityId })),
+  });
 
 export const buildMembershipInsertQuery = ({
   membershipSqlTable,

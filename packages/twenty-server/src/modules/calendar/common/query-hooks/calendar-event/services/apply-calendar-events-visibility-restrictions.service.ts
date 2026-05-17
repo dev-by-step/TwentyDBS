@@ -143,54 +143,49 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
           });
 
         for (let i = calendarEvents.length - 1; i >= 0; i--) {
-          const associations =
-            associationsByCalendarEventId.get(calendarEvents[i].id) ?? [];
-
-          const calendarChannels = associations
+          const event = calendarEvents[i];
+          const eventChannels = (
+            associationsByCalendarEventId.get(event.id) ?? []
+          )
             .map((association) =>
               calendarChannelMap.get(association.calendarChannelId),
             )
             .filter(isDefined);
 
-          const hasShareEverythingVisibility = calendarChannels.some(
-            (calendarChannel) =>
-              calendarChannel.visibility ===
-              CalendarChannelVisibility.SHARE_EVERYTHING,
+          const hasShareEverythingVisibility = eventChannels.some(
+            (channel) =>
+              channel.visibility === CalendarChannelVisibility.SHARE_EVERYTHING,
           );
 
           if (hasShareEverythingVisibility) {
             continue;
           }
 
-          const isOwnedByCurrentUser = calendarChannels.some(
-            (calendarChannel) =>
-              ownedConnectedAccountIds.has(calendarChannel.connectedAccountId),
+          const isOwnedByCurrentUser = eventChannels.some((channel) =>
+            ownedConnectedAccountIds.has(channel.connectedAccountId),
           );
 
-          const shouldMask = calendarEventMaskMap.get(calendarEvents[i].id) ?? false;
-
-          if (hasShareEverythingVisibility || isOwnedByCurrentUser) {
+          if (isOwnedByCurrentUser) {
             continue;
           }
 
-          const hasMetadataVisibility = calendarChannels.some(
-            (calendarChannel) =>
-              calendarChannel.visibility === CalendarChannelVisibility.METADATA,
+          const hasMetadataVisibility = eventChannels.some(
+            (channel) =>
+              channel.visibility === CalendarChannelVisibility.METADATA,
           );
 
           if (hasMetadataVisibility) {
+            // Force-mask when the privacy service had no requester identity to
+            // evaluate cross-entity visibility; otherwise keep the existing
+            // decision already recorded in calendarEventMaskMap.
             if (!hasRequesterEntityContext) {
-              calendarEventMaskMap.set(calendarEvents[i].id, true);
-              continue;
+              calendarEventMaskMap.set(event.id, true);
             }
-
-            if (!shouldMask) {
-              continue;
-            }
-
             continue;
           }
 
+          // Private channel from another user with no metadata fallback → fully
+          // hide the event from the response (not just mask it).
           calendarEvents.splice(i, 1);
         }
 

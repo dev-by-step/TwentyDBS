@@ -337,16 +337,11 @@ export class CalendarPrivacyService {
     calendarEventMaskMap: Map<string, boolean>,
   ) {
     for (const calendarEvent of calendarEvents) {
-      if (!calendarEventMaskMap.get(calendarEvent.id)) {
+      if (calendarEventMaskMap.get(calendarEvent.id) !== true) {
         continue;
       }
 
-      calendarEvent.title = CALENDAR_PRIVACY_OCCUPIED_TITLE;
-      calendarEvent.description = null;
-      calendarEvent.location = null;
-      calendarEvent.conferenceSolution = null;
-      calendarEvent.calendarEventParticipants = [];
-      calendarEvent.conferenceLink = this.createEmptyConferenceLink();
+      this.applyWorkspaceCalendarEventMask(calendarEvent);
     }
   }
 
@@ -355,17 +350,41 @@ export class CalendarPrivacyService {
     calendarEventMaskMap: Map<string, boolean>,
   ) {
     for (const timelineCalendarEvent of timelineCalendarEvents) {
-      if (!calendarEventMaskMap.get(timelineCalendarEvent.id)) {
+      if (calendarEventMaskMap.get(timelineCalendarEvent.id) !== true) {
         continue;
       }
 
-      timelineCalendarEvent.title = CALENDAR_PRIVACY_OCCUPIED_TITLE;
-      timelineCalendarEvent.description = null;
-      timelineCalendarEvent.location = null;
-      timelineCalendarEvent.conferenceSolution = null;
-      timelineCalendarEvent.participants = null;
-      timelineCalendarEvent.conferenceLink = null;
+      this.applyTimelineCalendarEventMask(timelineCalendarEvent);
     }
+  }
+
+  // Privacy contract: every field that can reveal the owning entity must be
+  // redacted here. When adding a sensitive field to CalendarEventWorkspaceEntity,
+  // extend this method to keep cross-entity events anonymized.
+  private applyWorkspaceCalendarEventMask(
+    calendarEvent: CalendarEventWorkspaceEntity,
+  ): void {
+    calendarEvent.title = CALENDAR_PRIVACY_OCCUPIED_TITLE;
+    calendarEvent.description = null;
+    calendarEvent.location = null;
+    calendarEvent.conferenceSolution = null;
+    calendarEvent.calendarEventParticipants = [];
+    calendarEvent.conferenceLink = this.createEmptyConferenceLink();
+  }
+
+  // Privacy contract: every field that can reveal the owning entity must be
+  // redacted here. When adding a sensitive field to TimelineCalendarEventDTO,
+  // extend this method to keep cross-entity events anonymized.
+  private applyTimelineCalendarEventMask(
+    timelineCalendarEvent: TimelineCalendarEventDTO,
+  ): void {
+    timelineCalendarEvent.title = CALENDAR_PRIVACY_OCCUPIED_TITLE;
+    timelineCalendarEvent.description = null;
+    timelineCalendarEvent.location = null;
+    timelineCalendarEvent.conferenceSolution = null;
+    timelineCalendarEvent.participants = null;
+    timelineCalendarEvent.conferenceLink = null;
+    timelineCalendarEvent.entityColor = null;
   }
 
   private createEmptyConferenceLink() {
@@ -374,14 +393,6 @@ export class CalendarPrivacyService {
       primaryLinkUrl: '',
       secondaryLinks: null,
     };
-  }
-
-  private normalizeEntityId(entityId?: string | null) {
-    if (!isDefined(entityId) || entityId.trim().length === 0) {
-      return null;
-    }
-
-    return entityId.toLowerCase();
   }
 
   private createCalendarEventMaskMap(

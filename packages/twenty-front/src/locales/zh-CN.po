@@ -931,6 +931,11 @@ msgstr "添加自定义提供商"
 msgid "Add Emailing Domain"
 msgstr "添加电子邮件域名"
 
+#. js-lingui-id: Q5wyPc
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "Add entity"
+msgstr ""
+
 #. js-lingui-id: DpV70M
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
@@ -4501,6 +4506,7 @@ msgstr "日期粒度 Y"
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityLabel.ts
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Day"
 msgstr "日"
 
@@ -5981,6 +5987,11 @@ msgstr "实体 ID"
 msgid "Entity ID copied to clipboard"
 msgstr "实体 ID 已复制到剪贴板"
 
+#. js-lingui-id: XvMak0
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "Entity view selector"
+msgstr ""
+
 #. js-lingui-id: 3IeauL
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTabEnvironmentVariableTableRow.tsx
 msgid "Env Variable Options"
@@ -7326,6 +7337,12 @@ msgstr "分组"
 msgid "Group by"
 msgstr "分组依据"
 
+#. js-lingui-id: v5qiMe
+#: src/pages/group-calendar/GroupCalendarPage.tsx
+#: src/modules/navigation/components/NavigationDrawerOtherSection.tsx
+msgid "Group calendar"
+msgstr ""
+
 #. js-lingui-id: tyyaxS
 #: src/modules/page-layout/widgets/components/RecordPageAddWidgetSection.tsx
 msgid "Group multiple fields from this record"
@@ -7340,6 +7357,11 @@ msgstr "分组名称"
 #: src/modules/object-record/record-group/components/RecordGroupReorderConfirmationModal.tsx
 msgid "Group sorting"
 msgstr "分组排序"
+
+#. js-lingui-id: oXWxw4
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "Group view"
+msgstr ""
 
 #. js-lingui-id: eKiSkN
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
@@ -9292,6 +9314,7 @@ msgstr "月"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCalendarViewContent.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Month"
 msgstr "月"
 
@@ -9430,6 +9453,11 @@ msgstr "必须是有效电子邮件的数组"
 #. js-lingui-id: OJCJh9
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "My apps"
+msgstr ""
+
+#. js-lingui-id: be0MBV
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "My company"
 msgstr ""
 
 #. js-lingui-id: XTGSZU
@@ -9977,6 +10005,11 @@ msgstr ""
 msgid "No email exchange has occurred with this record yet."
 msgstr "还没有与此记录进行电子邮件交换。"
 
+#. js-lingui-id: AGxqD7
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "No entity linked"
+msgstr ""
+
 #. js-lingui-id: p3Hivn
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
 msgid "No evaluation inputs yet. Add your first test input above."
@@ -9987,12 +10020,18 @@ msgstr ""
 msgid "No evaluations yet for this turn"
 msgstr ""
 
+#. js-lingui-id: f3M/fA
+#: src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx
+msgid "No event is scheduled for this period."
+msgstr ""
+
 #. js-lingui-id: SIR5Ix
 #: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
 msgid "No event logs found"
 msgstr "未找到事件日志"
 
 #. js-lingui-id: l7y8S8
+#: src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx
 #: src/modules/activities/calendar/components/CalendarEventsCard.tsx
 msgid "No Events"
 msgstr "无事件"
@@ -11941,6 +11980,12 @@ msgstr "移除默认设置"
 #: src/modules/object-record/record-table/empty-state/components/RecordTableEmptyStateSoftDelete.tsx
 msgid "Remove Deleted filter"
 msgstr "移除已删除过滤器"
+
+#. js-lingui-id: Sc2Cjl
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+msgid "Remove entity"
+msgstr ""
 
 #. js-lingui-id: 9VZ6f0
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelEditOrganizeActions.tsx
@@ -14528,6 +14573,12 @@ msgstr "这将断开此提供商的所有模型连接。在配置新的提供商
 msgid "This will modify {contextStoreNumberOfSelectedRecords} records. This action cannot be undone."
 msgstr "这将修改 {contextStoreNumberOfSelectedRecords} 条记录。此操作无法撤销。"
 
+#. js-lingui-id: n8n2Ce
+#. placeholder {0}: entityLabel ? <strong>{entityLabel}</strong> : 'this entity'
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+msgid "This will only remove the link with {0}.<0/>The Internal Entity record will be kept."
+msgstr ""
+
 #. js-lingui-id: XGDxrH
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 msgid "This will permanently delete the field and all its data from {objectLabel}. Type \"yes\" to confirm."
@@ -14628,6 +14679,7 @@ msgstr "收件人"
 #: src/modules/object-record/record-calendar/components/RecordCalendarTopBar.tsx
 #: src/modules/localization/utils/formatDateISOStringToRelativeDate.ts
 #: src/modules/ai/utils/getDateGroupTitle.ts
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Today"
 msgstr "今天"
 
@@ -15175,6 +15227,11 @@ msgstr "未命名"
 #: src/modules/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerMenuItemContent.tsx
 msgid "Untitled {labelSingular}"
 msgstr "未命名的 {labelSingular}"
+
+#. js-lingui-id: poaqOf
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "Untitled entity"
+msgstr ""
 
 #. js-lingui-id: zJsHrW
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowOutputSchemaBuilder.tsx
@@ -15976,8 +16033,14 @@ msgstr "网站"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCalendarViewContent.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Week"
 msgstr "周"
+
+#. js-lingui-id: HwxVFF
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
+msgid "Week of"
+msgstr ""
 
 #. js-lingui-id: IAUiSh
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityPluralLabel.ts

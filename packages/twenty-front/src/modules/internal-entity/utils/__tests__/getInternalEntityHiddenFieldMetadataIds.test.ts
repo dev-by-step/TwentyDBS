@@ -41,10 +41,7 @@ const createField = ({
             },
           }
         : null,
-    settings:
-      type === FieldMetadataType.RELATION
-        ? { joinColumnName }
-        : null,
+    settings: type === FieldMetadataType.RELATION ? { joinColumnName } : null,
   }) as unknown as FieldMetadataItem;
 
 describe('getInternalEntityHiddenFieldMetadataIds', () => {
@@ -52,7 +49,11 @@ describe('getInternalEntityHiddenFieldMetadataIds', () => {
     const objectMetadataItem = {
       labelIdentifierFieldMetadataId: 'id-field-id',
       fields: [
-        createField({ id: 'id-field-id', name: 'id', type: FieldMetadataType.UUID }),
+        createField({
+          id: 'id-field-id',
+          name: 'id',
+          type: FieldMetadataType.UUID,
+        }),
         createField({
           id: 'person-field-id',
           name: 'person',
@@ -82,9 +83,6 @@ describe('getInternalEntityHiddenFieldMetadataIds', () => {
       getInternalEntityHiddenFieldMetadataIds({
         objectMetadataItem,
       }),
-    ).toEqual([
-      'person-id-field-id',
-      'internal-entity-id-field-id',
-    ]);
+    ).toEqual(['person-id-field-id', 'internal-entity-id-field-id']);
   });
 });

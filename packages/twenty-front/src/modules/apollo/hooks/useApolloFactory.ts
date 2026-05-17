@@ -12,7 +12,7 @@ import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
 import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
-import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -32,14 +32,16 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
   const [currentWorkspace, setCurrentWorkspace] = useAtomState(
     currentWorkspaceState,
   );
-  const [activeEntityId, setActiveEntityId] = useAtomState(activeEntityIdState);
+  const setActiveEntityId = useSetAtomState(activeEntityIdState);
   const appVersion = useAtomStateValue(appVersionState);
   const [currentWorkspaceMember, setCurrentWorkspaceMember] = useAtomState(
     currentWorkspaceMemberState,
   );
   const setCurrentUser = useSetAtomState(currentUserState);
   const setCurrentUserWorkspace = useSetAtomState(currentUserWorkspaceState);
-  const setSelectedEntityId = useSetAtomState(selectedEntityIdState);
+  const [selectedEntityId, setSelectedEntityId] = useAtomState(
+    selectedEntityIdState,
+  );
 
   const setReturnToPath = useSetAtomState(returnToPathState);
   const location = useLocation();
@@ -65,7 +67,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       devtools: { enabled: process.env.IS_DEBUG_MODE === 'true' },
       currentWorkspaceMember: currentWorkspaceMember,
       currentWorkspace: currentWorkspace,
-      activeInternalEntityId: activeEntityId,
+      activeInternalEntityId: selectedEntityId,
       appVersion,
       onTokenPairChange: (tokenPair) => {
         setTokenPair(tokenPair);
@@ -141,9 +143,9 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
 
   useUpdateEffect(() => {
     if (isDefined(apolloRef.current)) {
-      apolloRef.current.updateActiveInternalEntityId(activeEntityId);
+      apolloRef.current.updateActiveInternalEntityId(selectedEntityId);
     }
-  }, [activeEntityId]);
+  }, [selectedEntityId]);
 
   useUpdateEffect(() => {
     if (isDefined(apolloRef.current)) {

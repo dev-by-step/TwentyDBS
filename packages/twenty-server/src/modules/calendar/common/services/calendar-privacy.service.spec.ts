@@ -1,13 +1,16 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
+import { CALENDAR_PRIVACY_OCCUPIED_TITLE } from 'src/modules/calendar/common/constants/calendar-privacy.constants';
 import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
+import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 describe('CalendarPrivacyService', () => {
@@ -461,5 +464,128 @@ describe('CalendarPrivacyService', () => {
         ['calendar-event-2', true],
       ]),
     );
+  });
+
+  describe('applyInternalEntityPrivacyToTimelineCalendarEvents', () => {
+    const buildTimelineCalendarEvent = (
+      overrides: Partial<TimelineCalendarEventDTO> = {},
+    ): TimelineCalendarEventDTO =>
+      ({
+        id: 'calendar-event-1',
+        title: 'Sensitive client meeting',
+        isCanceled: false,
+        isFullDay: false,
+        startsAt: new Date('2026-05-17T09:00:00Z'),
+        endsAt: new Date('2026-05-17T10:00:00Z'),
+        description: 'Strategic discussion',
+        location: 'HQ — Floor 4',
+        conferenceSolution: 'google-meet',
+        conferenceLink: {
+          primaryLinkLabel: 'Join',
+          primaryLinkUrl: 'https://example.com/join',
+          secondaryLinks: null,
+        },
+        participants: [],
+        visibility: 'SHARE_EVERYTHING',
+        entityColor: '#FF0000',
+        ...overrides,
+      }) as TimelineCalendarEventDTO;
+
+    it('redacts every entity-identifying field on masked events', () => {
+      const event = buildTimelineCalendarEvent();
+
+      service.applyInternalEntityPrivacyToTimelineCalendarEvents(
+        [event],
+        new Map([[event.id, true]]),
+      );
+
+      expect(event).toMatchObject({
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceSolution: null,
+        conferenceLink: null,
+        participants: null,
+        entityColor: null,
+      });
+    });
+
+    it('leaves events untouched when not flagged in the mask map', () => {
+      const event = buildTimelineCalendarEvent();
+      const snapshot = { ...event };
+
+      service.applyInternalEntityPrivacyToTimelineCalendarEvents(
+        [event],
+        new Map([[event.id, false]]),
+      );
+
+      expect(event).toEqual(snapshot);
+    });
+
+    it('leaves events untouched when missing from the mask map', () => {
+      const event = buildTimelineCalendarEvent();
+      const snapshot = { ...event };
+
+      service.applyInternalEntityPrivacyToTimelineCalendarEvents(
+        [event],
+        new Map(),
+      );
+
+      expect(event).toEqual(snapshot);
+    });
+  });
+
+  describe('applyInternalEntityPrivacyToWorkspaceCalendarEvents', () => {
+    const buildWorkspaceCalendarEvent = (
+      overrides: Partial<CalendarEventWorkspaceEntity> = {},
+    ): CalendarEventWorkspaceEntity =>
+      ({
+        id: 'calendar-event-1',
+        title: 'Sensitive client meeting',
+        description: 'Strategic discussion',
+        location: 'HQ — Floor 4',
+        conferenceSolution: 'google-meet',
+        conferenceLink: {
+          primaryLinkLabel: 'Join',
+          primaryLinkUrl: 'https://example.com/join',
+          secondaryLinks: null,
+        },
+        calendarEventParticipants: [{ id: 'participant-1' }],
+        ...overrides,
+      }) as unknown as CalendarEventWorkspaceEntity;
+
+    it('redacts every entity-identifying field on masked events', () => {
+      const event = buildWorkspaceCalendarEvent();
+
+      service.applyInternalEntityPrivacyToWorkspaceCalendarEvents(
+        [event],
+        new Map([[event.id, true]]),
+      );
+
+      expect(event).toMatchObject({
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceSolution: null,
+        calendarEventParticipants: [],
+        conferenceLink: {
+          primaryLinkLabel: '',
+          primaryLinkUrl: '',
+          secondaryLinks: null,
+        },
+      });
+    });
+
+    it('leaves events untouched when not flagged in the mask map', () => {
+      const event = buildWorkspaceCalendarEvent();
+      const snapshot = { ...event };
+
+      service.applyInternalEntityPrivacyToWorkspaceCalendarEvents(
+        [event],
+        new Map([[event.id, false]]),
+      );
+
+      expect(event).toEqual(snapshot);
+    });
   });
 });

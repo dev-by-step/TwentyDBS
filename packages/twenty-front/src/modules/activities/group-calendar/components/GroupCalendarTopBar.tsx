@@ -1,7 +1,6 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { type Locale, format } from 'date-fns';
 import {
   IconCalendar,
   IconChevronLeft,
@@ -11,6 +10,8 @@ import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { type GroupCalendarViewMode } from '@/activities/group-calendar/types/GroupCalendarViewMode';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { dateLocaleState } from '~/localization/states/dateLocaleState';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -71,19 +72,24 @@ const StyledViewModeButton = styled.button<{ isActive: boolean }>`
   }
 `;
 
-const formatPeriodLabel = (
-  viewMode: GroupCalendarViewMode,
-  selectedDate: Date,
-): string => {
-  const locale = fr;
-
+const formatPeriodLabel = ({
+  viewMode,
+  selectedDate,
+  locale,
+  weekOfPrefix,
+}: {
+  viewMode: GroupCalendarViewMode;
+  selectedDate: Date;
+  locale: Locale;
+  weekOfPrefix: string;
+}): string => {
   switch (viewMode) {
     case 'DAY':
       return format(selectedDate, 'd MMMM yyyy', { locale });
     case 'WEEK': {
       const weekStart = format(selectedDate, 'd MMM', { locale });
 
-      return `Semaine du ${weekStart}`;
+      return `${weekOfPrefix} ${weekStart}`;
     }
     case 'MONTH':
       return format(selectedDate, 'MMMM yyyy', { locale });
@@ -108,11 +114,12 @@ export const GroupCalendarTopBar = ({
   onToday,
 }: GroupCalendarTopBarProps) => {
   const { t } = useLingui();
+  const { localeCatalog } = useAtomStateValue(dateLocaleState);
 
   const viewModes: { label: string; mode: GroupCalendarViewMode }[] = [
-    { label: t`Jour`, mode: 'DAY' },
-    { label: t`Semaine`, mode: 'WEEK' },
-    { label: t`Mois`, mode: 'MONTH' },
+    { label: t`Day`, mode: 'DAY' },
+    { label: t`Week`, mode: 'WEEK' },
+    { label: t`Month`, mode: 'MONTH' },
   ];
 
   return (
@@ -120,7 +127,12 @@ export const GroupCalendarTopBar = ({
       <StyledLeft>
         <IconCalendar size={themeCssVariables.icon.size.md} />
         <StyledPeriodLabel>
-          {formatPeriodLabel(viewMode, selectedDate)}
+          {formatPeriodLabel({
+            viewMode,
+            selectedDate,
+            locale: localeCatalog,
+            weekOfPrefix: t`Week of`,
+          })}
         </StyledPeriodLabel>
       </StyledLeft>
 
@@ -134,7 +146,7 @@ export const GroupCalendarTopBar = ({
         <Button
           size="small"
           variant="tertiary"
-          title={t`Aujourd'hui`}
+          title={t`Today`}
           onClick={onToday}
         />
         <Button

@@ -926,6 +926,11 @@ msgstr "Add Custom Provider"
 msgid "Add Emailing Domain"
 msgstr "Add Emailing Domain"
 
+#. js-lingui-id: Q5wyPc
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "Add entity"
+msgstr "Add entity"
+
 #. js-lingui-id: DpV70M
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
@@ -4496,6 +4501,7 @@ msgstr "Date Granularity Y"
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityLabel.ts
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Day"
 msgstr "Day"
 
@@ -5976,6 +5982,11 @@ msgstr "Entity ID"
 msgid "Entity ID copied to clipboard"
 msgstr "Entity ID copied to clipboard"
 
+#. js-lingui-id: XvMak0
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "Entity view selector"
+msgstr "Entity view selector"
+
 #. js-lingui-id: 3IeauL
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTabEnvironmentVariableTableRow.tsx
 msgid "Env Variable Options"
@@ -7321,6 +7332,12 @@ msgstr "Group"
 msgid "Group by"
 msgstr "Group by"
 
+#. js-lingui-id: v5qiMe
+#: src/pages/group-calendar/GroupCalendarPage.tsx
+#: src/modules/navigation/components/NavigationDrawerOtherSection.tsx
+msgid "Group calendar"
+msgstr "Group calendar"
+
 #. js-lingui-id: tyyaxS
 #: src/modules/page-layout/widgets/components/RecordPageAddWidgetSection.tsx
 msgid "Group multiple fields from this record"
@@ -7335,6 +7352,11 @@ msgstr "Group name"
 #: src/modules/object-record/record-group/components/RecordGroupReorderConfirmationModal.tsx
 msgid "Group sorting"
 msgstr "Group sorting"
+
+#. js-lingui-id: oXWxw4
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "Group view"
+msgstr "Group view"
 
 #. js-lingui-id: eKiSkN
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
@@ -9310,6 +9332,7 @@ msgstr "month"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCalendarViewContent.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Month"
 msgstr "Month"
 
@@ -9449,6 +9472,11 @@ msgstr "must be an array of valid emails"
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "My apps"
 msgstr "My apps"
+
+#. js-lingui-id: be0MBV
+#: src/modules/entity-filter/components/entity-selector/entity-selector.component.tsx
+msgid "My company"
+msgstr "My company"
 
 #. js-lingui-id: XTGSZU
 #: src/modules/views/view-picker/components/ViewPickerListContent.tsx
@@ -9995,6 +10023,11 @@ msgstr "No description available for this application"
 msgid "No email exchange has occurred with this record yet."
 msgstr "No email exchange has occurred with this record yet."
 
+#. js-lingui-id: AGxqD7
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "No entity linked"
+msgstr "No entity linked"
+
 #. js-lingui-id: p3Hivn
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
 msgid "No evaluation inputs yet. Add your first test input above."
@@ -10005,12 +10038,18 @@ msgstr "No evaluation inputs yet. Add your first test input above."
 msgid "No evaluations yet for this turn"
 msgstr "No evaluations yet for this turn"
 
+#. js-lingui-id: f3M/fA
+#: src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx
+msgid "No event is scheduled for this period."
+msgstr "No event is scheduled for this period."
+
 #. js-lingui-id: SIR5Ix
 #: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
 msgid "No event logs found"
 msgstr "No event logs found"
 
 #. js-lingui-id: l7y8S8
+#: src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx
 #: src/modules/activities/calendar/components/CalendarEventsCard.tsx
 msgid "No Events"
 msgstr "No Events"
@@ -11959,6 +11998,12 @@ msgstr "Remove as default"
 #: src/modules/object-record/record-table/empty-state/components/RecordTableEmptyStateSoftDelete.tsx
 msgid "Remove Deleted filter"
 msgstr "Remove Deleted filter"
+
+#. js-lingui-id: Sc2Cjl
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+msgid "Remove entity"
+msgstr "Remove entity"
 
 #. js-lingui-id: 9VZ6f0
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelEditOrganizeActions.tsx
@@ -14578,6 +14623,12 @@ msgstr "This will disconnect all models from this provider. Models will no longe
 msgid "This will modify {contextStoreNumberOfSelectedRecords} records. This action cannot be undone."
 msgstr "This will modify {contextStoreNumberOfSelectedRecords} records. This action cannot be undone."
 
+#. js-lingui-id: n8n2Ce
+#. placeholder {0}: entityLabel ? <strong>{entityLabel}</strong> : 'this entity'
+#: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
+msgid "This will only remove the link with {0}.<0/>The Internal Entity record will be kept."
+msgstr "This will only remove the link with {0}.<0/>The Internal Entity record will be kept."
+
 #. js-lingui-id: XGDxrH
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 msgid "This will permanently delete the field and all its data from {objectLabel}. Type \"yes\" to confirm."
@@ -14678,6 +14729,7 @@ msgstr "To"
 #: src/modules/object-record/record-calendar/components/RecordCalendarTopBar.tsx
 #: src/modules/localization/utils/formatDateISOStringToRelativeDate.ts
 #: src/modules/ai/utils/getDateGroupTitle.ts
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Today"
 msgstr "Today"
 
@@ -15225,6 +15277,11 @@ msgstr "Untitled"
 #: src/modules/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerMenuItemContent.tsx
 msgid "Untitled {labelSingular}"
 msgstr "Untitled {labelSingular}"
+
+#. js-lingui-id: poaqOf
+#: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
+msgid "Untitled entity"
+msgstr "Untitled entity"
 
 #. js-lingui-id: zJsHrW
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowOutputSchemaBuilder.tsx
@@ -16026,8 +16083,14 @@ msgstr "Website"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCalendarViewContent.tsx
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
 msgid "Week"
 msgstr "Week"
+
+#. js-lingui-id: HwxVFF
+#: src/modules/activities/group-calendar/components/GroupCalendarTopBar.tsx
+msgid "Week of"
+msgstr "Week of"
 
 #. js-lingui-id: IAUiSh
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityPluralLabel.ts

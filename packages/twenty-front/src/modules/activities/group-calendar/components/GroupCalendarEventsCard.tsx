@@ -1,7 +1,6 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { format, getYear } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
 import { CalendarDayCardContent } from '@/activities/calendar/components/CalendarDayCardContent';
 import { GroupCalendarTopBar } from '@/activities/group-calendar/components/GroupCalendarTopBar';
@@ -9,6 +8,8 @@ import { useGroupCalendarEvents } from '@/activities/group-calendar/hooks/useGro
 import { CalendarContext } from '@/activities/calendar/contexts/CalendarContext';
 import { useCalendarEvents } from '@/activities/calendar/hooks/useCalendarEvents';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { dateLocaleState } from '~/localization/states/dateLocaleState';
 import { H3Title } from 'twenty-ui/display';
 import {
   AnimatedPlaceholder,
@@ -58,6 +59,7 @@ export const GroupCalendarEventsCard = () => {
     navigateNext,
     navigateToday,
   } = useGroupCalendarEvents();
+  const { localeCatalog } = useAtomStateValue(dateLocaleState);
 
   const {
     calendarEventsByDayTime,
@@ -87,10 +89,10 @@ export const GroupCalendarEventsCard = () => {
           <AnimatedPlaceholder type="noMatchRecord" />
           <AnimatedPlaceholderEmptyTextContainer>
             <AnimatedPlaceholderEmptyTitle>
-              {t`Aucun événement`}
+              {t`No Events`}
             </AnimatedPlaceholderEmptyTitle>
             <AnimatedPlaceholderEmptySubTitle>
-              {t`Aucun créneau n'est planifié pour cette période.`}
+              {t`No event is scheduled for this period.`}
             </AnimatedPlaceholderEmptySubTitle>
           </AnimatedPlaceholderEmptyTextContainer>
         </AnimatedPlaceholderEmptyContainer>
@@ -102,7 +104,9 @@ export const GroupCalendarEventsCard = () => {
               const year = getYear(monthTime);
               const lastMonthOfYear = monthTimesByYear[year]?.[0];
               const isLastMonthOfYear = lastMonthOfYear === monthTime;
-              const monthLabel = format(monthTime, 'MMMM', { locale: fr });
+              const monthLabel = format(monthTime, 'MMMM', {
+                locale: localeCatalog,
+              });
 
               return (
                 <Section key={monthTime}>

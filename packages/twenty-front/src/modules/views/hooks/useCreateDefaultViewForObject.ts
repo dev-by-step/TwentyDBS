@@ -1,7 +1,5 @@
-import {
-  DEFAULT_VIEW_FIELD_SIZE,
-  INTERNAL_ENTITY_RELATION_VIEW_FIELD_DEFAULT_SIZE,
-} from '@/internal-entity/constants/InternalEntityRelationViewFieldSize';
+import { INTERNAL_ENTITY_RELATION_VIEW_FIELD_DEFAULT_SIZE } from '@/internal-entity/constants/InternalEntityRelationViewFieldSize';
+import { DEFAULT_VIEW_FIELD_SIZE } from '@/views/constants/DefaultViewFieldSize';
 import { getInternalEntityHiddenFieldMetadataIds } from '@/internal-entity/utils/getInternalEntityHiddenFieldMetadataIds';
 import { getInternalEntityRelationFieldMetadataItems } from '@/internal-entity/utils/getInternalEntityRelationFieldMetadataItems';
 import { isInternalEntityMembershipObjectMetadataItem } from '@/internal-entity/utils/isInternalEntityMembershipObjectMetadataItem';
@@ -58,7 +56,9 @@ export const useCreateDefaultViewForObject = () => {
             objectMetadataItems,
           });
         const preferredFieldMetadataIdSet = new Set(
-          preferredFieldMetadataItems.map((fieldMetadataItem) => fieldMetadataItem.id),
+          preferredFieldMetadataItems.map(
+            (fieldMetadataItem) => fieldMetadataItem.id,
+          ),
         );
         const preferredFieldOrderById = new Map(
           preferredFieldMetadataItems.map((fieldMetadataItem, index) => [

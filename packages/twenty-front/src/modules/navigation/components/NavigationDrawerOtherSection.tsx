@@ -48,7 +48,7 @@ export const NavigationDrawerOtherSection = () => {
         initial={false}
       >
         <NavigationDrawerItem
-          label={t`Calendrier Groupe`}
+          label={t`Group calendar`}
           Icon={IconCalendar}
           to={AppPath.GroupCalendarPage}
         />

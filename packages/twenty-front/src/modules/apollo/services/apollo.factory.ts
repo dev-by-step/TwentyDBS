@@ -14,7 +14,7 @@ import UploadHttpLink from 'apollo-upload-client/UploadHttpLink.mjs';
 import { renewToken } from '@/auth/services/AuthService';
 import { type CurrentWorkspaceMember } from '@/auth/states/currentWorkspaceMemberState';
 import { type CurrentWorkspace } from '@/auth/states/currentWorkspaceState';
-import { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from '@/entity-filter/constants/activeInternalEntityIdHeaderName';
+import { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from 'twenty-shared/constants';
 import { type AuthTokenPair } from '~/generated-metadata/graphql';
 import { logDebug } from '~/utils/logDebug';
 import { retryWithBackoff } from '~/utils/retryWithBackoff';

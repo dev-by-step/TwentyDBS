@@ -14,7 +14,7 @@ export const validateUuidOrThrow = (
   fieldName: string,
 ): string => {
   if (!isValidUuid(value)) {
-    throw new Error(`${fieldName} invalide: ${value}`);
+    throw new Error(`Invalid ${fieldName}: ${value}`);
   }
 
   return value.toLowerCase();
@@ -22,7 +22,7 @@ export const validateUuidOrThrow = (
 
 export const quoteSqlIdentifierOrThrow = (identifier: string): string => {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
-    throw new Error(`Identifiant SQL invalide: ${identifier}`);
+    throw new Error(`Invalid SQL identifier: ${identifier}`);
   }
 
   return `"${identifier}"`;
@@ -53,9 +53,7 @@ export const resolveObjectTableNameOrThrow = async ({
   );
 
   if (!isDefined(objectMetadata)) {
-    throw new Error(
-      `Objet standard introuvable dans le workspace: ${nameSingular}`,
-    );
+    throw new Error(`Standard object not found in workspace: ${nameSingular}`);
   }
 
   return computeObjectTargetTable({

@@ -1,28 +1,16 @@
 import { type Request } from 'express';
+import { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from 'twenty-shared/constants';
 import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
 
 import { type RawAuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
-
-export const ACTIVE_INTERNAL_ENTITY_ID_HEADER =
-  'x-active-internal-entity-id';
-
-const normalizeOptionalEntityId = (entityId?: string | null) => {
-  if (!entityId || entityId.trim().length === 0) {
-    return null;
-  }
-
-  return entityId.trim().toLowerCase();
-};
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 
 export const extractActiveInternalEntityIdFromRequest = (
   request: Pick<Request, 'headers'>,
-) => {
-  const headerValue = request.headers[ACTIVE_INTERNAL_ENTITY_ID_HEADER];
-
-  return normalizeOptionalEntityId(
-    typeof headerValue === 'string' ? headerValue : null,
+) =>
+  normalizeOptionalEntityId(
+    request.headers[ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME],
   );
-};
 
 export const bindDataToRequestObject = (
   data: RawAuthContext,

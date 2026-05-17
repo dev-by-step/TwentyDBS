@@ -170,7 +170,9 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     expect(result).toEqual(calendarEvents);
     expect(
       result.every(
-        (item) => item.title === 'Test Event' && item.description === 'Test Description',
+        (item) =>
+          item.title === 'Test Event' &&
+          item.description === 'Test Description',
       ),
     ).toBe(true);
     expect(mockConnectedAccountRepository.find).not.toHaveBeenCalled();
@@ -261,7 +263,9 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     expect(result).toEqual(calendarEvents);
     expect(
       result.every(
-        (item) => item.title === 'Test Event' && item.description === 'Test Description',
+        (item) =>
+          item.title === 'Test Event' &&
+          item.description === 'Test Description',
       ),
     ).toBe(true);
   });

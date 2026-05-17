@@ -8,7 +8,7 @@ import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
 import { useLastAuthenticatedWorkspaceDomain } from '@/domain-manager/hooks/useLastAuthenticatedWorkspaceDomain';
-import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdState';
 import { useInitializeFormatPreferences } from '@/localization/hooks/useInitializeFormatPreferences';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';

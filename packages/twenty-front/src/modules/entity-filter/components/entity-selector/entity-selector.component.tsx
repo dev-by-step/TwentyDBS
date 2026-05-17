@@ -129,13 +129,13 @@ export const EntitySelector = () => {
   const options: ViewModeOption[] = [
     {
       icon: IconBuildingSkyscraper,
-      label: t`Ma Société`,
+      label: t`My company`,
       mode: ENTITY_FILTER_VIEW_MODE.MY_COMPANY,
       onClick: getOptionOnClick(ENTITY_FILTER_VIEW_MODE.MY_COMPANY),
     },
     {
       icon: IconSitemap,
-      label: t`Vue Groupe`,
+      label: t`Group view`,
       mode: ENTITY_FILTER_VIEW_MODE.GROUP,
       onClick: getOptionOnClick(ENTITY_FILTER_VIEW_MODE.GROUP),
     },

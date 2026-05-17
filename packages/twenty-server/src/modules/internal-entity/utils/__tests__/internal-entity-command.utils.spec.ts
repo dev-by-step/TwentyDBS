@@ -26,7 +26,7 @@ describe('internal-entity-command.utils', () => {
     it('should throw for an invalid UUID', () => {
       expect(() =>
         validateUuidOrThrow('workspace;DROP SCHEMA', 'workspaceId'),
-      ).toThrow('workspaceId invalide: workspace;DROP SCHEMA');
+      ).toThrow('Invalid workspaceId: workspace;DROP SCHEMA');
     });
   });
 
@@ -40,9 +40,7 @@ describe('internal-entity-command.utils', () => {
     it('should reject unsafe SQL identifiers', () => {
       expect(() =>
         quoteSqlIdentifierOrThrow('workspace";DROP TABLE opportunity;--'),
-      ).toThrow(
-        'Identifiant SQL invalide: workspace";DROP TABLE opportunity;--',
-      );
+      ).toThrow('Invalid SQL identifier: workspace";DROP TABLE opportunity;--');
     });
   });
 
@@ -100,9 +98,7 @@ describe('internal-entity-command.utils', () => {
           workspaceId: WORKSPACE_ID,
           nameSingular: 'opportunity',
         }),
-      ).rejects.toThrow(
-        'Objet standard introuvable dans le workspace: opportunity',
-      );
+      ).rejects.toThrow('Standard object not found in workspace: opportunity');
     });
   });
 });

@@ -10,10 +10,6 @@ const INTERNAL_ENTITY_MEMBERSHIP_SOURCE_OBJECT_NAMES = [
 export type InternalEntityMembershipSourceObjectName =
   (typeof INTERNAL_ENTITY_MEMBERSHIP_SOURCE_OBJECT_NAMES)[number];
 
-const INTERNAL_ENTITY_MEMBERSHIP_SOURCE_OBJECT_NAME_SET = new Set<string>(
-  INTERNAL_ENTITY_MEMBERSHIP_SOURCE_OBJECT_NAMES,
-);
-
 const hasMatchingActiveRelationField = ({
   objectMetadataItem,
   fieldName,
@@ -71,8 +67,3 @@ export const isInternalEntityMembershipObjectMetadataItem = (
   objectMetadataItem: Pick<EnrichedObjectMetadataItem, 'fields'>,
 ): boolean =>
   isDefined(getInternalEntityMembershipSourceObjectName(objectMetadataItem));
-
-export const isInternalEntityMembershipSourceObjectName = (
-  objectNameSingular: string,
-): objectNameSingular is InternalEntityMembershipSourceObjectName =>
-  INTERNAL_ENTITY_MEMBERSHIP_SOURCE_OBJECT_NAME_SET.has(objectNameSingular);

@@ -190,17 +190,21 @@ describe('useCreateDefaultViewForObject', () => {
     });
 
     const createdFieldMetadataIds =
-      performViewFieldAPICreate.mock.calls.at(-1)?.[0].inputs.map(
-        (input: { fieldMetadataId: string }) => input.fieldMetadataId,
-      ) ?? [];
+      performViewFieldAPICreate.mock.calls
+        .at(-1)?.[0]
+        .inputs.map(
+          (input: { fieldMetadataId: string }) => input.fieldMetadataId,
+        ) ?? [];
 
-    expect(createdFieldMetadataIds.indexOf('junction-person-field-id')).toBeLessThan(
-      createdFieldMetadataIds.indexOf('membership-id-field-id'),
-    );
+    expect(
+      createdFieldMetadataIds.indexOf('junction-person-field-id'),
+    ).toBeLessThan(createdFieldMetadataIds.indexOf('membership-id-field-id'));
     expect(
       createdFieldMetadataIds.indexOf('junction-internal-entity-field-id'),
     ).toBeLessThan(createdFieldMetadataIds.indexOf('membership-id-field-id'));
-    expect(createdFieldMetadataIds).not.toContain('membership-person-id-field-id');
+    expect(createdFieldMetadataIds).not.toContain(
+      'membership-person-id-field-id',
+    );
     expect(createdFieldMetadataIds).not.toContain(
       'membership-internal-entity-id-field-id',
     );

@@ -216,7 +216,9 @@ const GENERATE_OPPORTUNITY_SEEDS = (): OpportunityDataSeed[] => {
     }
     const cycleIndex = Math.floor((INDEX - 1) / COMPANY_RECORD_COUNT);
     const opportunityWorkspaceMemberIds =
-      demoRecord.opportunityWorkspaceMemberIds ?? [demoRecord.workspaceMemberId];
+      demoRecord.opportunityWorkspaceMemberIds ?? [
+        demoRecord.workspaceMemberId,
+      ];
     const workspaceMemberId =
       opportunityWorkspaceMemberIds[
         cycleIndex % opportunityWorkspaceMemberIds.length

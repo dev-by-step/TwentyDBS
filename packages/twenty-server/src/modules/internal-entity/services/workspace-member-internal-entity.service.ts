@@ -4,6 +4,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 
 const WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME =
   'workspaceMemberEntityMembership';
@@ -141,6 +142,11 @@ export class WorkspaceMemberInternalEntityService {
       const entityIds =
         entityIdsByWorkspaceMemberId.get(workspaceMemberId) ?? [];
 
+      const currentEntityId = this.resolveCurrentEntityId({
+        entityIds,
+        fallbackEntityId,
+      });
+
       contexts.set(workspaceMemberId, {
         entityIds:
           entityIds.length > 0
@@ -148,14 +154,8 @@ export class WorkspaceMemberInternalEntityService {
             : isDefined(fallbackEntityId)
               ? [fallbackEntityId]
               : [],
-        currentEntityId: this.resolveCurrentEntityId({
-          entityIds,
-          fallbackEntityId,
-        }),
-        activeEntityId: this.resolveCurrentEntityId({
-          entityIds,
-          fallbackEntityId,
-        }),
+        currentEntityId,
+        activeEntityId: currentEntityId,
       });
     }
 
@@ -203,13 +203,10 @@ export class WorkspaceMemberInternalEntityService {
     return new Map(
       workspaceMemberIds.map((workspaceMemberId) => [
         workspaceMemberId,
-        this.buildFallbackContext(
-          {
-            fallbackEntityId:
-              fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId) ??
-              null,
-          },
-        ),
+        this.buildFallbackContext({
+          fallbackEntityId:
+            fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId) ?? null,
+        }),
       ]),
     );
   }
@@ -265,10 +262,6 @@ export class WorkspaceMemberInternalEntityService {
   }
 
   private normalizeEntityId(entityId?: string | null) {
-    if (!isDefined(entityId) || entityId.trim().length === 0) {
-      return null;
-    }
-
-    return entityId.toLowerCase();
+    return normalizeOptionalEntityId(entityId);
   }
 }

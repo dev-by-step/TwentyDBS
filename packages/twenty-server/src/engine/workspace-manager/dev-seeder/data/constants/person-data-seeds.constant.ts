@@ -21696,46 +21696,46 @@ const PERSON_DATA_SEEDS_RAW = [
   }
 ];
 
-export const PERSON_DATA_SEEDS: PersonDataSeed[] = PERSON_DATA_SEEDS_RAW
-  .filter((person) => PERSON_DATA_SEED_DEMO_IDS.has(person.id))
-  .map((person, index) => {
-    const demoPersonOverride = PERSON_DATA_SEED_DEMO_OVERRIDES_BY_ID.get(
-      person.id,
-    );
-    const workspaceMemberId =
-      PERSON_DATA_SEED_DEMO_WORKSPACE_MEMBER_IDS_BY_ID.get(person.id) ??
-      Object.values(WORKSPACE_MEMBER_DATA_SEED_IDS)[index % 4];
-    const workspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
-      (workspaceMember) => workspaceMember.id === workspaceMemberId,
-    );
-    const workspaceMemberName = isDefined(workspaceMember)
-      ? `${workspaceMember?.nameFirstName} ${workspaceMember?.nameLastName}`
-      : 'Unknown';
+export const PERSON_DATA_SEEDS: PersonDataSeed[] = PERSON_DATA_SEEDS_RAW.filter(
+  (person) => PERSON_DATA_SEED_DEMO_IDS.has(person.id),
+).map((person, index) => {
+  const demoPersonOverride = PERSON_DATA_SEED_DEMO_OVERRIDES_BY_ID.get(
+    person.id,
+  );
+  const workspaceMemberId =
+    PERSON_DATA_SEED_DEMO_WORKSPACE_MEMBER_IDS_BY_ID.get(person.id) ??
+    Object.values(WORKSPACE_MEMBER_DATA_SEED_IDS)[index % 4];
+  const workspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
+    (workspaceMember) => workspaceMember.id === workspaceMemberId,
+  );
+  const workspaceMemberName = isDefined(workspaceMember)
+    ? `${workspaceMember?.nameFirstName} ${workspaceMember?.nameLastName}`
+    : 'Unknown';
 
-    const personSeed = demoPersonOverride
-      ? { ...person, ...demoPersonOverride }
-      : person;
+  const personSeed = demoPersonOverride
+    ? { ...person, ...demoPersonOverride }
+    : person;
 
-    const dataSeed: PersonDataSeed = {
-      ...personSeed,
-      createdBySource: personSeed.createdBySource,
-      createdByWorkspaceMemberId: workspaceMemberId,
-      createdByName: workspaceMemberName,
-      updatedBySource: personSeed.createdBySource,
-      updatedByWorkspaceMemberId: workspaceMemberId,
-      updatedByName: workspaceMemberName,
-      position: index + 1,
-    };
+  const dataSeed: PersonDataSeed = {
+    ...personSeed,
+    createdBySource: personSeed.createdBySource,
+    createdByWorkspaceMemberId: workspaceMemberId,
+    createdByName: workspaceMemberName,
+    updatedBySource: personSeed.createdBySource,
+    updatedByWorkspaceMemberId: workspaceMemberId,
+    updatedByName: workspaceMemberName,
+    position: index + 1,
+  };
 
-    const personDataSeedWithSQLColumnOrder: PersonDataSeed = Object.fromEntries(
-      PERSON_DATA_SEED_COLUMNS.map((column) => [
-        column,
-        dataSeed[column as keyof PersonDataSeed],
-      ]),
-    ) as PersonDataSeed;
+  const personDataSeedWithSQLColumnOrder: PersonDataSeed = Object.fromEntries(
+    PERSON_DATA_SEED_COLUMNS.map((column) => [
+      column,
+      dataSeed[column as keyof PersonDataSeed],
+    ]),
+  ) as PersonDataSeed;
 
-    return personDataSeedWithSQLColumnOrder;
-  });
+  return personDataSeedWithSQLColumnOrder;
+});
 
 // Map for O(1) lookups by person ID
 export const PERSON_DATA_SEEDS_MAP = new Map<string, PersonDataSeed>(

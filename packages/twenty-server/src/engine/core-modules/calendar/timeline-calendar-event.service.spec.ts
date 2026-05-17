@@ -66,7 +66,9 @@ describe('TimelineCalendarEventService', () => {
     };
 
     mockCalendarPrivacyService = {
-      getCalendarEventMaskMap: jest.fn().mockResolvedValue(new Map([['1', false]])),
+      getCalendarEventMaskMap: jest
+        .fn()
+        .mockResolvedValue(new Map([['1', false]])),
     };
 
     const mockGlobalWorkspaceOrmManager = {
@@ -125,7 +127,9 @@ describe('TimelineCalendarEventService', () => {
       .mockResolvedValueOnce([
         {
           ...mockCalendarEvent,
-          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+          calendarChannelEventAssociations: [
+            { calendarChannelId: 'channel-1' },
+          ],
         },
       ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
@@ -162,7 +166,9 @@ describe('TimelineCalendarEventService', () => {
       .mockResolvedValueOnce([
         {
           ...mockCalendarEvent,
-          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+          calendarChannelEventAssociations: [
+            { calendarChannelId: 'channel-1' },
+          ],
         },
       ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
@@ -208,7 +214,9 @@ describe('TimelineCalendarEventService', () => {
       .mockResolvedValueOnce([
         {
           ...mockCalendarEvent,
-          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+          calendarChannelEventAssociations: [
+            { calendarChannelId: 'channel-1' },
+          ],
         },
       ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
@@ -253,7 +261,9 @@ describe('TimelineCalendarEventService', () => {
       .mockResolvedValueOnce([
         {
           ...mockCalendarEvent,
-          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+          calendarChannelEventAssociations: [
+            { calendarChannelId: 'channel-1' },
+          ],
         },
       ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
