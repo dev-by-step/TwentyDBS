@@ -18,8 +18,6 @@ describe('normalizeOptionalEntityId', () => {
   it('lowercases and trims valid entity ids', () => {
     expect(normalizeOptionalEntityId('ABC-123')).toBe('abc-123');
     expect(normalizeOptionalEntityId('  abc-123  ')).toBe('abc-123');
-    expect(normalizeOptionalEntityId('A1B2-C3D4-E5F6')).toBe(
-      'a1b2-c3d4-e5f6',
-    );
+    expect(normalizeOptionalEntityId('A1B2-C3D4-E5F6')).toBe('a1b2-c3d4-e5f6');
   });
 });

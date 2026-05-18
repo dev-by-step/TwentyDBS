@@ -72,7 +72,6 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { AccountsToReconnectKeys } from 'src/modules/connected-account/types/accounts-to-reconnect-key-value.type';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
-
 const getHMACKey = (email?: string, key?: string | null) => {
   if (!email || !key) return null;
 
@@ -233,11 +232,15 @@ export class UserResolver {
     }
 
     const { currentEntityId } =
-      await this.workspaceMemberInternalEntityService.resolveContext({
-        workspaceId: workspace.id,
-        workspaceMemberId: workspaceMemberEntity.id,
-        fallbackEntityId: user.entityId,
-      });
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          this.workspaceMemberInternalEntityService.resolveContext({
+            workspaceId: workspace.id,
+            workspaceMemberId: workspaceMemberEntity.id,
+            fallbackEntityId: user.entityId,
+          }),
+        buildSystemAuthContext(workspace.id),
+      );
 
     return currentEntityId;
   }

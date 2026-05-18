@@ -230,9 +230,7 @@ export class CalendarPrivacyService {
           userIds.length > 0
             ? await workspaceMemberRepository.find({
                 where: {
-                  userId: {
-                    in: userIds,
-                  },
+                  userId: In(userIds),
                 },
               })
             : [];
@@ -384,7 +382,6 @@ export class CalendarPrivacyService {
     timelineCalendarEvent.conferenceSolution = null;
     timelineCalendarEvent.participants = null;
     timelineCalendarEvent.conferenceLink = null;
-    timelineCalendarEvent.entityColor = null;
   }
 
   private createEmptyConferenceLink() {

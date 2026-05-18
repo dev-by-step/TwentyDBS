@@ -5,13 +5,16 @@ import {
   IconCalendar,
   IconChevronLeft,
   IconChevronRight,
+  IconPlus,
 } from 'twenty-ui/display';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { GroupCalendarCreateEventModal } from '@/activities/group-calendar/components/GroupCalendarCreateEventModal';
 import { type GroupCalendarViewMode } from '@/activities/group-calendar/types/GroupCalendarViewMode';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { dateLocaleState } from '~/localization/states/dateLocaleState';
+import { useState } from 'react';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -103,6 +106,7 @@ type GroupCalendarTopBarProps = {
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
+  onEventCreated: () => Promise<unknown> | unknown;
 };
 
 export const GroupCalendarTopBar = ({
@@ -112,9 +116,11 @@ export const GroupCalendarTopBar = ({
   onPrev,
   onNext,
   onToday,
+  onEventCreated,
 }: GroupCalendarTopBarProps) => {
   const { t } = useLingui();
   const { localeCatalog } = useAtomStateValue(dateLocaleState);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const viewModes: { label: string; mode: GroupCalendarViewMode }[] = [
     { label: t`Day`, mode: 'DAY' },
@@ -123,52 +129,68 @@ export const GroupCalendarTopBar = ({
   ];
 
   return (
-    <StyledContainer>
-      <StyledLeft>
-        <IconCalendar size={themeCssVariables.icon.size.md} />
-        <StyledPeriodLabel>
-          {formatPeriodLabel({
-            viewMode,
-            selectedDate,
-            locale: localeCatalog,
-            weekOfPrefix: t`Week of`,
-          })}
-        </StyledPeriodLabel>
-      </StyledLeft>
+    <>
+      <StyledContainer>
+        <StyledLeft>
+          <IconCalendar size={themeCssVariables.icon.size.md} />
+          <StyledPeriodLabel>
+            {formatPeriodLabel({
+              viewMode,
+              selectedDate,
+              locale: localeCatalog,
+              weekOfPrefix: t`Week of`,
+            })}
+          </StyledPeriodLabel>
+        </StyledLeft>
 
-      <StyledRight>
-        <Button
-          size="small"
-          variant="tertiary"
-          Icon={IconChevronLeft}
-          onClick={onPrev}
-        />
-        <Button
-          size="small"
-          variant="tertiary"
-          title={t`Today`}
-          onClick={onToday}
-        />
-        <Button
-          size="small"
-          variant="tertiary"
-          Icon={IconChevronRight}
-          onClick={onNext}
-        />
+        <StyledRight>
+          <Button
+            size="small"
+            variant="secondary"
+            Icon={IconPlus}
+            title={t`New event`}
+            onClick={() => setIsCreateModalOpen(true)}
+          />
+          <Button
+            size="small"
+            variant="tertiary"
+            Icon={IconChevronLeft}
+            onClick={onPrev}
+          />
+          <Button
+            size="small"
+            variant="tertiary"
+            title={t`Today`}
+            onClick={onToday}
+          />
+          <Button
+            size="small"
+            variant="tertiary"
+            Icon={IconChevronRight}
+            onClick={onNext}
+          />
 
-        <StyledViewModeSelector>
-          {viewModes.map(({ label, mode }) => (
-            <StyledViewModeButton
-              key={mode}
-              isActive={viewMode === mode}
-              onClick={() => onViewModeChange(mode)}
-              type="button"
-            >
-              {label}
-            </StyledViewModeButton>
-          ))}
-        </StyledViewModeSelector>
-      </StyledRight>
-    </StyledContainer>
+          <StyledViewModeSelector>
+            {viewModes.map(({ label, mode }) => (
+              <StyledViewModeButton
+                key={mode}
+                isActive={viewMode === mode}
+                onClick={() => onViewModeChange(mode)}
+                type="button"
+              >
+                {label}
+              </StyledViewModeButton>
+            ))}
+          </StyledViewModeSelector>
+        </StyledRight>
+      </StyledContainer>
+      {isCreateModalOpen && (
+        <GroupCalendarCreateEventModal
+          selectedDate={selectedDate}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={onEventCreated}
+        />
+      )}
+    </>
   );
 };

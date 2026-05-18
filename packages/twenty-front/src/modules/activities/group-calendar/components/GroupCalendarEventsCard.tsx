@@ -55,6 +55,7 @@ export const GroupCalendarEventsCard = () => {
     selectedDate,
     loading,
     calendarEvents,
+    refetch,
     navigatePrev,
     navigateNext,
     navigateToday,
@@ -77,6 +78,7 @@ export const GroupCalendarEventsCard = () => {
         onPrev={navigatePrev}
         onNext={navigateNext}
         onToday={navigateToday}
+        onEventCreated={refetch}
       />
 
       {loading ? (

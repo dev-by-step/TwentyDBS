@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
+import { In } from 'typeorm';
 
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -89,20 +90,23 @@ export class WorkspaceMemberInternalEntityService {
       );
     }
 
-    const membershipRepository =
-      await this.globalWorkspaceOrmManager.getRepository<
-        Record<string, unknown>
-      >(workspaceId, WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME, {
-        shouldBypassPermissionChecks: true,
-      });
+    const memberships =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const membershipRepository =
+            await this.globalWorkspaceOrmManager.getRepository<
+              Record<string, unknown>
+            >(workspaceId, WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME, {
+              shouldBypassPermissionChecks: true,
+            });
 
-    const memberships = await membershipRepository.find({
-      where: {
-        workspaceMemberId: {
-          in: uniqueWorkspaceMemberIds,
+          return membershipRepository.find({
+            where: {
+              workspaceMemberId: In(uniqueWorkspaceMemberIds),
+            },
+          });
         },
-      },
-    });
+      );
 
     const entityIdsByWorkspaceMemberId = new Map<string, string[]>();
 

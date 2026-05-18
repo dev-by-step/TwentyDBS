@@ -157,6 +157,47 @@ describe('FilterArgProcessorService', () => {
   });
 
   describe('logical operators', () => {
+    it('should ignore missing internal entity scope keys at top level', () => {
+      const fieldNames = ['textField'];
+      const flatFieldMetadataMaps = createFlatFieldMetadataMaps(fieldNames);
+      const flatObjectMetadata = createFlatObjectMetadata(fieldNames);
+
+      const result = filterArgProcessorService.process({
+        filter: {
+          internalEntityId: { in: ['entity-id'] },
+          internalEntitiesId: { in: ['entity-id'] },
+          textField: { eq: 'test' },
+        },
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      });
+
+      expect(result).toEqual({
+        textField: { eq: 'test' },
+      });
+    });
+
+    it('should ignore missing internal entity scope keys in nested filters', () => {
+      const fieldNames = ['textField'];
+      const flatFieldMetadataMaps = createFlatFieldMetadataMaps(fieldNames);
+      const flatObjectMetadata = createFlatObjectMetadata(fieldNames);
+
+      const result = filterArgProcessorService.process({
+        filter: {
+          and: [
+            { internalEntityId: { in: ['entity-id'] } },
+            { textField: { eq: 'test' } },
+          ],
+        },
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      });
+
+      expect(result).toEqual({
+        and: [{}, { textField: { eq: 'test' } }],
+      });
+    });
+
     it('should process filter with "and" operator', () => {
       const fieldNames = ['textField', 'numberField'];
       const flatFieldMetadataMaps = createFlatFieldMetadataMaps(fieldNames);

@@ -15,12 +15,19 @@ const buildServiceContext = ({
   canAccessFullAdminPanel = false,
   accessibleEntityIds,
   activeEntityId,
+  includeActiveEntityHeader = true,
+  objectMetadataByObjectName,
 }: {
   roleLabel?: string;
   roleUniversalIdentifier?: string;
   canAccessFullAdminPanel?: boolean;
   accessibleEntityIds?: string[];
   activeEntityId?: string;
+  includeActiveEntityHeader?: boolean;
+  objectMetadataByObjectName?: Record<
+    string,
+    { name: string; settings: Record<string, unknown> }[]
+  >;
 } = {}) => {
   const workspaceId = faker.string.uuid();
   const entityId = faker.string.uuid();
@@ -51,10 +58,11 @@ const buildServiceContext = ({
   };
   const membershipRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
 
   const globalWorkspaceOrmManager = {
+    executeInWorkspaceContext: jest.fn(async (fn: () => unknown) => fn()),
     getRepository: jest.fn(async (_workspaceId: string, objectName: string) => {
       switch (objectName) {
         case 'opportunity':
@@ -105,6 +113,28 @@ const buildServiceContext = ({
     ),
   };
 
+  const objectMetadataService = {
+    findOneWithinWorkspace: jest
+      .fn()
+      .mockImplementation(
+        async (
+          _workspaceId: string,
+          options: { where: { nameSingular: string } },
+        ) => ({
+          nameSingular: options.where.nameSingular,
+          fields: objectMetadataByObjectName?.[options.where.nameSingular] ?? [
+            {
+              name: 'internalEntities',
+              settings: { junctionTargetFieldId: faker.string.uuid() },
+            },
+            { name: 'internalEntitiesId', settings: {} },
+            { name: 'internalEntity', settings: {} },
+            { name: 'internalEntityId', settings: {} },
+          ],
+        }),
+      ),
+  };
+
   const service = new InternalEntityAccessPolicyService(
     globalWorkspaceOrmManager as unknown as GlobalWorkspaceOrmManager,
     userRoleService as unknown as UserRoleService,
@@ -115,6 +145,7 @@ const buildServiceContext = ({
         entityIds: accessibleEntityIds ?? [entityId],
       }),
     } as unknown as WorkspaceMemberInternalEntityService,
+    objectMetadataService as unknown as import('src/engine/metadata-modules/object-metadata/object-metadata.service').ObjectMetadataService,
   );
 
   const authContext: WorkspaceAuthContext = {
@@ -132,6 +163,9 @@ const buildServiceContext = ({
       entityId,
       canAccessFullAdminPanel,
     },
+    activeInternalEntityId: includeActiveEntityHeader
+      ? (activeEntityId ?? entityId)
+      : undefined,
   } as WorkspaceAuthContext;
 
   return {
@@ -151,6 +185,28 @@ const buildServiceContext = ({
 };
 
 describe('InternalEntityAccessPolicyService', () => {
+  it('should keep opportunity findMany queries unscoped in group view', async () => {
+    const { service, authContext } = buildServiceContext({
+      includeActiveEntityHeader: false,
+    });
+
+    const filter = {
+      stage: {
+        eq: 'NEW',
+      },
+    };
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter,
+      },
+    );
+
+    expect(payload.filter).toEqual(filter);
+  });
+
   it('should scope opportunity findMany queries to the current entity', async () => {
     const { service, authContext, entityId } = buildServiceContext();
 
@@ -179,6 +235,82 @@ describe('InternalEntityAccessPolicyService', () => {
           },
         },
       ],
+    });
+  });
+
+  it('should keep entity-scoped reads unscoped when internal entity metadata bootstrap is incomplete', async () => {
+    const { service, authContext } = buildServiceContext({
+      objectMetadataByObjectName: {
+        company: [{ name: 'internalEntities', settings: {} }],
+      },
+    });
+
+    const filter = {
+      stage: {
+        eq: 'NEW',
+      },
+    };
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter,
+      },
+    );
+
+    expect(payload.filter).toEqual(filter);
+  });
+
+  it('should keep entity-scoped reads unscoped when relation join column field is missing', async () => {
+    const { service, authContext } = buildServiceContext({
+      objectMetadataByObjectName: {
+        company: [
+          {
+            name: 'internalEntities',
+            settings: { junctionTargetFieldId: faker.string.uuid() },
+          },
+        ],
+      },
+    });
+
+    const payload = await service.scopeFindManyPayload(authContext, 'person', {
+      filter: {
+        name: {
+          ilike: '%a%',
+        },
+      },
+    });
+
+    expect(payload.filter).toEqual({
+      name: {
+        ilike: '%a%',
+      },
+    });
+  });
+
+  it('should strip invalid entity scope keys from incoming filters when metadata bootstrap is incomplete', async () => {
+    const { service, authContext } = buildServiceContext({
+      objectMetadataByObjectName: {
+        company: [{ name: 'internalEntities', settings: {} }],
+      },
+    });
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {
+        filter: {
+          and: [
+            { internalEntityId: { in: [faker.string.uuid()] } },
+            { stage: { eq: 'NEW' } },
+          ],
+        },
+      },
+    );
+
+    expect(payload.filter).toEqual({
+      and: [{ stage: { eq: 'NEW' } }],
     });
   });
 
@@ -299,9 +431,12 @@ describe('InternalEntityAccessPolicyService', () => {
   });
 
   it('should allow an entity manager to scope a bulk opportunity mutation to their entity', async () => {
-    const { service, authContext, entityId } = buildServiceContext({
-      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
-    });
+    const { service, authContext, entityId, membershipRepository } =
+      buildServiceContext({
+        roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      });
+
+    membershipRepository.find.mockResolvedValue([]);
 
     const payload = await service.scopeBulkMutationPayload(
       authContext,
@@ -557,7 +692,7 @@ describe('InternalEntityAccessPolicyService', () => {
     });
   });
 
-  it('should allow entity membership deletion to an entity manager of the same entity', async () => {
+  it('should deny entity membership deletion to an entity manager of the same entity', async () => {
     const { service, authContext, membershipRepository, entityId } =
       buildServiceContext({
         roleLabel: ENTITY_MANAGER_ROLE_LABEL,
@@ -575,10 +710,12 @@ describe('InternalEntityAccessPolicyService', () => {
         faker.string.uuid(),
         'deleteOne',
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
-  it('should deny a platform administrator from creating a membership for another entity', async () => {
+  it('should allow a platform administrator to create a membership for another entity', async () => {
     const { service, authContext } = buildServiceContext({
       canAccessFullAdminPanel: true,
     });
@@ -588,6 +725,51 @@ describe('InternalEntityAccessPolicyService', () => {
         data: {
           personId: faker.string.uuid(),
           internalEntityId: faker.string.uuid(),
+        },
+      }),
+    ).resolves.toEqual({
+      data: {
+        personId: expect.any(String),
+        internalEntityId: expect.any(String),
+      },
+    });
+  });
+
+  it('should deny an entity manager from creating membership when target entity is sent via relation payload', async () => {
+    const { service, authContext, entityId } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'personEntityMembership', {
+        data: {
+          personId: faker.string.uuid(),
+          internalEntity: {
+            connect: {
+              id: entityId,
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should deny membership creation when relation payload targets another entity', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'personEntityMembership', {
+        data: {
+          person: {
+            id: faker.string.uuid(),
+          },
+          internalEntity: {
+            id: faker.string.uuid(),
+          },
         },
       }),
     ).rejects.toMatchObject({
@@ -832,7 +1014,7 @@ describe('InternalEntityAccessPolicyService', () => {
     });
   });
 
-  it('should scope CRM reads to every accessible entity for multi-entity members', async () => {
+  it('should scope CRM reads to the active entity for multi-entity members in entity view', async () => {
     const primaryEntityId = faker.string.uuid();
     const secondaryEntityId = faker.string.uuid();
     const { service, authContext } = buildServiceContext({
@@ -861,7 +1043,7 @@ describe('InternalEntityAccessPolicyService', () => {
         },
         {
           internalEntityId: {
-            in: [primaryEntityId, secondaryEntityId],
+            in: [secondaryEntityId],
           },
         },
       ],

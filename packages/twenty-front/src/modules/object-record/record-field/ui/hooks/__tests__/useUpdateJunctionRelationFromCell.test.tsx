@@ -258,4 +258,126 @@ describe('useUpdateJunctionRelationFromCell', () => {
       [fieldName]: [],
     });
   });
+
+  it('should not create a duplicate junction record when already linked', async () => {
+    const store = createStore();
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [
+        {
+          id: 'existing-junction-id',
+          __typename: 'PersonInternalEntity',
+          personId: recordId,
+          internalEntityId: targetRecordId,
+          internalEntity: {
+            id: targetRecordId,
+            __typename: 'InternalEntity',
+            name: 'WEKNOW',
+          },
+        },
+      ],
+    });
+
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
+
+    await act(async () => {
+      await result.current.updateJunctionRelationFromCell({
+        morphItem: {
+          recordId: targetRecordId,
+          objectMetadataId: 'internal-entity-metadata-id',
+          isSelected: true,
+        } as any,
+      });
+    });
+
+    expect(mockCreateJunctionRecord).not.toHaveBeenCalled();
+  });
+
+  it('should handle duplicate relation backend error without throwing', async () => {
+    const store = createStore();
+
+    mockCreateJunctionRecord.mockRejectedValueOnce(
+      new Error('A record with this relationship already exists.'),
+    );
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
+
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.updateJunctionRelationFromCell({
+          morphItem: {
+            recordId: targetRecordId,
+            objectMetadataId: 'internal-entity-metadata-id',
+            isSelected: true,
+          } as any,
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
 });

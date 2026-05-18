@@ -42,6 +42,7 @@ const buildServiceContext = ({
     find: jest.fn(),
   };
   const globalWorkspaceOrmManager = {
+    executeInWorkspaceContext: jest.fn(async (fn: () => unknown) => fn()),
     getRepository: jest.fn(async (_workspaceId: string, objectName: string) => {
       if (objectName === 'calendarEvent') {
         return calendarEventRepository;
@@ -173,15 +174,25 @@ const buildServiceContext = ({
 };
 
 describe('CalendarEventMutationPermissionService', () => {
-  it('should allow the author to mutate their own calendar event', async () => {
-    const { service, authContext, calendarEventRepository, workspaceMemberId } =
-      buildServiceContext();
+  it('should deny the author from mutating their own event when they are not an entity manager or platform administrator', async () => {
+    const {
+      service,
+      authContext,
+      calendarEventRepository,
+      associationRepository,
+      workspaceMemberId,
+    } = buildServiceContext();
 
     calendarEventRepository.findOne.mockResolvedValue({
       createdBy: {
         workspaceMemberId,
       },
     });
+    associationRepository.find.mockResolvedValue([
+      {
+        calendarChannelId: 'calendar-channel-1',
+      },
+    ]);
 
     await expect(
       service.assertSingleMutationAllowed(
@@ -189,10 +200,12 @@ describe('CalendarEventMutationPermissionService', () => {
         'calendarEvent',
         faker.string.uuid(),
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
-  it('should allow the owner of the connected account to mutate the calendar event', async () => {
+  it('should deny the connected account owner from mutating an event when they are not an entity manager or platform administrator', async () => {
     const {
       service,
       authContext,
@@ -232,7 +245,9 @@ describe('CalendarEventMutationPermissionService', () => {
         'calendarEvent',
         faker.string.uuid(),
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
   it('should allow an entity manager to mutate an event owned by the same entity', async () => {
@@ -301,7 +316,7 @@ describe('CalendarEventMutationPermissionService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('should deny an entity manager from mutating an event outside the active entity', async () => {
+  it('should allow an entity manager to mutate an event owned by any entity they belong to', async () => {
     const primaryActiveEntityId = faker.string.uuid();
     const secondaryEntityId = faker.string.uuid();
     const {
@@ -314,8 +329,6 @@ describe('CalendarEventMutationPermissionService', () => {
       userWorkspaceRepository,
       workspaceMemberRepository,
       userRepository,
-      userWorkspaceId,
-      workspaceMemberId,
     } = buildServiceContext({
       roleLabel: ENTITY_MANAGER_ROLE_LABEL,
       accessibleEntityIds: [primaryActiveEntityId, secondaryEntityId],
@@ -352,6 +365,66 @@ describe('CalendarEventMutationPermissionService', () => {
     ]);
     userRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: secondaryEntityId },
+    ]);
+
+    await expect(
+      service.assertSingleMutationAllowed(
+        authContext,
+        'calendarEvent',
+        faker.string.uuid(),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('should deny an entity manager from mutating an event owned by an entity they do not belong to', async () => {
+    const managerEntityId = faker.string.uuid();
+    const otherEntityId = faker.string.uuid();
+    const {
+      service,
+      authContext,
+      calendarEventRepository,
+      associationRepository,
+      calendarChannelRepository,
+      connectedAccountRepository,
+      userWorkspaceRepository,
+      workspaceMemberRepository,
+      userRepository,
+    } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      accessibleEntityIds: [managerEntityId],
+      activeEntityId: managerEntityId,
+    });
+
+    calendarEventRepository.findOne.mockResolvedValue({
+      createdBy: {
+        workspaceMemberId: faker.string.uuid(),
+      },
+    });
+    associationRepository.find.mockResolvedValue([
+      {
+        calendarChannelId: 'calendar-channel-1',
+      },
+    ]);
+    calendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-channel-1',
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    connectedAccountRepository.find.mockResolvedValue([
+      {
+        id: 'connected-account-1',
+        userWorkspaceId: 'owner-user-workspace-1',
+      },
+    ]);
+    userWorkspaceRepository.find.mockResolvedValue([
+      { id: 'owner-user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    workspaceMemberRepository.find.mockResolvedValue([
+      { id: 'owner-workspace-member-1', userId: 'owner-user-1' },
+    ]);
+    userRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: otherEntityId },
     ]);
 
     await expect(
@@ -630,7 +703,7 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
-  it('should allow creating a calendar link on a connected account owned by the requester', async () => {
+  it('should deny creating a calendar link to a standard user even when they own the connected account', async () => {
     const {
       service,
       authContext,
@@ -662,10 +735,120 @@ describe('CalendarEventMutationPermissionService', () => {
           },
         },
       ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should allow an entity manager to create a calendar link for an entity they belong to', async () => {
+    const {
+      service,
+      authContext,
+      calendarChannelRepository,
+      connectedAccountRepository,
+      userWorkspaceRepository,
+      workspaceMemberRepository,
+      userRepository,
+      entityId,
+    } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    calendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-channel-1',
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    connectedAccountRepository.find.mockResolvedValue([
+      {
+        id: 'connected-account-1',
+        userWorkspaceId: 'owner-user-workspace-1',
+      },
+    ]);
+    userWorkspaceRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-workspace-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    workspaceMemberRepository.find.mockResolvedValue([
+      {
+        id: 'owner-workspace-member-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    userRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-1',
+        entityId,
+      },
+    ]);
+
+    await expect(
+      service.validateCreatePayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: {
+            calendarChannelId: 'calendar-channel-1',
+          },
+        },
+      ),
     ).resolves.toEqual({
       data: {
         calendarChannelId: 'calendar-channel-1',
       },
+    });
+  });
+
+  it('should deny creating a calendar event to a standard user', async () => {
+    const { service, authContext } = buildServiceContext();
+
+    await expect(
+      service.validateCreatePayload(authContext, 'calendarEvent', {
+        data: {
+          title: 'Weekly sync',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should allow an entity manager attached to an entity to create a calendar event', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'calendarEvent', {
+        data: {
+          title: 'Weekly sync',
+        },
+      }),
+    ).resolves.toEqual({
+      data: {
+        title: 'Weekly sync',
+      },
+    });
+  });
+
+  it('should deny a platform administrator without entity membership from creating a calendar event', async () => {
+    const { service, authContext } = buildServiceContext({
+      canAccessFullAdminPanel: true,
+      accessibleEntityIds: [],
+      activeEntityId: undefined,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'calendarEvent', {
+        data: {
+          title: 'Weekly sync',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
     });
   });
 

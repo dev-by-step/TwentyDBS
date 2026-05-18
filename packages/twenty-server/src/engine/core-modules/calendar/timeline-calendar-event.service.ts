@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import omit from 'lodash.omit';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
+import { isDefined } from 'twenty-shared/utils';
 import {
   Any,
   Between,
@@ -19,14 +20,23 @@ import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/
 import { type TimelineCalendarEventsWithTotalDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-events-with-total.dto';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
+import {
+  type WorkspaceMemberInternalEntityContext,
+  WorkspaceMemberInternalEntityService,
+} from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 import { type OpportunityWorkspaceEntity } from 'src/modules/opportunity/standard-objects/opportunity.workspace-entity';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
-import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
+
+type InternalEntityBadgeInfo = {
+  color: string | null;
+  name: string | null;
+};
 
 @Injectable()
 export class TimelineCalendarEventService {
@@ -37,8 +47,11 @@ export class TimelineCalendarEventService {
     private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async getCalendarEventsFromPersonIds({
@@ -103,6 +116,7 @@ export class TimelineCalendarEventService {
 
   async getGroupCalendarEvents({
     currentWorkspaceMemberId,
+    includeMaskedEvents,
     workspaceId,
     page = 1,
     pageSize = TIMELINE_CALENDAR_EVENTS_DEFAULT_PAGE_SIZE,
@@ -110,6 +124,7 @@ export class TimelineCalendarEventService {
     endDate,
   }: {
     currentWorkspaceMemberId: string;
+    includeMaskedEvents: boolean;
     workspaceId: string;
     page: number;
     pageSize: number;
@@ -130,32 +145,39 @@ export class TimelineCalendarEventService {
 
         const dateWhere = this.buildDateWhereClause(startDate, endDate);
 
-        const [totalNumberOfCalendarEvents, paginatedIds] = await Promise.all([
-          calendarEventRepository.count({ where: dateWhere }),
-          calendarEventRepository.find({
-            where: dateWhere,
-            select: { id: true },
-            skip: offset,
-            take: pageSize,
-            order: { startsAt: 'DESC' },
-          }),
-        ]);
+        const allMatchingIds = await calendarEventRepository.find({
+          where: dateWhere,
+          select: { id: true },
+          order: { startsAt: 'DESC' },
+        });
 
-        const ids = paginatedIds.map(({ id }) => id);
+        const ids = allMatchingIds.map(({ id }) => id);
 
         if (ids.length === 0) {
           return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
         }
 
-        const timelineCalendarEvents =
+        const timelineCalendarEvents = (
           await this.buildTimelineCalendarEventsFromIds({
             calendarEventRepository,
             ids,
             currentWorkspaceMemberId,
             workspaceId,
-          });
+          })
+        ).filter(
+          (timelineCalendarEvent) =>
+            includeMaskedEvents ||
+            timelineCalendarEvent.visibility !==
+              CalendarChannelVisibility.METADATA,
+        );
 
-        return { totalNumberOfCalendarEvents, timelineCalendarEvents };
+        return {
+          totalNumberOfCalendarEvents: timelineCalendarEvents.length,
+          timelineCalendarEvents: timelineCalendarEvents.slice(
+            offset,
+            offset + pageSize,
+          ),
+        };
       },
       authContext,
     );
@@ -310,70 +332,12 @@ export class TimelineCalendarEventService {
           })
         : [];
 
-    const workspaceMemberRepo =
-      await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
+    const calendarEventEntityBadgeMap =
+      await this.buildCalendarEventEntityBadgeMap({
         workspaceId,
-        'workspaceMember',
-        { shouldBypassPermissionChecks: true },
-      );
-
-    const currentMember = await workspaceMemberRepo.findOne({
-      where: { id: currentWorkspaceMemberId },
-      select: { userId: true },
-    });
-
-    const currentUserWorkspaceId = currentMember
-      ? ((
-          await this.userWorkspaceRepository.findOne({
-            where: { userId: currentMember.userId, workspaceId },
-            select: { id: true },
-          })
-        )?.id ?? null)
-      : null;
-
-    const connectedAccountIds = [
-      ...new Set(calendarChannels.map((ch) => ch.connectedAccountId)),
-    ];
-
-    const ownedAccountIds =
-      connectedAccountIds.length > 0 && currentUserWorkspaceId != null
-        ? new Set(
-            (
-              await this.connectedAccountRepository.find({
-                where: {
-                  id: In(connectedAccountIds),
-                  userWorkspaceId: currentUserWorkspaceId,
-                },
-                select: { id: true },
-              })
-            ).map((a) => a.id),
-          )
-        : new Set<string>();
-
-    const calendarChannelMap = new Map(
-      calendarChannels.map((ch) => [
-        ch.id,
-        {
-          visibility: ch.visibility,
-          isOwnedByCurrentUser: ownedAccountIds.has(ch.connectedAccountId),
-        },
-      ]),
-    );
-
-    const allPersonIds = [
-      ...new Set(
-        events.flatMap((event) =>
-          event.calendarEventParticipants
-            .map((p) => p.personId)
-            .filter((id): id is string => id != null),
-        ),
-      ),
-    ];
-
-    const personEntityColorMap = await this.buildPersonEntityColorMap({
-      workspaceId,
-      personIds: allPersonIds,
-    });
+        events,
+        calendarChannels,
+      });
     const calendarEventMaskMap =
       await this.calendarPrivacyService.getCalendarEventMaskMap({
         calendarEventIds: events.map((event) => event.id),
@@ -406,20 +370,12 @@ export class TimelineCalendarEventService {
           handle: p.handle ?? '',
         }));
 
-        const hasFullAccessFromCalendarChannel =
-          event.calendarChannelEventAssociations.some((assoc) => {
-            const ch = calendarChannelMap.get(assoc.calendarChannelId);
-
-            return (
-              ch?.visibility === 'SHARE_EVERYTHING' || ch?.isOwnedByCurrentUser
-            );
-          });
         const shouldMask = calendarEventMaskMap.get(event.id) ?? false;
 
-        const visibility =
-          hasFullAccessFromCalendarChannel || !shouldMask
-            ? CalendarChannelVisibility.SHARE_EVERYTHING
-            : CalendarChannelVisibility.METADATA;
+        const visibility = shouldMask
+          ? CalendarChannelVisibility.METADATA
+          : CalendarChannelVisibility.SHARE_EVERYTHING;
+        const eventEntityBadge = calendarEventEntityBadgeMap.get(event.id);
 
         return {
           ...omit(event, [
@@ -441,73 +397,249 @@ export class TimelineCalendarEventService {
           location: event.location ?? null,
           conferenceSolution: event.conferenceSolution ?? null,
           conferenceLink: null,
-          entityColor:
-            event.calendarEventParticipants
-              .map((p) =>
-                p.personId != null
-                  ? (personEntityColorMap.get(p.personId) ?? null)
-                  : null,
-              )
-              .find((color) => color != null) ?? null,
+          entityColor: eventEntityBadge?.color ?? null,
+          entityName: eventEntityBadge?.name ?? null,
         };
       });
   }
 
-  private async buildPersonEntityColorMap({
+  private async buildCalendarEventEntityBadgeMap({
     workspaceId,
-    personIds,
+    events,
+    calendarChannels,
   }: {
     workspaceId: string;
-    personIds: string[];
-  }): Promise<Map<string, string>> {
-    if (personIds.length === 0) {
+    events: CalendarEventWorkspaceEntity[];
+    calendarChannels: CalendarChannelEntity[];
+  }): Promise<Map<string, InternalEntityBadgeInfo>> {
+    if (events.length === 0 || calendarChannels.length === 0) {
       return new Map();
     }
 
-    const membershipRepo = await this.globalWorkspaceOrmManager.getRepository<{
-      personId: string;
-      internalEntityId: string;
-    }>(workspaceId, 'personEntityMembership', {
-      shouldBypassPermissionChecks: true,
-    });
-
-    const memberships = await membershipRepo.find({
-      where: { personId: In(personIds) },
-      select: { personId: true, internalEntityId: true },
-    });
-
-    const internalEntityIds = [
-      ...new Set(memberships.map((m) => m.internalEntityId)),
+    const connectedAccountIds = [
+      ...new Set(
+        calendarChannels
+          .map((calendarChannel) => calendarChannel.connectedAccountId)
+          .filter(isDefined),
+      ),
     ];
 
-    if (internalEntityIds.length === 0) {
+    const connectedAccounts =
+      connectedAccountIds.length > 0
+        ? await this.connectedAccountRepository.find({
+            where: {
+              id: In(connectedAccountIds),
+              workspaceId,
+            },
+            select: ['id', 'userWorkspaceId'],
+          })
+        : [];
+
+    const userWorkspaceIds = [
+      ...new Set(
+        connectedAccounts
+          .map((connectedAccount) => connectedAccount.userWorkspaceId)
+          .filter(isDefined),
+      ),
+    ];
+
+    const userWorkspaces =
+      userWorkspaceIds.length > 0
+        ? await this.userWorkspaceRepository.find({
+            where: {
+              id: In(userWorkspaceIds),
+              workspaceId,
+            },
+            select: ['id', 'userId'],
+          })
+        : [];
+
+    const userIds = [
+      ...new Set(
+        userWorkspaces
+          .map((userWorkspace) => userWorkspace.userId)
+          .filter(isDefined),
+      ),
+    ];
+
+    const users =
+      userIds.length > 0
+        ? await this.userRepository.find({
+            where: {
+              id: In(userIds),
+            },
+            select: ['id', 'entityId'],
+          })
+        : [];
+
+    const workspaceMemberRepository =
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(workspaceId, 'workspaceMember', {
+        shouldBypassPermissionChecks: true,
+      });
+    const workspaceMembers =
+      userIds.length > 0
+        ? await workspaceMemberRepository.find({
+            where: {
+              userId: In(userIds),
+            },
+          })
+        : [];
+
+    const userWorkspaceIdByConnectedAccountId = new Map(
+      connectedAccounts.map((connectedAccount) => [
+        connectedAccount.id,
+        connectedAccount.userWorkspaceId,
+      ]),
+    );
+    const userIdByUserWorkspaceId = new Map(
+      userWorkspaces.map((userWorkspace) => [
+        userWorkspace.id,
+        userWorkspace.userId,
+      ]),
+    );
+    const userById = new Map(users.map((user) => [user.id, user]));
+    const workspaceMemberIdByUserId = new Map(
+      workspaceMembers
+        .map((workspaceMember) => [
+          this.extractStringField(workspaceMember, 'userId'),
+          this.extractStringField(workspaceMember, 'id'),
+        ])
+        .filter(
+          (entry): entry is [string, string] =>
+            isDefined(entry[0]) && isDefined(entry[1]),
+        ),
+    );
+
+    const workspaceMemberIds = [...workspaceMemberIdByUserId.values()];
+    const fallbackEntityIdByWorkspaceMemberId = new Map(
+      workspaceMemberIds.map((workspaceMemberId) => {
+        const userId = [...workspaceMemberIdByUserId.entries()].find(
+          ([, resolvedWorkspaceMemberId]) =>
+            resolvedWorkspaceMemberId === workspaceMemberId,
+        )?.[0];
+
+        return [
+          workspaceMemberId,
+          userId != null ? (userById.get(userId)?.entityId ?? null) : null,
+        ] as const;
+      }),
+    );
+
+    const ownerEntityContexts =
+      workspaceMemberIds.length > 0
+        ? await this.workspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds(
+            {
+              workspaceId,
+              workspaceMemberIds,
+              fallbackEntityIdByWorkspaceMemberId,
+            },
+          )
+        : new Map<string, WorkspaceMemberInternalEntityContext>();
+
+    const ownerEntityIds = [
+      ...new Set(
+        [...ownerEntityContexts.values()]
+          .map((context) => context.currentEntityId)
+          .filter(isDefined),
+      ),
+    ];
+
+    if (ownerEntityIds.length === 0) {
       return new Map();
     }
 
-    const internalEntityRepo =
+    const internalEntityRepository =
       await this.globalWorkspaceOrmManager.getRepository<{
         id: string;
-        color: string;
+        color: string | null;
+        name: string | null;
       }>(workspaceId, 'internalEntity', {
         shouldBypassPermissionChecks: true,
       });
-
-    const internalEntities = await internalEntityRepo.find({
-      where: { id: In(internalEntityIds) },
-      select: { id: true, color: true },
+    const internalEntities = await internalEntityRepository.find({
+      where: {
+        id: In(ownerEntityIds),
+      },
+      select: {
+        id: true,
+        color: true,
+        name: true,
+      },
     });
 
-    const entityColorById = new Map(
-      internalEntities.map((e) => [e.id, e.color]),
+    const entityBadgeById = new Map(
+      internalEntities.map((internalEntity) => [
+        internalEntity.id,
+        {
+          color: internalEntity.color,
+          name:
+            typeof internalEntity.name === 'string' &&
+            internalEntity.name.length > 0
+              ? internalEntity.name
+              : null,
+        } satisfies InternalEntityBadgeInfo,
+      ]),
+    );
+
+    const ownerEntityBadgeByCalendarChannelId = new Map(
+      calendarChannels.map((calendarChannel) => {
+        const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
+          calendarChannel.connectedAccountId,
+        );
+        const userId = isDefined(userWorkspaceId)
+          ? userIdByUserWorkspaceId.get(userWorkspaceId)
+          : undefined;
+        const workspaceMemberId = isDefined(userId)
+          ? workspaceMemberIdByUserId.get(userId)
+          : undefined;
+        const ownerEntityId = isDefined(workspaceMemberId)
+          ? (ownerEntityContexts.get(workspaceMemberId)?.currentEntityId ??
+            null)
+          : null;
+
+        return [
+          calendarChannel.id,
+          ownerEntityId != null
+            ? (entityBadgeById.get(ownerEntityId) ?? null)
+            : null,
+        ] as const;
+      }),
     );
 
     return new Map(
-      memberships
-        .map((m): [string, string | undefined] => [
-          m.personId,
-          entityColorById.get(m.internalEntityId),
-        ])
-        .filter((entry): entry is [string, string] => entry[1] != null),
+      events
+        .map((event) => {
+          const eventEntityBadge = event.calendarChannelEventAssociations
+            .map((association) =>
+              ownerEntityBadgeByCalendarChannelId.get(
+                association.calendarChannelId,
+              ),
+            )
+            .find(
+              (badge): badge is InternalEntityBadgeInfo =>
+                isDefined(badge) &&
+                (isDefined(badge.color) || isDefined(badge.name)),
+            );
+
+          return isDefined(eventEntityBadge)
+            ? ([event.id, eventEntityBadge] as const)
+            : null;
+        })
+        .filter(
+          (entry): entry is readonly [string, InternalEntityBadgeInfo] =>
+            entry !== null,
+        ),
     );
+  }
+
+  private extractStringField(
+    record: Record<string, unknown>,
+    fieldName: string,
+  ) {
+    const value = record[fieldName];
+
+    return typeof value === 'string' && value.length > 0 ? value : null;
   }
 }

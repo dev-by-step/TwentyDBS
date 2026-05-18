@@ -54,6 +54,21 @@ const StyledLabels = styled.div`
   gap: ${themeCssVariables.spacing[2]};
 `;
 
+const StyledEntityBadge = styled.div<{ entityColor?: string | null }>`
+  align-items: center;
+  background: ${({ entityColor }) =>
+    entityColor ?? themeCssVariables.background.transparent.light};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.inverted};
+  display: inline-flex;
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  line-height: 1;
+  max-width: ${themeCssVariables.spacing[28]};
+  padding: 0 ${themeCssVariables.spacing[2]};
+  white-space: nowrap;
+`;
+
 const StyledTime = styled.div`
   align-items: center;
   color: ${themeCssVariables.font.color.tertiary};
@@ -97,6 +112,8 @@ export const CalendarEventRow = ({
   );
   const showTitle =
     calendarEvent.visibility === CalendarChannelVisibility.SHARE_EVERYTHING;
+  const entityName = (calendarEvent as { entityName?: string | null })
+    .entityName;
 
   return (
     <StyledContainer
@@ -130,6 +147,11 @@ export const CalendarEventRow = ({
           </StyledTitle>
         ) : (
           <CalendarEventNotSharedContent />
+        )}
+        {!!entityName && (
+          <StyledEntityBadge entityColor={calendarEvent.entityColor}>
+            {entityName}
+          </StyledEntityBadge>
         )}
       </StyledLabels>
       {!!calendarEvent.participants?.length && (

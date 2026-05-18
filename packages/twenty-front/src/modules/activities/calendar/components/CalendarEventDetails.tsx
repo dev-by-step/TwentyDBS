@@ -5,8 +5,10 @@ import { useCallback, useState } from 'react';
 import { CalendarEventParticipantsResponseStatus } from '@/activities/calendar/components/CalendarEventParticipantsResponseStatus';
 import { type CalendarEvent } from '@/activities/calendar/types/CalendarEvent';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
+import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
@@ -23,6 +25,8 @@ import { RecordFieldComponentInstanceContext } from '@/object-record/record-fiel
 import { RecordInlineCell } from '@/object-record/record-inline-cell/components/RecordInlineCell';
 import { PropertyBox } from '@/object-record/record-inline-cell/property-box/components/PropertyBox';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
@@ -32,7 +36,8 @@ import {
   ChipSize,
   ChipVariant,
 } from 'twenty-ui/components';
-import { IconCalendarEvent } from 'twenty-ui/display';
+import { IconCalendarEvent, IconTrash } from 'twenty-ui/display';
+import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { beautifyPastDateRelativeToNow } from '~/utils/date-utils';
 
@@ -64,7 +69,20 @@ const StyledEventChipWrapper = styled.span`
   }
 `;
 
-const StyledHeader = styled.header``;
+const StyledHeader = styled.header`
+  width: 100%;
+`;
+
+const StyledHeaderTop = styled.div`
+  align-items: flex-start;
+  display: flex;
+  gap: ${themeCssVariables.spacing[3]};
+  justify-content: space-between;
+`;
+
+const StyledHeaderMain = styled.div`
+  min-width: 0;
+`;
 
 const StyledTitle = styled.h2<{ canceled?: boolean }>`
   color: ${themeCssVariables.font.color.primary};
@@ -94,6 +112,9 @@ export const CalendarEventDetails = ({
   calendarEvent,
 }: CalendarEventDetailsProps) => {
   const { t } = useLingui();
+  const apolloCoreClient = useApolloCoreClient();
+  const { closeSidePanelMenu } = useSidePanelMenu();
+  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular: CoreObjectNameSingular.CalendarEvent,
   });
@@ -128,8 +149,12 @@ export const CalendarEventDetails = ({
   const { calendarEventParticipants } = calendarEvent;
 
   const { updateOneRecord } = useUpdateOneRecord();
+  const { deleteOneRecord } = useDeleteOneRecord({
+    objectNameSingular: CoreObjectNameSingular.CalendarEvent,
+  });
 
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const updateEntity = useCallback(
     ({ variables }: RecordUpdateHookParams) => {
       setIsUpdating(true);
@@ -137,10 +162,47 @@ export const CalendarEventDetails = ({
         objectNameSingular: CoreObjectNameSingular.CalendarEvent,
         idToUpdate: variables.where.id as string,
         updateOneRecordInput: variables.updateOneRecordInput,
-      }).finally(() => setIsUpdating(false));
+      })
+        .then(() =>
+          apolloCoreClient.refetchQueries({
+            include: ['GetGroupTimelineCalendarEvents'],
+          }),
+        )
+        .finally(() => setIsUpdating(false));
     },
-    [updateOneRecord],
+    [apolloCoreClient, updateOneRecord],
   );
+
+  const deleteCalendarEvent = useCallback(async () => {
+    if (!window.confirm(t`Delete this event?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await deleteOneRecord(calendarEvent.id);
+      await apolloCoreClient.refetchQueries({
+        include: ['GetGroupTimelineCalendarEvents'],
+      });
+      enqueueSuccessSnackBar({ message: t`Event deleted.` });
+      closeSidePanelMenu();
+    } catch (error) {
+      enqueueErrorSnackBar({
+        message: error instanceof Error ? error.message : t`An error occurred.`,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [
+    apolloCoreClient,
+    calendarEvent.id,
+    closeSidePanelMenu,
+    deleteOneRecord,
+    enqueueErrorSnackBar,
+    enqueueSuccessSnackBar,
+    t,
+  ]);
 
   const useUpdateOneCalendarEventRecordMutation: RecordUpdateHook = () => [
     updateEntity,
@@ -224,15 +286,28 @@ export const CalendarEventDetails = ({
           />
         </StyledEventChipWrapper>
         <StyledHeader>
-          <StyledTitle canceled={calendarEvent.isCanceled}>
-            {calendarEvent.title}
-          </StyledTitle>
-          <StyledCreatedAt>
-            {t`Created`}{' '}
-            {beautifyPastDateRelativeToNow(
-              new Date(calendarEvent.externalCreatedAt),
-            )}
-          </StyledCreatedAt>
+          <StyledHeaderTop>
+            <StyledHeaderMain>
+              <StyledTitle canceled={calendarEvent.isCanceled}>
+                {calendarEvent.title}
+              </StyledTitle>
+              <StyledCreatedAt>
+                {t`Created`}{' '}
+                {beautifyPastDateRelativeToNow(
+                  new Date(calendarEvent.externalCreatedAt),
+                )}
+              </StyledCreatedAt>
+            </StyledHeaderMain>
+            <Button
+              Icon={IconTrash}
+              title={t`Delete`}
+              variant="tertiary"
+              accent="danger"
+              size="small"
+              onClick={deleteCalendarEvent}
+              disabled={isDeleting}
+            />
+          </StyledHeaderTop>
         </StyledHeader>
         <StyledFields>
           {standardFields.slice(0, 2).map(renderField)}

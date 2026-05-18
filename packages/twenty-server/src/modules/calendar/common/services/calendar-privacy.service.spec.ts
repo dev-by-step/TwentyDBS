@@ -1,5 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { FindOperator } from 'typeorm';
 
 import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
@@ -280,6 +281,47 @@ describe('CalendarPrivacyService', () => {
     expect(result.get('calendar-event-1')).toBe(false);
   });
 
+  it('should query workspace members with a TypeORM In operator', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      { id: 'channel-1', connectedAccountId: 'connected-account-1' },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'same-entity-id' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-unresolved', userId: 'owner-user-1' },
+    ]);
+
+    await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+    });
+
+    expect(mockWorkspaceMemberRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: expect.any(FindOperator),
+        }),
+      }),
+    );
+  });
+
   it('should resolve the requester entity from the workspace member when the user entity is absent from the request context', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
       {
@@ -506,7 +548,7 @@ describe('CalendarPrivacyService', () => {
         conferenceSolution: null,
         conferenceLink: null,
         participants: null,
-        entityColor: null,
+        entityColor: '#FF0000',
       });
     });
 

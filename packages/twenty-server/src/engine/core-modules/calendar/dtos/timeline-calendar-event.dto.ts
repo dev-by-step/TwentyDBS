@@ -65,4 +65,7 @@ export class TimelineCalendarEventDTO {
 
   @Field(() => String, { nullable: true })
   entityColor: string | null;
+
+  @Field(() => String, { nullable: true })
+  entityName: string | null;
 }
