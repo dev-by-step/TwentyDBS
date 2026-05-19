@@ -1,6 +1,7 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { format } from 'date-fns';
+import { isDefined } from 'twenty-shared/utils';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
   CalendarChannelVisibility,
@@ -21,6 +22,7 @@ import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 type CalendarEventRowProps = {
   calendarEvent: TimelineCalendarEvent;
   className?: string;
+  actions?: React.ReactNode;
 };
 
 const StyledContainer = styled.div<{ showTitle?: boolean }>`
@@ -90,9 +92,16 @@ const StyledTitle = styled.div<{ active: boolean; canceled: boolean }>`
   width: ${themeCssVariables.spacing[10]};
 `;
 
+const StyledActionsContainer = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[1]};
+`;
+
 export const CalendarEventRow = ({
   calendarEvent,
   className,
+  actions,
 }: CalendarEventRowProps) => {
   const { theme } = useContext(ThemeContext);
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
@@ -158,6 +167,14 @@ export const CalendarEventRow = ({
         <CalendarEventParticipantsAvatarGroup
           participants={calendarEvent.participants}
         />
+      )}
+      {isDefined(actions) && (
+        <StyledActionsContainer
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {actions}
+        </StyledActionsContainer>
       )}
     </StyledContainer>
   );

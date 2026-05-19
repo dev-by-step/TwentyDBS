@@ -65,6 +65,14 @@ describe('CalendarPrivacyService', () => {
     findOne: jest.fn(),
   };
 
+  const mockCalendarEventEntityAudienceRepository = {
+    find: jest.fn().mockResolvedValue([]),
+  };
+
+  const mockCalendarEventPersonAudienceRepository = {
+    find: jest.fn().mockResolvedValue([]),
+  };
+
   const mockGlobalWorkspaceOrmManager = {
     getRepository: jest
       .fn()
@@ -79,6 +87,14 @@ describe('CalendarPrivacyService', () => {
 
         if (repositoryName === 'workspaceMember') {
           return mockWorkspaceMemberRepository;
+        }
+
+        if (repositoryName === 'calendarEventEntityAudience') {
+          return mockCalendarEventEntityAudienceRepository;
+        }
+
+        if (repositoryName === 'calendarEventPersonAudience') {
+          return mockCalendarEventPersonAudienceRepository;
         }
       }),
     executeInWorkspaceContext: jest
@@ -95,6 +111,8 @@ describe('CalendarPrivacyService', () => {
       defaultResolveContextImplementation,
     );
     mockWorkspaceMemberRepository.find.mockResolvedValue([]);
+    mockCalendarEventEntityAudienceRepository.find.mockResolvedValue([]);
+    mockCalendarEventPersonAudienceRepository.find.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -470,6 +488,131 @@ describe('CalendarPrivacyService', () => {
     ]);
     mockUserRepository.find.mockResolvedValue([
       { id: 'owner-user-1', entityId: 'other-entity-id' },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(false);
+  });
+
+  it('should not mask a calendar event when the requester workspace member is in the person audience', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      { id: 'channel-1', connectedAccountId: 'connected-account-1' },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'other-entity-id' },
+    ]);
+    mockCalendarEventPersonAudienceRepository.find.mockResolvedValue([
+      {
+        calendarEventId: 'calendar-event-1',
+        workspaceMemberId: 'workspace-member-guest',
+      },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+      currentWorkspaceMemberId: 'workspace-member-guest',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(false);
+  });
+
+  it('should mask a cross-entity calendar event when the requester is not in the person audience', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      { id: 'channel-1', connectedAccountId: 'connected-account-1' },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'other-entity-id' },
+    ]);
+    mockCalendarEventPersonAudienceRepository.find.mockResolvedValue([
+      {
+        calendarEventId: 'calendar-event-1',
+        workspaceMemberId: 'workspace-member-allowed',
+      },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+      currentWorkspaceMemberId: 'workspace-member-other',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(true);
+  });
+
+  it('should keep an owner-entity member unmasked even when an explicit audience targets other entities', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      { id: 'channel-1', connectedAccountId: 'connected-account-1' },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'workspace-member-1', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'same-entity-id' },
+    ]);
+    mockCalendarEventEntityAudienceRepository.find.mockResolvedValue([
+      {
+        calendarEventId: 'calendar-event-1',
+        internalEntityId: 'other-entity-id',
+      },
     ]);
 
     const result = await service.getCalendarEventMaskMap({

@@ -34,6 +34,7 @@ import { type OpportunityWorkspaceEntity } from 'src/modules/opportunity/standar
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
 
 type InternalEntityBadgeInfo = {
+  id: string;
   color: string | null;
   name: string | null;
 };
@@ -399,6 +400,7 @@ export class TimelineCalendarEventService {
           conferenceLink: null,
           entityColor: eventEntityBadge?.color ?? null,
           entityName: eventEntityBadge?.name ?? null,
+          ownerEntityId: eventEntityBadge?.id ?? null,
         };
       });
   }
@@ -573,6 +575,7 @@ export class TimelineCalendarEventService {
       internalEntities.map((internalEntity) => [
         internalEntity.id,
         {
+          id: internalEntity.id,
           color: internalEntity.color,
           name:
             typeof internalEntity.name === 'string' &&
@@ -617,10 +620,8 @@ export class TimelineCalendarEventService {
                 association.calendarChannelId,
               ),
             )
-            .find(
-              (badge): badge is InternalEntityBadgeInfo =>
-                isDefined(badge) &&
-                (isDefined(badge.color) || isDefined(badge.name)),
+            .find((badge): badge is InternalEntityBadgeInfo =>
+              isDefined(badge),
             );
 
           return isDefined(eventEntityBadge)

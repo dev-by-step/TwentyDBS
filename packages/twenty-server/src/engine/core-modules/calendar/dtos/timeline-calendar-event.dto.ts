@@ -68,4 +68,7 @@ export class TimelineCalendarEventDTO {
 
   @Field(() => String, { nullable: true })
   entityName: string | null;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  ownerEntityId: string | null;
 }

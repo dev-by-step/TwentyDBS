@@ -1,5 +1,9 @@
 import { Command } from 'nest-commander';
-import { FieldMetadataType, RelationType } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  RelationOnDeleteAction,
+  RelationType,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
@@ -258,6 +262,30 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
         skipNameField: true,
       });
 
+    const calendarEventEntityAudienceMetadata = await this.ensureObjectMetadata(
+      {
+        workspaceId,
+        nameSingular: 'calendarEventEntityAudience',
+        namePlural: 'calendarEventEntityAudiences',
+        labelSingular: 'Calendar Event Entity Audience',
+        labelPlural: 'Calendar Event Entity Audiences',
+        icon: 'IconCalendarShare',
+        skipNameField: true,
+      },
+    );
+
+    const calendarEventPersonAudienceMetadata = await this.ensureObjectMetadata(
+      {
+        workspaceId,
+        nameSingular: 'calendarEventPersonAudience',
+        namePlural: 'calendarEventPersonAudiences',
+        labelSingular: 'Calendar Event Person Audience',
+        labelPlural: 'Calendar Event Person Audiences',
+        icon: 'IconUserShare',
+        skipNameField: true,
+      },
+    );
+
     const personMetadata = await this.findObjectMetadataOrThrow(
       workspaceId,
       'person',
@@ -273,6 +301,10 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const workspaceMemberMetadata = await this.findObjectMetadataOrThrow(
       workspaceId,
       'workspaceMember',
+    );
+    const calendarEventMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'calendarEvent',
     );
 
     await this.ensureTextField({
@@ -367,6 +399,54 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       targetFieldLabel: 'Internal Entity',
       targetFieldIcon: 'IconBuilding',
       targetObjectMetadataId: workspaceMemberEntityMembershipMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: calendarEventMetadata.id,
+      name: 'audienceEntities',
+      label: 'Audience Entities',
+      icon: 'IconBuilding',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Calendar Event',
+      targetFieldIcon: 'IconCalendar',
+      targetObjectMetadataId: calendarEventEntityAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'calendarEventsInAudience',
+      label: 'Calendar Events in Audience',
+      icon: 'IconCalendar',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Internal Entity',
+      targetFieldIcon: 'IconBuilding',
+      targetObjectMetadataId: calendarEventEntityAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: calendarEventMetadata.id,
+      name: 'audienceMembers',
+      label: 'Audience Members',
+      icon: 'IconUser',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Calendar Event',
+      targetFieldIcon: 'IconCalendar',
+      targetObjectMetadataId: calendarEventPersonAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: workspaceMemberMetadata.id,
+      name: 'calendarEventAudienceMemberships',
+      label: 'Calendar Events in Audience',
+      icon: 'IconCalendar',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Workspace Member',
+      targetFieldIcon: 'IconUser',
+      targetObjectMetadataId: calendarEventPersonAudienceMetadata.id,
     });
 
     const flatMaps = await this.getFreshMaps(workspaceId);
@@ -513,6 +593,116 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       targetFieldLabel: 'Opportunities',
       targetFieldIcon: 'IconTargetArrow',
       targetObjectMetadataId: internalEntityMetadata.id,
+    });
+
+    const calendarEventAudienceFieldId = this.findFieldId(
+      'calendarEvent',
+      'audienceEntities',
+      flatMaps,
+    );
+    const junctionCalendarEventAudienceInternalEntityFieldId = this.findFieldId(
+      'calendarEventEntityAudience',
+      'internalEntity',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: calendarEventAudienceFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventAudienceInternalEntityFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const internalEntityCalendarEventsInAudienceFieldId = this.findFieldId(
+      'internalEntity',
+      'calendarEventsInAudience',
+      flatMaps,
+    );
+    const junctionCalendarEventAudienceCalendarEventFieldId = this.findFieldId(
+      'calendarEventEntityAudience',
+      'calendarEvent',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: internalEntityCalendarEventsInAudienceFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventAudienceCalendarEventFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const calendarEventAudienceMembersFieldId = this.findFieldId(
+      'calendarEvent',
+      'audienceMembers',
+      flatMaps,
+    );
+    const junctionCalendarEventPersonAudienceWorkspaceMemberFieldId =
+      this.findFieldId(
+        'calendarEventPersonAudience',
+        'workspaceMember',
+        flatMaps,
+      );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: calendarEventAudienceMembersFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventPersonAudienceWorkspaceMemberFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const workspaceMemberCalendarEventAudienceMembershipsFieldId =
+      this.findFieldId(
+        'workspaceMember',
+        'calendarEventAudienceMemberships',
+        flatMaps,
+      );
+    const junctionCalendarEventPersonAudienceCalendarEventFieldId =
+      this.findFieldId(
+        'calendarEventPersonAudience',
+        'calendarEvent',
+        flatMaps,
+      );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: workspaceMemberCalendarEventAudienceMembershipsFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventPersonAudienceCalendarEventFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    // Cascade delete junction rows when the parent calendarEvent is destroyed.
+    // updateOneField fully replaces `settings`, so we must include the
+    // pre-existing keys (joinColumnName) — losing them produces a malformed
+    // MANY_TO_ONE field and crashes the workspace cache rebuild.
+    await this.applyCalendarEventJunctionCascadeOnDelete({
+      workspaceId,
+      flatMaps,
+      junctionObjectNameSingular: 'calendarEventEntityAudience',
+    });
+    await this.applyCalendarEventJunctionCascadeOnDelete({
+      workspaceId,
+      flatMaps,
+      junctionObjectNameSingular: 'calendarEventPersonAudience',
     });
 
     this.logger.log('Schéma InternalEntity prêt');
@@ -1305,6 +1495,56 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           targetFieldLabel,
           targetFieldIcon,
           targetObjectMetadataId,
+        },
+      },
+      workspaceId,
+    });
+  }
+
+  private async applyCalendarEventJunctionCascadeOnDelete({
+    workspaceId,
+    flatMaps,
+    junctionObjectNameSingular,
+  }: {
+    workspaceId: string;
+    flatMaps: FlatMaps;
+    junctionObjectNameSingular: string;
+  }): Promise<void> {
+    const fieldId = this.findFieldId(
+      junctionObjectNameSingular,
+      'calendarEvent',
+      flatMaps,
+    );
+    const existingField = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: fieldId,
+      flatEntityMaps: flatMaps.flatFieldMetadataMaps,
+    });
+
+    if (!isDefined(existingField)) {
+      return;
+    }
+
+    const existingSettings =
+      (existingField.settings as Record<string, unknown> | null | undefined) ??
+      {};
+    const hasCascade =
+      existingSettings.onDelete === RelationOnDeleteAction.CASCADE;
+    const hasJoinColumn = typeof existingSettings.joinColumnName === 'string';
+
+    if (hasCascade && hasJoinColumn) {
+      return;
+    }
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: fieldId,
+        settings: {
+          ...existingSettings,
+          relationType: RelationType.MANY_TO_ONE,
+          joinColumnName: hasJoinColumn
+            ? (existingSettings.joinColumnName as string)
+            : 'calendarEventId',
+          onDelete: RelationOnDeleteAction.CASCADE,
         },
       },
       workspaceId,

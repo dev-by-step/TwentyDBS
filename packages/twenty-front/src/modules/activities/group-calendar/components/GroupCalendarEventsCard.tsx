@@ -1,16 +1,29 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { format, getYear } from 'date-fns';
+import { useState } from 'react';
 
 import { CalendarDayCardContent } from '@/activities/calendar/components/CalendarDayCardContent';
+import { GroupCalendarEditEventModal } from '@/activities/group-calendar/components/GroupCalendarEditEventModal';
 import { GroupCalendarTopBar } from '@/activities/group-calendar/components/GroupCalendarTopBar';
+import { useCurrentUserEntityIds } from '@/activities/group-calendar/hooks/useCurrentUserEntityIds';
 import { useGroupCalendarEvents } from '@/activities/group-calendar/hooks/useGroupCalendarEvents';
 import { CalendarContext } from '@/activities/calendar/contexts/CalendarContext';
 import { useCalendarEvents } from '@/activities/calendar/hooks/useCalendarEvents';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
+import { currentUserState } from '@/auth/states/currentUserState';
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { dateLocaleState } from '~/localization/states/dateLocaleState';
-import { H3Title } from 'twenty-ui/display';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import {
+  CalendarChannelVisibility,
+  type TimelineCalendarEvent,
+} from '~/generated/graphql';
+import { H3Title, IconPencil } from 'twenty-ui/display';
+import { IconButton } from 'twenty-ui/input';
 import {
   AnimatedPlaceholder,
   AnimatedPlaceholderEmptyContainer,
@@ -61,6 +74,55 @@ export const GroupCalendarEventsCard = () => {
     navigateToday,
   } = useGroupCalendarEvents();
   const { localeCatalog } = useAtomStateValue(dateLocaleState);
+  const { objectMetadataItem: calendarEventMetadata } = useObjectMetadataItem({
+    objectNameSingular: CoreObjectNameSingular.CalendarEvent,
+  });
+  const calendarEventPermissions = useObjectPermissionsForObject(
+    calendarEventMetadata.id,
+  );
+  const hasGlobalCalendarEventUpdatePermission =
+    calendarEventPermissions.canUpdateObjectRecords ||
+    calendarEventPermissions.canSoftDeleteObjectRecords;
+  const currentUser = useAtomStateValue(currentUserState);
+  const currentUserEntityIds = useCurrentUserEntityIds();
+  const isPlatformAdmin = currentUser?.canAccessFullAdminPanel === true;
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+
+  const renderEventActions = (calendarEvent: TimelineCalendarEvent) => {
+    if (!hasGlobalCalendarEventUpdatePermission) {
+      return null;
+    }
+
+    if (
+      calendarEvent.visibility !== CalendarChannelVisibility.SHARE_EVERYTHING
+    ) {
+      return null;
+    }
+
+    const ownerEntityId = (
+      calendarEvent as TimelineCalendarEvent & {
+        ownerEntityId?: string | null;
+      }
+    ).ownerEntityId;
+
+    const canManageThisEvent =
+      isPlatformAdmin ||
+      (isDefined(ownerEntityId) && currentUserEntityIds.has(ownerEntityId));
+
+    if (!canManageThisEvent) {
+      return null;
+    }
+
+    return (
+      <IconButton
+        Icon={IconPencil}
+        size="small"
+        variant="tertiary"
+        ariaLabel={t`Edit event`}
+        onClick={() => setEditingEventId(calendarEvent.id)}
+      />
+    );
+  };
 
   const {
     calendarEventsByDayTime,
@@ -130,6 +192,7 @@ export const GroupCalendarEventsCard = () => {
                         key={dayTime}
                         calendarEvents={calendarEventsByDayTime[dayTime] ?? []}
                         divider={index < monthDayTimes.length - 1}
+                        renderEventActions={renderEventActions}
                       />
                     ))}
                   </Card>
@@ -138,6 +201,14 @@ export const GroupCalendarEventsCard = () => {
             })}
           </StyledScrollArea>
         </CalendarContext.Provider>
+      )}
+      {editingEventId && (
+        <GroupCalendarEditEventModal
+          eventId={editingEventId}
+          onClose={() => setEditingEventId(null)}
+          onSaved={refetch}
+          onDeleted={refetch}
+        />
       )}
     </StyledWrapper>
   );

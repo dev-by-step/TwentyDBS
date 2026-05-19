@@ -240,16 +240,17 @@ Le script doit être **idempotent** (rejouable sans doublon) et s'exécuter **ap
 **Objectif :** ETQU utilisateur, je peux visualiser la charge globale du groupe sur un seul calendrier.
 
 ### Fichiers attendus / modifiés
-- `packages/twenty-front/src/modules/activities/calendar/` (extension ou nouveau composant)
-- Hook : `useMultiEntityCalendar()`
-- Query GQL fusionnant les 4 flux
+- `packages/twenty-front/src/modules/activities/group-calendar/` (nouveau module)
+- Page : `pages/group-calendar/GroupCalendarPage.tsx`
+- Hook : `useGroupCalendarEvents`
+- Service backend : `TimelineCalendarEventService.getGroupCalendarEvents`
 
 ### Critères d'Acceptation
-- [ ] La vue calendrier affiche les créneaux occupés des 4 entités sur un seul calendrier
-- [ ] Je peux voir les créneaux de mes collègues des 3 autres sociétés dans la vue groupe
-- [ ] Les créneaux d'autres entités respectent la règle de la Carte 5 (anonymisation du détail, conservation des horaires)
-- [ ] La vue supporte les modes Jour, Semaine, Mois
-- [ ] `npx nx typecheck twenty-front` passe sans erreur
+- [x] La vue calendrier affiche les créneaux occupés des entités sur un seul calendrier
+- [x] Je peux voir les créneaux de mes collègues des autres sociétés dans la vue groupe
+- [x] Les créneaux d'autres entités respectent la règle de la Carte 5 (anonymisation du détail, conservation des horaires)
+- [x] La vue supporte les modes Jour, Semaine, Mois
+- [x] `npx nx typecheck twenty-front` passe sans erreur
 
 ---
 
@@ -258,12 +259,71 @@ Le script doit être **idempotent** (rejouable sans doublon) et s'exécuter **ap
 **Objectif :** ETQU utilisateur, je peux identifier le porteur d'un projet sur le calendrier grâce à une couleur associée à la société responsable.
 
 ### Fichiers attendus / modifiés
-- `packages/twenty-front/src/modules/activities/calendar/` (customisation du rendu des créneaux)
-- Mapping / usage de `InternalEntity.color` sur les événements calendrier
+- `packages/twenty-front/src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx`
+- Mapping `InternalEntity.color` via `TimelineCalendarEventService.buildCalendarEventEntityColorMap`
+- Exposition `entityColor` sur `TimelineCalendarEventDTO`
 
 ### Critères d'Acceptation
-- [ ] Chaque créneau du calendrier affiche une bordure de couleur correspondant à la société responsable
-- [ ] La couleur provient de `InternalEntity.color`
-- [ ] Le repère visuel reste visible même quand le détail du créneau est anonymisé par la Carte 5
-- [ ] Je peux identifier rapidement quelle société porte le créneau depuis la vue calendrier
-- [ ] `npx nx typecheck twenty-front` passe sans erreur
+- [x] Chaque créneau du calendrier affiche une bordure de couleur correspondant à la société responsable
+- [x] La couleur provient de `InternalEntity.color`
+- [x] Le repère visuel reste visible même quand le détail du créneau est anonymisé par la Carte 5
+- [x] Je peux identifier rapidement quelle société porte le créneau depuis la vue calendrier
+- [x] `npx nx typecheck twenty-front` passe sans erreur
+
+---
+
+## Carte 10 — `10-permissions-entites` : Permissions multi-entités + Audience calendrier
+
+**Objectif :** ETQU plateforme, isoler les données CRM par entité interne via un
+système de permissions transverse (lecture, mutation, bulk, merge,
+duplicates) ; ETQU utilisateur, choisir l'audience d'un événement de
+calendrier (groupe entier ou liste d'entités spécifiques, y compris une
+entité dont je ne fais pas partie).
+
+### Fichiers attendus / modifiés
+
+**Permissions transverses :**
+- `packages/twenty-server/src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts`
+- `packages/twenty-server/src/modules/internal-entity/query-hooks/internal-entity-access-*.pre-query-hook.ts` (16 hooks branchés sur `*.findMany`, `*.findOne`, `*.groupBy`, `*.create*`, `*.update*`, `*.delete*`, `*.destroy*`, `*.restore*`, `*.findDuplicates`, `*.mergeMany`)
+- `packages/twenty-server/src/modules/internal-entity/services/workspace-member-internal-entity.service.ts`
+- Constantes : `ENTITY_SCOPED_OBJECT_NAMES`, `ENTITY_CONFIGURATION_OBJECT_NAMES`, `PERSONAL_WORK_OBJECT_NAMES`, `HYBRID_SCOPED_OBJECT_NAMES`
+- Rôles : `STANDARD_ROLE.entityManager` (créé dans le seeder dev)
+- Header HTTP : `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` (twenty-shared)
+
+**Audience calendrier per-event :**
+- Nouvel objet metadata `calendarEventEntityAudience` (junction M2M `CalendarEvent ↔ InternalEntity`) seedé par `init-internal-entities`
+- Champ `sharingScope` sur `CalendarEvent` : `ENTITY_ONLY` (défaut) | `WORKSPACE_PUBLIC`
+- `CalendarPrivacyService.loadAudienceEntityIdsByCalendarEventId` consulte la M2M
+- Modal `GroupCalendarCreateEventModal.tsx` : sélecteur d'audience (radio "Tout le groupe" / "Entités spécifiques" + chips couleur)
+- Édition : auto-générée par Twenty via le picker de relation sur la fiche événement
+
+### Critères d'Acceptation
+
+**Scoping par entité :**
+- [x] Un utilisateur sans entité active (Vue Groupe) voit toutes les données CRM accessibles à son rôle (filtre désactivé en lecture).
+- [x] Un utilisateur en Vue Société (`activeInternalEntityId` posé) ne voit que les `Company`/`Person`/`Opportunity`/`Membership`/`InternalEntity` rattachés à son entité.
+- [x] Les mutations (`updateOne`, `deleteOne`, `bulkUpdate`, etc.) sont rejetées sur un enregistrement d'une autre entité, sauf pour `STANDARD_ROLE.admin` (platform admin) ou `STANDARD_ROLE.entityManager`.
+- [x] `findDuplicates` et `mergeMany` sont restreints aux entity managers / platform admins, et uniquement sur des enregistrements de l'entité active.
+- [x] `Task`/`Note`/`Attachment`/`NoteTarget`/`TaskTarget` suivent la règle "personal work" (créateur ou assignee uniquement).
+- [x] `TimelineActivity` suit la règle hybride (OR createdBy personnel + targets visibles dans l'entité).
+
+**Résilience metadata :**
+- [x] Si l'objet `calendarEventEntityAudience` (ou les `junctionTargetFieldId` Person/Company) n'est pas encore créé sur le workspace, l'access policy ignore silencieusement le filtre concerné au lieu de remonter `Invalid filter`. Le service met le résultat de cette vérification en cache process.
+- [x] Le filtre client envoyé par le front (`internalEntityId` / `internalEntitiesId`) est strippé avant validation si le scope field n'est pas disponible (`sanitizeEntityScopeFilterFromPayload`).
+
+**Audience calendrier :**
+- [x] Sur la création d'un événement, je peux choisir entre "Tout le groupe" (= `sharingScope: WORKSPACE_PUBLIC`) et "Entités spécifiques" (= membership M2M sur les `InternalEntity` sélectionnées).
+- [x] Une `audienceEntities` non vide masque l'événement pour les utilisateurs hors audience (titre = "Occupé", description/location/attendees nuls), tout en gardant `startsAt`/`endsAt`.
+- [x] Le créateur peut cibler une entité dont il ne fait pas partie (aucune contrainte d'appartenance imposée).
+- [x] L'édition de l'audience se fait depuis la fiche événement (picker M2M auto-généré par Twenty).
+- [x] Le modal front s'ouvre même si la metadata d'audience n'a pas encore été initialisée (gating via `useObjectMetadataItems`) — seul le mode "Tout le groupe" est exposé tant que `init-internal-entities` n'a pas tourné.
+
+**Qualité :**
+- [x] `npx nx typecheck twenty-server` et `npx nx typecheck twenty-front` passent.
+- [x] `npx nx lint:diff-with-main twenty-server` et `npx nx lint:diff-with-main twenty-front` passent.
+- [x] `internal-entity-access-policy.service.spec.ts` couvre les 4 familles de scope (entity, hybrid, personal, configuration) et la sanitization.
+- [x] `calendar-privacy.service.spec.ts` couvre l'arbitrage WORKSPACE_PUBLIC / audience M2M / fallback Carte 5.
+
+### Notes de mise en service
+- Après tout reset DB ou ajout de relation, relancer `npx nx run twenty-server:command -- init-internal-entities` puis `npx nx run twenty-front:graphql:generate`.
+- Le front communique l'entité active via header HTTP `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME`. Vue Groupe = header absent / vide → aucune contrainte de lecture appliquée par l'access policy.

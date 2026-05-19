@@ -11,6 +11,7 @@ import { type TimelineCalendarEvent } from '~/generated/graphql';
 type CalendarDayCardContentProps = {
   calendarEvents: TimelineCalendarEvent[];
   divider?: boolean;
+  renderEventActions?: (calendarEvent: TimelineCalendarEvent) => React.ReactNode;
 };
 
 const StyledCardContentContainer = styled.div`
@@ -53,6 +54,7 @@ const StyledEventRowContainer = styled.div`
 export const CalendarDayCardContent = ({
   calendarEvents,
   divider,
+  renderEventActions,
 }: CalendarDayCardContentProps) => {
   const { theme } = useContext(ThemeContext);
   const endOfDayDate = endOfDay(getCalendarEventStartDate(calendarEvents[0]));
@@ -87,7 +89,10 @@ export const CalendarDayCardContent = ({
         <StyledEvents>
           {calendarEvents.map((calendarEvent) => (
             <StyledEventRowContainer key={calendarEvent.id}>
-              <CalendarEventRow calendarEvent={calendarEvent} />
+              <CalendarEventRow
+                calendarEvent={calendarEvent}
+                actions={renderEventActions?.(calendarEvent)}
+              />
             </StyledEventRowContainer>
           ))}
         </StyledEvents>

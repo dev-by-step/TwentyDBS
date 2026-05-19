@@ -1,95 +1,41 @@
-import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { format, addHours, startOfHour } from 'date-fns';
+import { addHours, startOfHour } from 'date-fns';
 import { type FormEvent, useState } from 'react';
 import { v4 } from 'uuid';
 
 import { type CalendarChannel } from '@/accounts/types/CalendarChannel';
-import { useMyCalendarChannels } from '@/settings/accounts/hooks/useMyCalendarChannels';
+import {
+  StyledActions,
+  StyledBackdrop,
+  StyledDialog,
+  StyledField,
+  StyledRightActions,
+  StyledSelect,
+  StyledTitle,
+} from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
+import {
+  formatDateTimeInputValue,
+  type GroupCalendarEventFormState,
+  GroupCalendarEventFormFields,
+} from '@/activities/group-calendar/components/GroupCalendarEventFormFields';
+import {
+  CALENDAR_CHANNEL_EVENT_ASSOCIATION_OBJECT_NAME,
+  CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
+  CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
+  CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY,
+  CALENDAR_EVENT_SHARING_SCOPE_WORKSPACE_PUBLIC,
+} from '@/activities/group-calendar/constants/CalendarEventAudience';
+import {
+  CalendarEventAudienceSyncError,
+  useGroupCalendarEventAudienceSync,
+} from '@/activities/group-calendar/hooks/useGroupCalendarEventAudienceSync';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
+import { useMyCalendarChannels } from '@/settings/accounts/hooks/useMyCalendarChannels';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-
-const CALENDAR_CHANNEL_EVENT_ASSOCIATION_OBJECT_NAME =
-  'calendarChannelEventAssociation';
-
-const StyledBackdrop = styled.div`
-  align-items: center;
-  background: ${themeCssVariables.background.transparent.medium};
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 9999;
-`;
-
-const StyledDialog = styled.form`
-  background: ${themeCssVariables.background.primary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.md};
-  box-shadow: ${themeCssVariables.boxShadow.strong};
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[4]};
-  max-width: 420px;
-  padding: ${themeCssVariables.spacing[5]};
-  width: calc(100% - ${themeCssVariables.spacing[8]});
-`;
-
-const StyledTitle = styled.h2`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.lg};
-  font-weight: ${themeCssVariables.font.weight.semiBold};
-  margin: 0;
-`;
-
-const StyledField = styled.label`
-  color: ${themeCssVariables.font.color.secondary};
-  display: flex;
-  flex-direction: column;
-  font-size: ${themeCssVariables.font.size.sm};
-  gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledInput = styled.input`
-  background: ${themeCssVariables.background.secondary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  box-sizing: border-box;
-  color: ${themeCssVariables.font.color.primary};
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.sm};
-  height: ${themeCssVariables.spacing[8]};
-  padding: 0 ${themeCssVariables.spacing[2]};
-`;
-
-const StyledSelect = styled.select`
-  background: ${themeCssVariables.background.secondary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  box-sizing: border-box;
-  color: ${themeCssVariables.font.color.primary};
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.sm};
-  height: ${themeCssVariables.spacing[8]};
-  padding: 0 ${themeCssVariables.spacing[2]};
-`;
-
-const StyledActions = styled.div`
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: flex-end;
-`;
-
-const formatDateTimeInputValue = (date: Date) =>
-  format(date, "yyyy-MM-dd'T'HH:mm");
 
 type GroupCalendarCreateEventModalProps = {
   selectedDate: Date;
@@ -97,23 +43,49 @@ type GroupCalendarCreateEventModalProps = {
   onCreated: () => Promise<unknown> | unknown;
 };
 
+const buildInitialState = (selectedDate: Date): GroupCalendarEventFormState => {
+  const defaultStart = startOfHour(addHours(selectedDate, 1));
+  const defaultEnd = addHours(defaultStart, 1);
+
+  return {
+    title: '',
+    startsAt: formatDateTimeInputValue(defaultStart),
+    endsAt: formatDateTimeInputValue(defaultEnd),
+    audienceMode: 'group',
+    selectedAudienceEntityIds: [],
+    selectedAudienceMemberIds: [],
+  };
+};
+
 export const GroupCalendarCreateEventModal = ({
   selectedDate,
   onClose,
   onCreated,
 }: GroupCalendarCreateEventModalProps) => {
-  const defaultStart = startOfHour(addHours(selectedDate, 1));
-  const defaultEnd = addHours(defaultStart, 1);
   const { channels, loading: calendarChannelsLoading } =
     useMyCalendarChannels();
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
-  const [title, setTitle] = useState('');
-  const [startsAt, setStartsAt] = useState(
-    formatDateTimeInputValue(defaultStart),
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const isAudienceFeatureAvailable = objectMetadataItems.some(
+    (objectMetadataItem) =>
+      objectMetadataItem.nameSingular ===
+      CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
   );
-  const [endsAt, setEndsAt] = useState(formatDateTimeInputValue(defaultEnd));
+  const isPersonAudienceFeatureAvailable = objectMetadataItems.some(
+    (objectMetadataItem) =>
+      objectMetadataItem.nameSingular ===
+      CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
+  );
+
+  const [formState, setFormState] = useState<GroupCalendarEventFormState>(() =>
+    buildInitialState(selectedDate),
+  );
   const [calendarChannelId, setCalendarChannelId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const patchFormState = (patch: Partial<GroupCalendarEventFormState>) => {
+    setFormState((previous) => ({ ...previous, ...patch }));
+  };
 
   const { createOneRecord: createCalendarEvent } = useCreateOneRecord({
     objectNameSingular: CoreObjectNameSingular.CalendarEvent,
@@ -133,6 +105,10 @@ export const GroupCalendarCreateEventModal = ({
         calendarChannelId: true,
       },
     });
+  const { persistAudience } = useGroupCalendarEventAudienceSync({
+    isAudienceFeatureAvailable,
+    isPersonAudienceFeatureAvailable,
+  });
 
   const selectedCalendarChannelId =
     calendarChannelId || channels[0]?.id || null;
@@ -148,17 +124,36 @@ export const GroupCalendarCreateEventModal = ({
       return;
     }
 
+    if (
+      isAudienceFeatureAvailable &&
+      formState.audienceMode === 'specific' &&
+      formState.selectedAudienceEntityIds.length === 0 &&
+      formState.selectedAudienceMemberIds.length === 0
+    ) {
+      enqueueErrorSnackBar({
+        message: t`Select at least one entity or person for the audience.`,
+      });
+
+      return;
+    }
+
     setIsSaving(true);
 
     try {
+      const sharingScope =
+        !isAudienceFeatureAvailable || formState.audienceMode === 'group'
+          ? CALENDAR_EVENT_SHARING_SCOPE_WORKSPACE_PUBLIC
+          : CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY;
+
       const createdEvent = await createCalendarEvent({
-        title,
+        title: formState.title,
         isCanceled: false,
         isFullDay: false,
-        startsAt: new Date(startsAt).toISOString(),
-        endsAt: new Date(endsAt).toISOString(),
+        startsAt: new Date(formState.startsAt).toISOString(),
+        endsAt: new Date(formState.endsAt).toISOString(),
         externalCreatedAt: new Date().toISOString(),
         externalUpdatedAt: new Date().toISOString(),
+        sharingScope,
       });
 
       await createCalendarChannelEventAssociation({
@@ -168,13 +163,26 @@ export const GroupCalendarCreateEventModal = ({
         recurringEventExternalId: null,
       });
 
+      if (formState.audienceMode === 'specific') {
+        await persistAudience({
+          eventId: createdEvent.id,
+          desiredEntityIds: formState.selectedAudienceEntityIds,
+          desiredMemberIds: formState.selectedAudienceMemberIds,
+        });
+      }
+
       enqueueSuccessSnackBar({ message: t`Event created.` });
       await onCreated();
       onClose();
     } catch (error) {
-      enqueueErrorSnackBar({
-        message: error instanceof Error ? error.message : t`An error occurred.`,
-      });
+      const message =
+        error instanceof CalendarEventAudienceSyncError
+          ? t`The event was created but ${error.failedOperationCount} audience entry/entries failed to save. You can retry from the event details.`
+          : error instanceof Error
+            ? error.message
+            : t`An error occurred.`;
+
+      enqueueErrorSnackBar({ message });
     } finally {
       setIsSaving(false);
     }
@@ -184,61 +192,44 @@ export const GroupCalendarCreateEventModal = ({
     <StyledBackdrop>
       <StyledDialog onSubmit={handleSubmit}>
         <StyledTitle>{t`New event`}</StyledTitle>
-        <StyledField>
-          {t`Title`}
-          <StyledInput
-            autoFocus
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-          />
-        </StyledField>
-        <StyledField>
-          {t`Calendar`}
-          <StyledSelect
-            disabled={calendarChannelsLoading || channels.length === 0}
-            value={selectedCalendarChannelId ?? ''}
-            onChange={(event) => setCalendarChannelId(event.target.value)}
-            required
-          >
-            {channels.map((channel: CalendarChannel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.handle}
-              </option>
-            ))}
-          </StyledSelect>
-        </StyledField>
-        <StyledField>
-          {t`Starts at`}
-          <StyledInput
-            type="datetime-local"
-            value={startsAt}
-            onChange={(event) => setStartsAt(event.target.value)}
-            required
-          />
-        </StyledField>
-        <StyledField>
-          {t`Ends at`}
-          <StyledInput
-            type="datetime-local"
-            value={endsAt}
-            onChange={(event) => setEndsAt(event.target.value)}
-            required
-          />
-        </StyledField>
+        <GroupCalendarEventFormFields
+          state={formState}
+          onPatchState={patchFormState}
+          isAudienceFeatureAvailable={isAudienceFeatureAvailable}
+          isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
+          afterTitleField={
+            <StyledField>
+              {t`Calendar`}
+              <StyledSelect
+                disabled={calendarChannelsLoading || channels.length === 0}
+                value={selectedCalendarChannelId ?? ''}
+                onChange={(event) => setCalendarChannelId(event.target.value)}
+                required
+              >
+                {channels.map((channel: CalendarChannel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.handle}
+                  </option>
+                ))}
+              </StyledSelect>
+            </StyledField>
+          }
+        />
         <StyledActions>
-          <Button
-            title={t`Cancel`}
-            variant="tertiary"
-            onClick={onClose}
-            disabled={isSaving}
-          />
-          <Button
-            title={t`Create`}
-            variant="secondary"
-            type="submit"
-            disabled={isSaving}
-          />
+          <StyledRightActions style={{ marginLeft: 'auto' }}>
+            <Button
+              title={t`Cancel`}
+              variant="tertiary"
+              onClick={onClose}
+              disabled={isSaving}
+            />
+            <Button
+              title={t`Create`}
+              variant="secondary"
+              type="submit"
+              disabled={isSaving}
+            />
+          </StyledRightActions>
         </StyledActions>
       </StyledDialog>
     </StyledBackdrop>

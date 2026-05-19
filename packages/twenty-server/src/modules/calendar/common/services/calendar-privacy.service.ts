@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { MULTI_ENTITY_OBJECT_NAME } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
 
@@ -95,6 +96,32 @@ export class CalendarPrivacyService {
             .map((calendarEvent) => calendarEvent.id),
         );
 
+        const audienceEntityIdsByCalendarEventId =
+          await this.loadAudienceEntityIdsByCalendarEventId({
+            workspaceId,
+            calendarEventIds,
+          });
+
+        const audienceMemberIdsByCalendarEventId =
+          await this.loadAudienceMemberIdsByCalendarEventId({
+            workspaceId,
+            calendarEventIds,
+          });
+
+        const isViewerInPersonAudience = (calendarEventId: string): boolean => {
+          if (!isDefined(currentWorkspaceMemberId)) {
+            return false;
+          }
+
+          const audienceMemberIds =
+            audienceMemberIdsByCalendarEventId.get(calendarEventId);
+
+          return (
+            isDefined(audienceMemberIds) &&
+            audienceMemberIds.has(currentWorkspaceMemberId)
+          );
+        };
+
         if (accessibleEntityIds.size === 0) {
           const hasRequesterIdentityHints =
             isDefined(currentUserEntityId) ||
@@ -105,6 +132,7 @@ export class CalendarPrivacyService {
             calendarEventIds,
             (calendarEventId) =>
               !publicCalendarEventIds.has(calendarEventId) &&
+              !isViewerInPersonAudience(calendarEventId) &&
               hasRequesterIdentityHints,
           );
         }
@@ -117,7 +145,7 @@ export class CalendarPrivacyService {
         const calendarChannelEventAssociationRepository =
           await this.globalWorkspaceOrmManager.getRepository<CalendarChannelEventAssociationWorkspaceEntity>(
             workspaceId,
-            'calendarChannelEventAssociation',
+            MULTI_ENTITY_OBJECT_NAME.CalendarChannelEventAssociation,
           );
 
         const calendarChannelEventAssociations =
@@ -304,24 +332,44 @@ export class CalendarPrivacyService {
             continue;
           }
 
+          // Owner-entity members always see their own events, regardless of
+          // any explicit audience grant. Explicit audience is additive on top
+          // of the implicit owner-entity visibility.
           const ownerEntityIds =
             ownerEntityIdsByCalendarEventId.get(calendarEventId);
+          const hasUnknownOwnerEntity =
+            calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId);
+          const isViewerInOwnerEntity =
+            !hasUnknownOwnerEntity &&
+            isDefined(ownerEntityIds) &&
+            ownerEntityIds.size > 0 &&
+            [...ownerEntityIds].some((id) => accessibleEntityIds.has(id));
 
-          if (
-            calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId) ||
-            !isDefined(ownerEntityIds) ||
-            ownerEntityIds.size === 0
-          ) {
-            defaultMaskMap.set(calendarEventId, true);
+          if (isViewerInOwnerEntity) {
+            defaultMaskMap.set(calendarEventId, false);
             continue;
           }
 
-          defaultMaskMap.set(
-            calendarEventId,
-            [...ownerEntityIds].some(
-              (ownerEntityId) => !accessibleEntityIds.has(ownerEntityId),
-            ),
-          );
+          const audienceEntityIds =
+            audienceEntityIdsByCalendarEventId.get(calendarEventId);
+          const isViewerInEntityAudience =
+            isDefined(audienceEntityIds) &&
+            audienceEntityIds.size > 0 &&
+            [...audienceEntityIds].some((entityId) =>
+              accessibleEntityIds.has(entityId),
+            );
+
+          if (
+            isViewerInEntityAudience ||
+            isViewerInPersonAudience(calendarEventId)
+          ) {
+            defaultMaskMap.set(calendarEventId, false);
+            continue;
+          }
+
+          // No applicable unmasking rule: hide event details, keep the slot
+          // visible so other users see "Busy" with the owner entity badge.
+          defaultMaskMap.set(calendarEventId, true);
         }
 
         return defaultMaskMap;
@@ -440,6 +488,97 @@ export class CalendarPrivacyService {
       workspaceMemberId: currentWorkspaceMemberId,
       fallbackEntityId,
     });
+  }
+
+  private loadAudienceEntityIdsByCalendarEventId(args: {
+    workspaceId: string;
+    calendarEventIds: string[];
+  }): Promise<Map<string, Set<string>>> {
+    return this.loadAudienceMap({
+      ...args,
+      repositoryName: MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience,
+      targetField: 'internalEntityId',
+    });
+  }
+
+  private loadAudienceMemberIdsByCalendarEventId(args: {
+    workspaceId: string;
+    calendarEventIds: string[];
+  }): Promise<Map<string, Set<string>>> {
+    return this.loadAudienceMap({
+      ...args,
+      repositoryName: MULTI_ENTITY_OBJECT_NAME.CalendarEventPersonAudience,
+      targetField: 'workspaceMemberId',
+    });
+  }
+
+  // Loads junction rows from `repositoryName` matching the given event ids and
+  // returns a map calendarEventId -> Set of `targetField` values. Returns an
+  // empty map when the metadata is not yet initialised — callers fall back to
+  // the public/owner-entity heuristics so the privacy logic stays robust during
+  // schema migrations.
+  private async loadAudienceMap({
+    workspaceId,
+    calendarEventIds,
+    repositoryName,
+    targetField,
+  }: {
+    workspaceId: string;
+    calendarEventIds: string[];
+    repositoryName: string;
+    targetField: 'internalEntityId' | 'workspaceMemberId';
+  }): Promise<Map<string, Set<string>>> {
+    if (calendarEventIds.length === 0) {
+      return new Map();
+    }
+
+    let audienceRows: Array<Record<string, unknown>> = [];
+
+    try {
+      const audienceRepository =
+        await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(workspaceId, repositoryName, {
+          shouldBypassPermissionChecks: true,
+        });
+
+      if (!isDefined(audienceRepository)) {
+        return new Map();
+      }
+
+      audienceRows = await (
+        audienceRepository as {
+          find: (args: unknown) => Promise<Array<Record<string, unknown>>>;
+        }
+      ).find({
+        where: {
+          calendarEventId: In(calendarEventIds),
+        },
+      });
+    } catch {
+      return new Map();
+    }
+
+    const audienceMap = new Map<string, Set<string>>();
+
+    for (const row of audienceRows) {
+      const calendarEventId = row.calendarEventId;
+      const targetValue = row[targetField];
+
+      if (
+        typeof calendarEventId !== 'string' ||
+        typeof targetValue !== 'string'
+      ) {
+        continue;
+      }
+
+      const set = audienceMap.get(calendarEventId) ?? new Set<string>();
+
+      set.add(targetValue);
+      audienceMap.set(calendarEventId, set);
+    }
+
+    return audienceMap;
   }
 
   private extractStringField(
