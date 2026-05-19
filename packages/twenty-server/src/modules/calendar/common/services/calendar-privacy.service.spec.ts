@@ -2,6 +2,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FindOperator } from 'typeorm';
 
+import { createContextAwareOrmManagerMock } from 'src/engine/twenty-orm/global-workspace-datasource/__test-utils__/create-context-aware-orm-manager-mock';
+
 import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
@@ -771,6 +773,129 @@ describe('CalendarPrivacyService', () => {
       );
 
       expect(event).toEqual(snapshot);
+    });
+  });
+
+  describe('workspace-context wrapping (regression guards)', () => {
+    // Same intent as the mutation-permission spec: rebuild the service with a
+    // context-aware orm manager that throws when `getRepository` is called
+    // outside `executeInWorkspaceContext`. Catches regressions of the
+    // "Workspace context not set" runtime crash early.
+    const buildContextAwareService = async () => {
+      const calendarChannelEventAssociationRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+      const calendarEventRepository = {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 'calendar-event-1',
+            sharingScope: 'ENTITY_ONLY',
+          },
+        ]),
+      };
+      const workspaceMemberRepository = {
+        find: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn().mockResolvedValue(null),
+      };
+      const calendarEventEntityAudienceRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+      const calendarEventPersonAudienceRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+
+      const { manager } = createContextAwareOrmManagerMock({
+        repositoryFactory: async (_workspaceId, repositoryName) => {
+          if (repositoryName === 'calendarChannelEventAssociation')
+            return calendarChannelEventAssociationRepository;
+          if (repositoryName === 'calendarEvent')
+            return calendarEventRepository;
+          if (repositoryName === 'workspaceMember')
+            return workspaceMemberRepository;
+          if (repositoryName === 'calendarEventEntityAudience')
+            return calendarEventEntityAudienceRepository;
+          if (repositoryName === 'calendarEventPersonAudience')
+            return calendarEventPersonAudienceRepository;
+
+          return { find: jest.fn().mockResolvedValue([]) };
+        },
+      });
+
+      const calendarChannelRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+      const connectedAccountRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+      const userWorkspaceRepository = { find: jest.fn().mockResolvedValue([]) };
+      const userRepository = {
+        find: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn().mockResolvedValue({ entityId: 'same-entity-id' }),
+      };
+      const workspaceMemberInternalEntityService = {
+        resolveContext: jest.fn().mockResolvedValue({
+          currentEntityId: 'same-entity-id',
+          activeEntityId: 'same-entity-id',
+          entityIds: ['same-entity-id'],
+        }),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          CalendarPrivacyService,
+          {
+            provide: GlobalWorkspaceOrmManager,
+            useValue: manager,
+          },
+          {
+            provide: getRepositoryToken(CalendarChannelEntity),
+            useValue: calendarChannelRepository,
+          },
+          {
+            provide: getRepositoryToken(ConnectedAccountEntity),
+            useValue: connectedAccountRepository,
+          },
+          {
+            provide: getRepositoryToken(UserWorkspaceEntity),
+            useValue: userWorkspaceRepository,
+          },
+          {
+            provide: getRepositoryToken(UserEntity),
+            useValue: userRepository,
+          },
+          {
+            provide: WorkspaceMemberInternalEntityService,
+            useValue: workspaceMemberInternalEntityService,
+          },
+        ],
+      }).compile();
+
+      const service = module.get(CalendarPrivacyService);
+
+      return { service };
+    };
+
+    it('keeps every workspace query inside executeInWorkspaceContext when masking events', async () => {
+      const { service } = await buildContextAwareService();
+
+      await expect(
+        service.getCalendarEventMaskMap({
+          calendarEventIds: ['calendar-event-1'],
+          workspaceId: 'workspace-id',
+          currentUserEntityId: 'same-entity-id',
+        }),
+      ).resolves.toBeInstanceOf(Map);
+    });
+
+    it('keeps every workspace query inside executeInWorkspaceContext when called with no calendar event ids', async () => {
+      const { service } = await buildContextAwareService();
+
+      await expect(
+        service.getCalendarEventMaskMap({
+          calendarEventIds: [],
+          workspaceId: 'workspace-id',
+        }),
+      ).resolves.toBeInstanceOf(Map);
     });
   });
 });

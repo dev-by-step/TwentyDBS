@@ -23,6 +23,7 @@ export enum SettingsPath {
   WorkspaceMembersPage = 'members',
   WorkspaceMemberPage = 'members/:workspaceMemberId',
   Workspace = 'general',
+  InternalEntities = 'internal-entities',
   Domains = 'domains',
   Subdomain = 'domains/subdomain',
   CustomDomain = 'domains/custom-domain',

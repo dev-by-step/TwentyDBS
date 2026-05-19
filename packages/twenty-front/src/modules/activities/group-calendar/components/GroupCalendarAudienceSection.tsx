@@ -1,11 +1,11 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
+import { useMemo } from 'react';
 
 import {
   type AudienceMode,
   INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
-import { useCurrentUserEntityIds } from '@/activities/group-calendar/hooks/useCurrentUserEntityIds';
 import { useEntityMembersCoverage } from '@/activities/group-calendar/hooks/useEntityMembersCoverage';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
@@ -128,11 +128,16 @@ const buildWorkspaceMemberDisplayName = (
   `${member.name.firstName ?? ''} ${member.name.lastName ?? ''}`.trim() ||
   t`Unnamed member`;
 
+const buildWorkspaceMemberDedupeKey = (
+  member: WorkspaceMemberAudienceRecord,
+): string => buildWorkspaceMemberDisplayName(member).toLowerCase();
+
 type GroupCalendarAudienceSectionProps = {
   audienceMode: AudienceMode;
   selectedAudienceEntityIds: string[];
   selectedAudienceMemberIds: string[];
   isPersonAudienceFeatureAvailable: boolean;
+  eventEntityIds?: string[];
   onAudienceModeChange: (mode: AudienceMode) => void;
   onToggleAudienceEntity: (entityId: string) => void;
   onToggleAudienceMember: (workspaceMemberId: string) => void;
@@ -143,6 +148,7 @@ export const GroupCalendarAudienceSection = ({
   selectedAudienceEntityIds,
   selectedAudienceMemberIds,
   isPersonAudienceFeatureAvailable,
+  eventEntityIds = [],
   onAudienceModeChange,
   onToggleAudienceEntity,
   onToggleAudienceMember,
@@ -163,43 +169,48 @@ export const GroupCalendarAudienceSection = ({
       skip: !isPersonAudienceFeatureAvailable,
     });
 
-  const {
-    isMemberCoveredBySelectedEntities,
-    entityIdsByMemberId,
-  } = useEntityMembersCoverage({
-    skip: !isPersonAudienceFeatureAvailable,
-  });
-  const currentUserEntityIds = useCurrentUserEntityIds();
+  const { isMemberCoveredBySelectedEntities, entityIdsByMemberId } =
+    useEntityMembersCoverage({
+      skip: !isPersonAudienceFeatureAvailable,
+    });
+  const audienceWorkspaceMembers = useMemo(() => {
+    const membersByName = new Map<string, WorkspaceMemberAudienceRecord>();
+
+    for (const member of workspaceMembers) {
+      const memberEntityIds = entityIdsByMemberId.get(member.id);
+
+      if (memberEntityIds === undefined || memberEntityIds.size === 0) {
+        continue;
+      }
+
+      const memberKey = buildWorkspaceMemberDedupeKey(member);
+
+      if (!membersByName.has(memberKey)) {
+        membersByName.set(memberKey, member);
+      }
+    }
+
+    return [...membersByName.values()];
+  }, [entityIdsByMemberId, workspaceMembers]);
 
   const isMemberInOwnerEntity = (workspaceMemberId: string): boolean => {
+    if (eventEntityIds.length === 0) {
+      return false;
+    }
+
     const memberEntityIds = entityIdsByMemberId.get(workspaceMemberId);
 
     if (memberEntityIds === undefined || memberEntityIds.size === 0) {
       return false;
     }
 
-    for (const entityId of memberEntityIds) {
-      if (currentUserEntityIds.has(entityId)) {
-        return true;
-      }
-    }
-
-    return false;
+    return eventEntityIds.some((entityId) => memberEntityIds.has(entityId));
   };
 
   return (
     <StyledField as="div">
-      {t`Audience`}
+      {t`Who can see this event?`}
       <StyledRadioGroup>
-        <StyledRadioOption>
-          <input
-            type="radio"
-            name="audience"
-            checked={audienceMode === 'group'}
-            onChange={() => onAudienceModeChange('group')}
-          />
-          {t`Visible to the entire workspace`}
-        </StyledRadioOption>
         <StyledRadioOption>
           <input
             type="radio"
@@ -207,52 +218,70 @@ export const GroupCalendarAudienceSection = ({
             checked={audienceMode === 'specific'}
             onChange={() => onAudienceModeChange('specific')}
           />
-          {t`Limit to my entity + grant access to specific people/entities`}
+          {t`Only the event entities (and explicit grants)`}
+        </StyledRadioOption>
+        <StyledRadioOption>
+          <input
+            type="radio"
+            name="audience"
+            checked={audienceMode === 'group'}
+            onChange={() => onAudienceModeChange('group')}
+          />
+          {t`Everyone in the workspace`}
         </StyledRadioOption>
       </StyledRadioGroup>
       {audienceMode === 'specific' && (
         <>
           <StyledHelperText>
-            {t`Members of your own entity already see this event. Use the picker below to also grant visibility to people or entities that would otherwise only see "Busy".`}
+            {t`Members of the event entities always see this event. You can optionally grant access to other entities or people below — everyone else only sees "Busy" with the responsible entity's color.`}
           </StyledHelperText>
-          <StyledSubLabel>{t`Grant access to entities`}</StyledSubLabel>
+          <StyledSubLabel>{t`Also visible to — other entities`}</StyledSubLabel>
           <StyledChipsContainer>
-            {internalEntities.map((entity) => {
-              const isOwnerEntity = currentUserEntityIds.has(entity.id);
-              const selected =
-                selectedAudienceEntityIds.includes(entity.id) || isOwnerEntity;
+            {internalEntities.length === 0 ? (
+              <StyledHelperText>
+                {t`No other internal entity available.`}
+              </StyledHelperText>
+            ) : (
+              internalEntities.map((entity) => {
+                const isEventEntity = eventEntityIds.includes(entity.id);
+                const selected =
+                  selectedAudienceEntityIds.includes(entity.id) ||
+                  isEventEntity;
 
-              return (
-                <StyledChip
-                  key={entity.id}
-                  type="button"
-                  selected={selected}
-                  chipColor={entity.color}
-                  disabled={isOwnerEntity}
-                  title={
-                    isOwnerEntity
-                      ? t`Your entity — always sees this event.`
-                      : undefined
-                  }
-                  onClick={() =>
-                    isOwnerEntity ? undefined : onToggleAudienceEntity(entity.id)
-                  }
-                >
-                  {isOwnerEntity ? `${entity.name} ✓` : entity.name}
-                </StyledChip>
-              );
-            })}
+                return (
+                  <StyledChip
+                    key={entity.id}
+                    type="button"
+                    selected={selected}
+                    chipColor={entity.color}
+                    disabled={isEventEntity}
+                    title={
+                      isEventEntity
+                        ? t`Event entity — already sees this event.`
+                        : undefined
+                    }
+                    onClick={() =>
+                      isEventEntity
+                        ? undefined
+                        : onToggleAudienceEntity(entity.id)
+                    }
+                  >
+                    {isEventEntity ? `${entity.name} ✓` : entity.name}
+                  </StyledChip>
+                );
+              })
+            )}
           </StyledChipsContainer>
           {isPersonAudienceFeatureAvailable && (
             <>
-              <StyledSubLabel>{t`Grant access to specific people`}</StyledSubLabel>
+              <StyledSubLabel>{t`Also visible to — specific people`}</StyledSubLabel>
               <StyledChipsContainer>
-                {workspaceMembers.length === 0 ? (
+                {audienceWorkspaceMembers.length === 0 ? (
                   <StyledHelperText>
                     {t`No workspace members available.`}
                   </StyledHelperText>
                 ) : (
-                  workspaceMembers.map((member) => {
+                  audienceWorkspaceMembers.map((member) => {
                     const isInOwnerEntity = isMemberInOwnerEntity(member.id);
                     const coveredByGrantedEntity =
                       isMemberCoveredBySelectedEntities(
@@ -273,13 +302,15 @@ export const GroupCalendarAudienceSection = ({
                         disabled={covered}
                         title={
                           isInOwnerEntity
-                            ? t`Already in your entity — sees this event by default.`
+                            ? t`Already in an event entity — sees this event by default.`
                             : coveredByGrantedEntity
-                              ? t`Already granted access via the selected entities.`
+                              ? t`Already covered by a granted entity.`
                               : undefined
                         }
                         onClick={() =>
-                          covered ? undefined : onToggleAudienceMember(member.id)
+                          covered
+                            ? undefined
+                            : onToggleAudienceMember(member.id)
                         }
                       >
                         {buildWorkspaceMemberDisplayName(member)}
@@ -290,9 +321,6 @@ export const GroupCalendarAudienceSection = ({
               </StyledChipsContainer>
             </>
           )}
-          <StyledHelperText>
-            {t`Everyone else will see this slot as "Busy" with the responsible entity's name.`}
-          </StyledHelperText>
         </>
       )}
     </StyledField>

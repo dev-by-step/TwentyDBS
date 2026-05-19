@@ -1,31 +1,27 @@
 import { type ReactNode } from 'react';
 import { t } from '@lingui/core/macro';
-import { format } from 'date-fns';
 
 import { GroupCalendarAudienceSection } from '@/activities/group-calendar/components/GroupCalendarAudienceSection';
 import {
   StyledField,
   StyledInput,
 } from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
-import { type AudienceMode } from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { GroupCalendarEventEntitiesPicker } from '@/activities/group-calendar/components/GroupCalendarEventEntitiesPicker';
+import { type ManageableEventEntity } from '@/activities/group-calendar/hooks/useManageableEventEntities';
+import { type GroupCalendarEventFormState } from '@/activities/group-calendar/utils/groupCalendarFormUtils';
 
-export type GroupCalendarEventFormState = {
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  audienceMode: AudienceMode;
-  selectedAudienceEntityIds: string[];
-  selectedAudienceMemberIds: string[];
-};
-
-export const formatDateTimeInputValue = (date: Date) =>
-  format(date, "yyyy-MM-dd'T'HH:mm");
+export {
+  type GroupCalendarEventFormState,
+  formatDateTimeInputValue,
+} from '@/activities/group-calendar/utils/groupCalendarFormUtils';
 
 type GroupCalendarEventFormFieldsProps = {
   state: GroupCalendarEventFormState;
   onPatchState: (patch: Partial<GroupCalendarEventFormState>) => void;
   isAudienceFeatureAvailable: boolean;
   isPersonAudienceFeatureAvailable: boolean;
+  manageableEventEntities: readonly ManageableEventEntity[];
+  eventEntitiesEmptyHint?: string;
   afterTitleField?: ReactNode;
   autoFocus?: boolean;
 };
@@ -35,9 +31,19 @@ export const GroupCalendarEventFormFields = ({
   onPatchState,
   isAudienceFeatureAvailable,
   isPersonAudienceFeatureAvailable,
+  manageableEventEntities,
+  eventEntitiesEmptyHint,
   afterTitleField,
   autoFocus = true,
 }: GroupCalendarEventFormFieldsProps) => {
+  const toggleEventEntity = (entityId: string) => {
+    onPatchState({
+      eventEntityIds: state.eventEntityIds.includes(entityId)
+        ? state.eventEntityIds.filter((id) => id !== entityId)
+        : [...state.eventEntityIds, entityId],
+    });
+  };
+
   const toggleAudienceEntity = (entityId: string) => {
     onPatchState({
       selectedAudienceEntityIds: state.selectedAudienceEntityIds.includes(
@@ -72,6 +78,12 @@ export const GroupCalendarEventFormFields = ({
         />
       </StyledField>
       {afterTitleField}
+      <GroupCalendarEventEntitiesPicker
+        manageableEventEntities={manageableEventEntities}
+        selectedEventEntityIds={state.eventEntityIds}
+        onToggleEventEntity={toggleEventEntity}
+        emptyHint={eventEntitiesEmptyHint}
+      />
       <StyledField>
         {t`Starts at`}
         <StyledInput
@@ -96,6 +108,7 @@ export const GroupCalendarEventFormFields = ({
           selectedAudienceEntityIds={state.selectedAudienceEntityIds}
           selectedAudienceMemberIds={state.selectedAudienceMemberIds}
           isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
+          eventEntityIds={state.eventEntityIds}
           onAudienceModeChange={(audienceMode) =>
             onPatchState({ audienceMode })
           }

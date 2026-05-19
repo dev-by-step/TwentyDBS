@@ -25,6 +25,7 @@ import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { ENTITY_MANAGER_ROLE_LABEL } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
@@ -489,19 +490,25 @@ export class CalendarEventMutationPermissionService {
             select: ['id', 'entityId'],
           })
         : [];
-    const workspaceMemberRepository =
-      await this.globalWorkspaceOrmManager.getRepository<
-        Record<string, unknown>
-      >(workspaceId, 'workspaceMember', { shouldBypassPermissionChecks: true });
     const workspaceMembers =
       userIds.length > 0
-        ? await workspaceMemberRepository.find({
-            where: {
-              userId: {
-                in: userIds,
-              },
+        ? await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+            async () => {
+              const workspaceMemberRepository =
+                await this.globalWorkspaceOrmManager.getRepository<
+                  Record<string, unknown>
+                >(workspaceId, 'workspaceMember', {
+                  shouldBypassPermissionChecks: true,
+                });
+
+              return workspaceMemberRepository.find({
+                where: {
+                  userId: In(userIds),
+                },
+              });
             },
-          })
+            buildSystemAuthContext(workspaceId),
+          )
         : [];
 
     const ownerUserIdByWorkspaceId = new Map(

@@ -9,20 +9,23 @@ import {
   StyledTitle,
 } from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
 import {
-  formatDateTimeInputValue,
   type GroupCalendarEventFormState,
   GroupCalendarEventFormFields,
 } from '@/activities/group-calendar/components/GroupCalendarEventFormFields';
 import {
   CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
   CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
-  CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY,
-  CALENDAR_EVENT_SHARING_SCOPE_WORKSPACE_PUBLIC,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
 import {
   CalendarEventAudienceSyncError,
   useGroupCalendarEventAudienceSync,
 } from '@/activities/group-calendar/hooks/useGroupCalendarEventAudienceSync';
+import { useManageableEventEntities } from '@/activities/group-calendar/hooks/useManageableEventEntities';
+import {
+  buildEditInitialFormState,
+  deriveSharingScopeFromAudienceMode,
+  mergeEntityIds,
+} from '@/activities/group-calendar/utils/groupCalendarFormUtils';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
@@ -72,7 +75,8 @@ const emptyFormState: GroupCalendarEventFormState = {
   title: '',
   startsAt: '',
   endsAt: '',
-  audienceMode: 'group',
+  eventEntityIds: [],
+  audienceMode: 'specific',
   selectedAudienceEntityIds: [],
   selectedAudienceMemberIds: [],
 };
@@ -95,6 +99,12 @@ export const GroupCalendarEditEventModal = ({
       objectMetadataItem.nameSingular ===
       CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
   );
+
+  const {
+    manageableEventEntities,
+    manageableEventEntityIds,
+    isReady: manageableEntitiesReady,
+  } = useManageableEventEntities();
 
   const { record: calendarEvent, loading: eventLoading } =
     useFindOneRecord<CalendarEventRecord>({
@@ -142,6 +152,7 @@ export const GroupCalendarEditEventModal = ({
   // Tracks the eventId we already hydrated for. Reset hydration if the modal
   // is reused for a different event (currently the parent unmounts/remounts but
   // this keeps the contract explicit and survives future refactors).
+  // oxlint-disable-next-line twenty/no-state-useref
   const hydratedForEventIdRef = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -149,6 +160,7 @@ export const GroupCalendarEditEventModal = ({
   const isHydrationDataReady =
     !eventLoading &&
     isDefined(calendarEvent) &&
+    manageableEntitiesReady &&
     (!isAudienceFeatureAvailable || !entityAudienceLoading) &&
     (!isPersonAudienceFeatureAvailable || !personAudienceLoading);
 
@@ -167,27 +179,14 @@ export const GroupCalendarEditEventModal = ({
       return;
     }
 
-    const initialEntityIds = existingEntityAudienceRows.map(
-      (row) => row.internalEntityId,
+    setFormState(
+      buildEditInitialFormState({
+        calendarEvent,
+        entityAudienceRows: existingEntityAudienceRows,
+        personAudienceRows: existingPersonAudienceRows,
+        manageableEventEntityIds,
+      }),
     );
-    const initialMemberIds = existingPersonAudienceRows.map(
-      (row) => row.workspaceMemberId,
-    );
-    const hasAnyAudience =
-      initialEntityIds.length > 0 || initialMemberIds.length > 0;
-
-    setFormState({
-      title: calendarEvent.title ?? '',
-      startsAt: formatDateTimeInputValue(new Date(calendarEvent.startsAt)),
-      endsAt: formatDateTimeInputValue(new Date(calendarEvent.endsAt)),
-      audienceMode:
-        calendarEvent.sharingScope ===
-          CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY || hasAnyAudience
-          ? 'specific'
-          : 'group',
-      selectedAudienceEntityIds: initialEntityIds,
-      selectedAudienceMemberIds: initialMemberIds,
-    });
     hydratedForEventIdRef.current = eventId;
   }, [
     eventId,
@@ -195,6 +194,7 @@ export const GroupCalendarEditEventModal = ({
     calendarEvent,
     existingEntityAudienceRows,
     existingPersonAudienceRows,
+    manageableEventEntityIds,
   ]);
 
   const { updateOneRecord } = useUpdateOneRecord();
@@ -212,13 +212,11 @@ export const GroupCalendarEditEventModal = ({
     event.preventDefault();
 
     if (
-      isAudienceFeatureAvailable &&
       formState.audienceMode === 'specific' &&
-      formState.selectedAudienceEntityIds.length === 0 &&
-      formState.selectedAudienceMemberIds.length === 0
+      formState.eventEntityIds.length === 0
     ) {
       enqueueErrorSnackBar({
-        message: t`Select at least one entity or person for the audience.`,
+        message: t`Select at least one entity this event belongs to.`,
       });
 
       return;
@@ -227,10 +225,10 @@ export const GroupCalendarEditEventModal = ({
     setIsSaving(true);
 
     try {
-      const sharingScope =
-        !isAudienceFeatureAvailable || formState.audienceMode === 'group'
-          ? CALENDAR_EVENT_SHARING_SCOPE_WORKSPACE_PUBLIC
-          : CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY;
+      const sharingScope = deriveSharingScopeFromAudienceMode({
+        audienceMode: formState.audienceMode,
+        isAudienceFeatureAvailable,
+      });
 
       await updateOneRecord({
         objectNameSingular: CoreObjectNameSingular.CalendarEvent,
@@ -243,19 +241,27 @@ export const GroupCalendarEditEventModal = ({
         },
       });
 
-      await persistAudience({
-        eventId,
-        desiredEntityIds:
+      if (isAudienceFeatureAvailable) {
+        const desiredEntityIds =
           formState.audienceMode === 'specific'
-            ? formState.selectedAudienceEntityIds
-            : [],
-        desiredMemberIds:
+            ? mergeEntityIds(
+                formState.eventEntityIds,
+                formState.selectedAudienceEntityIds,
+              )
+            : [];
+        const desiredMemberIds =
           formState.audienceMode === 'specific'
             ? formState.selectedAudienceMemberIds
-            : [],
-        existingEntityRows: existingEntityAudienceRows,
-        existingPersonRows: existingPersonAudienceRows,
-      });
+            : [];
+
+        await persistAudience({
+          eventId,
+          desiredEntityIds,
+          desiredMemberIds,
+          existingEntityRows: existingEntityAudienceRows,
+          existingPersonRows: existingPersonAudienceRows,
+        });
+      }
 
       enqueueSuccessSnackBar({ message: t`Event updated.` });
       await onSaved();
@@ -306,49 +312,57 @@ export const GroupCalendarEditEventModal = ({
 
   return (
     <>
-    <StyledBackdrop>
-      <StyledDialog onSubmit={handleSubmit}>
-        <StyledTitle>{t`Edit event`}</StyledTitle>
-        <GroupCalendarEventFormFields
-          state={formState}
-          onPatchState={patchFormState}
-          isAudienceFeatureAvailable={isAudienceFeatureAvailable}
-          isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
-        />
-        <StyledActions>
-          <Button
-            title={t`Delete`}
-            variant="secondary"
-            accent="danger"
-            onClick={handleDeleteClick}
-            disabled={isSaving || isDeleting}
+      <StyledBackdrop>
+        <StyledDialog onSubmit={handleSubmit}>
+          <StyledTitle>{t`Edit event`}</StyledTitle>
+          <GroupCalendarEventFormFields
+            state={formState}
+            onPatchState={patchFormState}
+            isAudienceFeatureAvailable={isAudienceFeatureAvailable}
+            isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
+            manageableEventEntities={manageableEventEntities}
+            eventEntitiesEmptyHint={t`You don't manage any entity that owns this event — only audience grants you control are editable.`}
           />
-          <StyledRightActions>
+          <StyledActions>
             <Button
-              title={t`Cancel`}
-              variant="tertiary"
-              onClick={onClose}
-              disabled={isSaving || isDeleting}
-            />
-            <Button
-              title={t`Save`}
+              title={t`Delete`}
               variant="secondary"
-              type="submit"
+              accent="danger"
+              onClick={handleDeleteClick}
               disabled={isSaving || isDeleting}
             />
-          </StyledRightActions>
-        </StyledActions>
-      </StyledDialog>
-    </StyledBackdrop>
-    <ConfirmationModal
-      modalInstanceId={DELETE_CALENDAR_EVENT_MODAL_ID}
-      title={t`Delete this event?`}
-      subtitle={t`This action cannot be undone. Audience memberships will be removed too.`}
-      confirmButtonText={t`Delete`}
-      confirmButtonAccent="danger"
-      onConfirmClick={handleDeleteConfirmed}
-      loading={isDeleting}
-    />
+            <StyledRightActions>
+              <Button
+                title={t`Cancel`}
+                variant="tertiary"
+                onClick={onClose}
+                disabled={isSaving || isDeleting}
+              />
+              <Button
+                title={t`Save`}
+                variant="secondary"
+                type="submit"
+                disabled={
+                  isSaving ||
+                  isDeleting ||
+                  (formState.audienceMode === 'specific' &&
+                    formState.eventEntityIds.length === 0 &&
+                    manageableEventEntities.length > 0)
+                }
+              />
+            </StyledRightActions>
+          </StyledActions>
+        </StyledDialog>
+      </StyledBackdrop>
+      <ConfirmationModal
+        modalInstanceId={DELETE_CALENDAR_EVENT_MODAL_ID}
+        title={t`Delete this event?`}
+        subtitle={t`This action cannot be undone. Audience memberships will be removed too.`}
+        confirmButtonText={t`Delete`}
+        confirmButtonAccent="danger"
+        onConfirmClick={handleDeleteConfirmed}
+        loading={isDeleting}
+      />
     </>
   );
 };

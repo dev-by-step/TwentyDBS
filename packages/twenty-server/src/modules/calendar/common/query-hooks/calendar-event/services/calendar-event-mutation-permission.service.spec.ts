@@ -1,8 +1,10 @@
 import { faker } from '@faker-js/faker';
+import { FindOperator } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { createContextAwareOrmManagerMock } from 'src/engine/twenty-orm/global-workspace-datasource/__test-utils__/create-context-aware-orm-manager-mock';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { ENTITY_MANAGER_ROLE_LABEL } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
@@ -936,6 +938,278 @@ describe('CalendarEventMutationPermissionService', () => {
       service.assertBulkMutationAllowed(authContext, 'calendarEvent'),
     ).rejects.toMatchObject({
       code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  describe('workspace-context wrapping (regression guards)', () => {
+    // These tests exercise the real production constraint that calls to
+    // `globalWorkspaceOrmManager.getRepository(...)` MUST be wrapped in
+    // `executeInWorkspaceContext(...)`. The context-aware mock throws the
+    // same error as production whenever the contract is broken, so any
+    // future refactor that drops the wrapper around a workspace query
+    // (regression of the calendar-event creation crash) will fail here
+    // instead of paging us in prod.
+    const buildContextAwareService = ({
+      roleLabel = ENTITY_MANAGER_ROLE_LABEL,
+      roleUniversalIdentifier = STANDARD_ROLE.entityManager.universalIdentifier,
+      canAccessFullAdminPanel = false,
+    }: {
+      roleLabel?: string;
+      roleUniversalIdentifier?: string;
+      canAccessFullAdminPanel?: boolean;
+    } = {}) => {
+      const workspaceId = faker.string.uuid();
+      const entityId = faker.string.uuid();
+      const userId = faker.string.uuid();
+      const userWorkspaceId = faker.string.uuid();
+      const workspaceMemberId = faker.string.uuid();
+      const calendarChannelId = faker.string.uuid();
+      const connectedAccountId = faker.string.uuid();
+      const ownerUserId = faker.string.uuid();
+      const ownerUserWorkspaceId = faker.string.uuid();
+      const ownerWorkspaceMemberId = faker.string.uuid();
+
+      const calendarEventRepository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: faker.string.uuid(),
+          createdBy: { workspaceMemberId },
+        }),
+      };
+      const associationRepository = {
+        find: jest.fn().mockResolvedValue([{ calendarChannelId }]),
+        findOne: jest.fn().mockResolvedValue({ calendarChannelId }),
+      };
+      const participantRepository = {
+        findOne: jest.fn().mockResolvedValue({
+          calendarEventId: faker.string.uuid(),
+        }),
+      };
+      const workspaceMemberRepository = {
+        find: jest
+          .fn()
+          .mockResolvedValue([
+            { id: ownerWorkspaceMemberId, userId: ownerUserId },
+          ]),
+      };
+
+      const { manager } = createContextAwareOrmManagerMock({
+        repositoryFactory: async (_workspaceId, objectName) => {
+          if (objectName === 'calendarEvent') return calendarEventRepository;
+          if (objectName === 'calendarChannelEventAssociation')
+            return associationRepository;
+          if (objectName === 'calendarEventParticipant')
+            return participantRepository;
+          if (objectName === 'workspaceMember')
+            return workspaceMemberRepository;
+
+          return { findOne: jest.fn(), find: jest.fn() };
+        },
+      });
+
+      const userRoleService = {
+        getRolesByUserWorkspaces: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              userWorkspaceId,
+              [
+                {
+                  label: roleLabel,
+                  universalIdentifier: roleUniversalIdentifier,
+                },
+              ],
+            ],
+          ]),
+        ),
+      };
+
+      const calendarChannelRepository = {
+        find: jest
+          .fn()
+          .mockResolvedValue([{ id: calendarChannelId, connectedAccountId }]),
+      };
+      const connectedAccountRepository = {
+        find: jest
+          .fn()
+          .mockResolvedValue([
+            { id: connectedAccountId, userWorkspaceId: ownerUserWorkspaceId },
+          ]),
+      };
+      const userWorkspaceRepository = {
+        find: jest
+          .fn()
+          .mockResolvedValue([
+            { id: ownerUserWorkspaceId, userId: ownerUserId },
+          ]),
+      };
+      const userRepository = {
+        find: jest.fn().mockResolvedValue([{ id: ownerUserId, entityId }]),
+      };
+
+      const workspaceMemberInternalEntityService = {
+        resolveContext: jest.fn().mockResolvedValue({
+          currentEntityId: entityId,
+          activeEntityId: entityId,
+          entityIds: [entityId],
+        }),
+        resolveContextsByWorkspaceMemberIds: jest.fn().mockImplementation(
+          async ({ workspaceMemberIds }: { workspaceMemberIds: string[] }) =>
+            new Map(
+              workspaceMemberIds.map((id) => [
+                id,
+                {
+                  currentEntityId: entityId,
+                  activeEntityId: entityId,
+                  entityIds: [entityId],
+                },
+              ]),
+            ),
+        ),
+      };
+
+      const service = new CalendarEventMutationPermissionService(
+        manager as unknown as GlobalWorkspaceOrmManager,
+        userRoleService as unknown as UserRoleService,
+        calendarChannelRepository as any,
+        connectedAccountRepository as any,
+        userWorkspaceRepository as any,
+        userRepository as any,
+        workspaceMemberInternalEntityService as unknown as WorkspaceMemberInternalEntityService,
+      );
+
+      const authContext: WorkspaceAuthContext = {
+        type: 'user',
+        workspace: { id: workspaceId },
+        userWorkspaceId,
+        workspaceMemberId,
+        workspaceMember: { id: workspaceMemberId },
+        user: {
+          id: userId,
+          entityId,
+          canAccessFullAdminPanel,
+        },
+      } as WorkspaceAuthContext;
+
+      return { service, authContext, calendarChannelId };
+    };
+
+    it('wraps every workspace query when validating a calendarEvent create', async () => {
+      const { service, authContext } = buildContextAwareService();
+
+      await expect(
+        service.validateCreatePayload(authContext, 'calendarEvent', {
+          data: { title: 'Test' },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('wraps every workspace query when validating a calendarChannelEventAssociation create', async () => {
+      const { service, authContext, calendarChannelId } =
+        buildContextAwareService();
+
+      await expect(
+        service.validateCreatePayload(
+          authContext,
+          'calendarChannelEventAssociation',
+          { data: { calendarChannelId } },
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('wraps every workspace query when validating a calendarEventParticipant create', async () => {
+      const { service, authContext } = buildContextAwareService();
+
+      await expect(
+        service.validateCreatePayload(authContext, 'calendarEventParticipant', {
+          data: { calendarEventId: faker.string.uuid() },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('wraps every workspace query when asserting a single mutation on a calendarEvent', async () => {
+      const { service, authContext } = buildContextAwareService();
+
+      await expect(
+        service.assertSingleMutationAllowed(
+          authContext,
+          'calendarEvent',
+          faker.string.uuid(),
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it('wraps every workspace query when asserting a single mutation on a calendarEventParticipant', async () => {
+      const { service, authContext } = buildContextAwareService();
+
+      await expect(
+        service.assertSingleMutationAllowed(
+          authContext,
+          'calendarEventParticipant',
+          faker.string.uuid(),
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('workspace-repository filter syntax (regression guards)', () => {
+    // Catches the "invalid input syntax for type uuid: {in:[...]}" crash:
+    // workspace repos returned by `globalWorkspaceOrmManager.getRepository`
+    // expose TypeORM's `.find()` API, which expects `In(ids)` rather than the
+    // GraphQL-style `{ in: ids }` filter object. Using the wrong form
+    // serialises the object as a JSON literal in the SQL query.
+    it('queries workspace members with a TypeORM In operator (not a raw { in: [...] } filter)', async () => {
+      const {
+        service,
+        authContext,
+        calendarEventRepository,
+        associationRepository,
+        calendarChannelRepository,
+        connectedAccountRepository,
+        userWorkspaceRepository,
+        userRepository,
+        workspaceMemberRepository,
+      } = buildServiceContext({
+        roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+        roleUniversalIdentifier:
+          STANDARD_ROLE.entityManager.universalIdentifier,
+      });
+
+      calendarEventRepository.findOne.mockResolvedValue({
+        id: 'calendar-event-1',
+      });
+      associationRepository.find.mockResolvedValue([
+        { calendarChannelId: 'calendar-channel-1' },
+      ]);
+      calendarChannelRepository.find.mockResolvedValue([
+        { id: 'calendar-channel-1', connectedAccountId: 'connected-account-1' },
+      ]);
+      connectedAccountRepository.find.mockResolvedValue([
+        { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+      ]);
+      userWorkspaceRepository.find.mockResolvedValue([
+        { id: 'user-workspace-1', userId: 'owner-user-1' },
+      ]);
+      userRepository.find.mockResolvedValue([
+        { id: 'owner-user-1', entityId: faker.string.uuid() },
+      ]);
+      workspaceMemberRepository.find.mockResolvedValue([
+        { id: 'workspace-member-1', userId: 'owner-user-1' },
+      ]);
+
+      await service
+        .assertSingleMutationAllowed(
+          authContext,
+          'calendarEvent',
+          faker.string.uuid(),
+        )
+        .catch(() => undefined);
+
+      expect(workspaceMemberRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: expect.any(FindOperator),
+          }),
+        }),
+      );
     });
   });
 });

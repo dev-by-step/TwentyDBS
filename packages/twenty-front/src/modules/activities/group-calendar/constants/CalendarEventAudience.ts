@@ -1,3 +1,4 @@
+/* oxlint-disable twenty/max-consts-per-file */
 import {
   CALENDAR_EVENT_SHARING_SCOPE,
   MULTI_ENTITY_OBJECT_NAME,

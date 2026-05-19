@@ -418,6 +418,55 @@ export class TimelineCalendarEventService {
       return new Map();
     }
 
+    const calendarEventEntityAudienceRepository =
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(workspaceId, 'calendarEventEntityAudience', {
+        shouldBypassPermissionChecks: true,
+      });
+    const calendarEventEntityAudiences =
+      (await calendarEventEntityAudienceRepository.find({
+        where: {
+          calendarEventId: In(events.map((event) => event.id)),
+        },
+      })) ?? [];
+    const audienceEntityIdsByCalendarEventId = new Map<string, string[]>();
+
+    for (const audience of calendarEventEntityAudiences.sort(
+      (firstAudience, secondAudience) =>
+        new Date(
+          (firstAudience.createdAt as string | Date | undefined) ?? 0,
+        ).getTime() -
+        new Date(
+          (secondAudience.createdAt as string | Date | undefined) ?? 0,
+        ).getTime(),
+    )) {
+      const calendarEventId = this.extractStringField(
+        audience,
+        'calendarEventId',
+      );
+      const internalEntityId = this.extractStringField(
+        audience,
+        'internalEntityId',
+      );
+
+      if (!isDefined(calendarEventId) || !isDefined(internalEntityId)) {
+        continue;
+      }
+
+      const audienceEntityIds =
+        audienceEntityIdsByCalendarEventId.get(calendarEventId) ?? [];
+
+      if (!audienceEntityIds.includes(internalEntityId)) {
+        audienceEntityIds.push(internalEntityId);
+      }
+
+      audienceEntityIdsByCalendarEventId.set(
+        calendarEventId,
+        audienceEntityIds,
+      );
+    }
+
     const connectedAccountIds = [
       ...new Set(
         calendarChannels
@@ -542,9 +591,12 @@ export class TimelineCalendarEventService {
 
     const ownerEntityIds = [
       ...new Set(
-        [...ownerEntityContexts.values()]
-          .map((context) => context.currentEntityId)
-          .filter(isDefined),
+        [
+          ...[...audienceEntityIdsByCalendarEventId.values()].flat(),
+          ...[...ownerEntityContexts.values()].map(
+            (context) => context.currentEntityId,
+          ),
+        ].filter(isDefined),
       ),
     ];
 
@@ -614,6 +666,29 @@ export class TimelineCalendarEventService {
     return new Map(
       events
         .map((event) => {
+          const audienceEntityIds = audienceEntityIdsByCalendarEventId.get(
+            event.id,
+          );
+          const audienceEntityBadges =
+            audienceEntityIds
+              ?.map((entityId) => entityBadgeById.get(entityId))
+              .filter(isDefined) ?? [];
+
+          if (audienceEntityBadges.length > 0) {
+            return [
+              event.id,
+              {
+                id: audienceEntityBadges[0].id,
+                color: audienceEntityBadges[0].color,
+                name:
+                  audienceEntityBadges
+                    .map((badge) => badge.name)
+                    .filter(isDefined)
+                    .join(', ') || null,
+              } satisfies InternalEntityBadgeInfo,
+            ] as const;
+          }
+
           const eventEntityBadge = event.calendarChannelEventAssociations
             .map((association) =>
               ownerEntityBadgeByCalendarChannelId.get(

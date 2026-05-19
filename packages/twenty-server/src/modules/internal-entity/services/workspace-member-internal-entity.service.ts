@@ -5,6 +5,7 @@ import { In } from 'typeorm';
 
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 
 const WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME =
@@ -106,6 +107,7 @@ export class WorkspaceMemberInternalEntityService {
             },
           });
         },
+        buildSystemAuthContext(workspaceId),
       );
 
     const entityIdsByWorkspaceMemberId = new Map<string, string[]>();

@@ -11,7 +11,9 @@ import { type TimelineCalendarEvent } from '~/generated/graphql';
 type CalendarDayCardContentProps = {
   calendarEvents: TimelineCalendarEvent[];
   divider?: boolean;
-  renderEventActions?: (calendarEvent: TimelineCalendarEvent) => React.ReactNode;
+  renderEventActions?: (
+    calendarEvent: TimelineCalendarEvent,
+  ) => React.ReactNode;
 };
 
 const StyledCardContentContainer = styled.div`
