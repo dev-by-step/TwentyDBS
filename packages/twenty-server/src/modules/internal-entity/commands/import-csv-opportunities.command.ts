@@ -9,13 +9,17 @@ import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metada
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import {
+  buildUnknownInternalEntityWarning,
+  IMPORT_LOCK_PREFIX,
+} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
+import { InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
+import {
   ImportCsvOpportunitiesParserService,
   type CsvOpportunityRow,
 } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import {
   buildWorkspaceSqlTableName,
   INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
-  resolveInternalEntitySeedId,
   resolveObjectTableNameOrThrow,
   validateUuidOrThrow,
 } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
@@ -23,9 +27,6 @@ import {
 type ImportableCsvOpportunityRow = CsvOpportunityRow & {
   internalEntityId: string;
 };
-
-const IMPORT_LOCK_PREFIX = 'import-csv-opportunities';
-
 @Command({
   name: 'import-csv-opportunities',
   description:
@@ -35,6 +36,7 @@ export class ImportCsvOpportunitiesCommand extends ActiveOrSuspendedWorkspaceCom
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly objectMetadataService: ObjectMetadataService,
+    private readonly internalEntityConfigurationService: InternalEntityConfigurationService,
     private readonly importCsvOpportunitiesParserService: ImportCsvOpportunitiesParserService,
   ) {
     super(workspaceIteratorService);
@@ -136,11 +138,17 @@ export class ImportCsvOpportunitiesCommand extends ActiveOrSuspendedWorkspaceCom
     const importableRows: ImportableCsvOpportunityRow[] = [];
 
     for (const row of rows) {
-      const internalEntityId = resolveInternalEntitySeedId(row.entityName);
+      const internalEntityId =
+        this.internalEntityConfigurationService.resolveInternalEntityId(
+          row.entityName,
+        );
 
       if (!isDefined(internalEntityId)) {
         this.logger.warn(
-          `InternalEntity ${row.entityName ?? '<empty>'} introuvable, opportunité ${row.id} ignorée`,
+          buildUnknownInternalEntityWarning({
+            entityName: row.entityName,
+            opportunityId: row.id,
+          }),
         );
 
         continue;
