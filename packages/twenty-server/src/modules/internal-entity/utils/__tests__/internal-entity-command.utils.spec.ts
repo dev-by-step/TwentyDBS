@@ -1,21 +1,16 @@
-import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
+import { DEFAULT_INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
 import {
   buildWorkspaceSqlTableName,
   quoteSqlIdentifierOrThrow,
-  resolveInternalEntitySeedId,
   resolveObjectTableNameOrThrow,
   validateUuidOrThrow,
 } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
+import { resolveInternalEntitySeedId } from 'src/modules/internal-entity/utils/internal-entity-seeds.util';
 
 const WORKSPACE_ID = '550e8400-e29b-41d4-a716-446655440000';
-const CUSTOM_ENTITY_ID = '550e8400-e29b-41d4-a716-446655440099';
-const CUSTOM_ENTITY_KEY = 'TEST_INTERNAL_ENTITY_KEY';
 
 describe('internal-entity-command.utils', () => {
-  afterEach(() => {
-    delete INTERNAL_ENTITY_SEEDS[CUSTOM_ENTITY_KEY];
-  });
-
   describe('validateUuidOrThrow', () => {
     it('should normalize a valid UUID', () => {
       expect(
@@ -48,26 +43,50 @@ describe('internal-entity-command.utils', () => {
 
   describe('resolveInternalEntitySeedId', () => {
     it('should resolve an internal entity by seed key', () => {
-      expect(resolveInternalEntitySeedId('WEKNOW')).toBe(
-        INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+      expect(
+        resolveInternalEntitySeedId('WEKNOW', DEFAULT_INTERNAL_ENTITY_SEEDS),
+      ).toBe(
+        DEFAULT_INTERNAL_ENTITY_SEEDS.find((seed) => seed.name === 'WEKNOW')
+          ?.id,
       );
     });
 
     it('should resolve an internal entity by seed name', () => {
-      INTERNAL_ENTITY_SEEDS[CUSTOM_ENTITY_KEY] = {
-        id: CUSTOM_ENTITY_ID,
+      const customInternalEntitySeed = buildInternalEntitySeed({
         name: 'Custom Entity Display Name',
         color: '#000000',
-      };
+      });
 
-      expect(resolveInternalEntitySeedId('Custom Entity Display Name')).toBe(
-        CUSTOM_ENTITY_ID,
-      );
+      expect(
+        resolveInternalEntitySeedId('Custom Entity Display Name', [
+          ...DEFAULT_INTERNAL_ENTITY_SEEDS,
+          customInternalEntitySeed,
+        ]),
+      ).toBe(customInternalEntitySeed.id);
+    });
+
+    it('should resolve an internal entity by alias', () => {
+      const customInternalEntitySeed = buildInternalEntitySeed({
+        name: 'Custom Entity Display Name',
+        color: '#000000',
+        aliases: ['Legacy Entity Name'],
+      });
+
+      expect(
+        resolveInternalEntitySeedId('legacy entity name', [
+          ...DEFAULT_INTERNAL_ENTITY_SEEDS,
+          customInternalEntitySeed,
+        ]),
+      ).toBe(customInternalEntitySeed.id);
     });
 
     it('should return null for missing entity names', () => {
-      expect(resolveInternalEntitySeedId(null)).toBeNull();
-      expect(resolveInternalEntitySeedId('UNKNOWN')).toBeNull();
+      expect(
+        resolveInternalEntitySeedId(null, DEFAULT_INTERNAL_ENTITY_SEEDS),
+      ).toBeNull();
+      expect(
+        resolveInternalEntitySeedId('UNKNOWN', DEFAULT_INTERNAL_ENTITY_SEEDS),
+      ).toBeNull();
     });
   });
 

@@ -6,6 +6,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { parse } from 'papaparse';
 import { isDefined } from 'twenty-shared/utils';
 
+import {
+  buildCsvDuplicateOpportunityIdError,
+  buildCsvEmptyOrInvalidError,
+  buildCsvFileNotFoundError,
+  buildCsvFileTooLargeError,
+  buildCsvInvalidError,
+  buildCsvMissingRequiredHeadersError,
+  buildCsvRequiredValueMissingError,
+  buildCsvRowCountTooLargeError,
+  CSV_OPPORTUNITY_REQUIRED_HEADERS,
+  MAX_CSV_FILE_SIZE_BYTES,
+  MAX_CSV_OPPORTUNITY_ROWS,
+} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
 import { validateUuidOrThrow } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 export type CsvOpportunityRow = {
@@ -21,9 +34,6 @@ export type CsvOpportunityRow = {
 
 type RawCsvOpportunityRow = Record<string, string | undefined>;
 
-const MAX_CSV_FILE_SIZE_BYTES = 1024 * 1024;
-const MAX_CSV_OPPORTUNITY_ROWS = 100;
-
 @Injectable()
 export class ImportCsvOpportunitiesParserService {
   private readonly logger = new Logger(
@@ -35,9 +45,7 @@ export class ImportCsvOpportunitiesParserService {
     const csvStats = await stat(csvPath);
 
     if (csvStats.size > MAX_CSV_FILE_SIZE_BYTES) {
-      throw new Error(
-        `CSV trop volumineux: ${csvStats.size} octets (max ${MAX_CSV_FILE_SIZE_BYTES})`,
-      );
+      throw new Error(buildCsvFileTooLargeError(csvStats.size));
     }
 
     const csvContent = await readFile(csvPath, 'utf8');
@@ -53,31 +61,27 @@ export class ImportCsvOpportunitiesParserService {
         .map((error) => `${error.message} (ligne ${error.row ?? 'n/a'})`)
         .join(', ');
 
-      throw new Error(`CSV invalide: ${errors}`);
+      throw new Error(buildCsvInvalidError(errors));
     }
 
     const headers = parsed.meta.fields ?? [];
 
     if (headers.length === 0 || parsed.data.length === 0) {
-      throw new Error(`CSV vide ou invalide: ${csvPath}`);
+      throw new Error(buildCsvEmptyOrInvalidError(csvPath));
     }
 
-    const missingRequiredHeaders = ['Id', 'Nom', 'Société', 'Étape'].filter(
+    const missingRequiredHeaders = CSV_OPPORTUNITY_REQUIRED_HEADERS.filter(
       (header) => !headers.includes(header),
     );
 
     if (missingRequiredHeaders.length > 0) {
       throw new Error(
-        `Colonnes obligatoires manquantes dans le CSV: ${missingRequiredHeaders.join(
-          ', ',
-        )}`,
+        buildCsvMissingRequiredHeadersError([...missingRequiredHeaders]),
       );
     }
 
     if (parsed.data.length > MAX_CSV_OPPORTUNITY_ROWS) {
-      throw new Error(
-        `CSV trop volumineux: ${parsed.data.length} lignes (max ${MAX_CSV_OPPORTUNITY_ROWS})`,
-      );
+      throw new Error(buildCsvRowCountTooLargeError(parsed.data.length));
     }
 
     const rows = parsed.data.map((row, index) =>
@@ -122,9 +126,7 @@ export class ImportCsvOpportunitiesParserService {
     const value = row[header]?.trim();
 
     if (!isDefined(value) || value.length === 0) {
-      throw new Error(
-        `Valeur CSV obligatoire manquante: ${header} ligne ${rowNumber}`,
-      );
+      throw new Error(buildCsvRequiredValueMissingError(header, rowNumber));
     }
 
     return value;
@@ -179,7 +181,7 @@ export class ImportCsvOpportunitiesParserService {
 
     for (const row of rows) {
       if (seenOpportunityIds.has(row.id)) {
-        throw new Error(`Id opportunité dupliqué dans le CSV: ${row.id}`);
+        throw new Error(buildCsvDuplicateOpportunityIdError(row.id));
       }
 
       seenOpportunityIds.add(row.id);
@@ -208,7 +210,7 @@ export class ImportCsvOpportunitiesParserService {
       }
     }
 
-    throw new Error('docs/opportunity.csv introuvable');
+    throw new Error(buildCsvFileNotFoundError());
   }
 
   private formatErrorMessage(error: unknown): string {

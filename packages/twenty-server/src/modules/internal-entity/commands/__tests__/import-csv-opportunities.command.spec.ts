@@ -1,12 +1,20 @@
+import { randomUUID } from 'node:crypto';
+
 import { type QueryRunner } from 'typeorm';
 
+import {
+  buildCsvOpportunityRow,
+  buildInternalEntitySeed,
+} from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
-import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
-import { buildWorkspaceRecord } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { ImportCsvOpportunitiesCommand } from 'src/modules/internal-entity/commands/import-csv-opportunities.command';
-import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import {
+  buildUnknownInternalEntityWarning,
+  IMPORT_LOCK_PREFIX,
+} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
+import { type InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
 import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import { INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
@@ -65,20 +73,31 @@ const setCommandLogger = (command: unknown): MockLogger => {
 
 describe('ImportCsvOpportunitiesCommand', () => {
   const buildCommandContext = () => {
-    const workspace = buildWorkspaceRecord();
+    const workspaceId = randomUUID();
+    const configuredInternalEntity = buildInternalEntitySeed({
+      name: 'WEKNOW',
+    });
     const opportunityRow = buildCsvOpportunityRow({
-      name: 'Deal A',
-      entityName: 'WEKNOW',
+      entityName: configuredInternalEntity.name,
     });
     const unknownEntityRow = buildCsvOpportunityRow({
       entityName: 'UNKNOWN',
     });
-
     const objectMetadataService = {
       findOneWithinWorkspace: jest.fn().mockResolvedValue({
         nameSingular: 'opportunity',
         isCustom: false,
       }),
+    };
+    const internalEntityConfigurationService = {
+      getInternalEntitySeeds: jest
+        .fn()
+        .mockReturnValue([configuredInternalEntity]),
+      resolveInternalEntityId: jest.fn((entityName: string | null) =>
+        entityName === configuredInternalEntity.name
+          ? configuredInternalEntity.id
+          : null,
+      ),
     };
     const importCsvOpportunitiesParserService = {
       readCsvOpportunities: jest
@@ -103,21 +122,24 @@ describe('ImportCsvOpportunitiesCommand', () => {
     const command = new ImportCsvOpportunitiesCommand(
       {} as WorkspaceIteratorService,
       objectMetadataService as unknown as ObjectMetadataService,
+      internalEntityConfigurationService as unknown as InternalEntityConfigurationService,
       importCsvOpportunitiesParserService as unknown as ImportCsvOpportunitiesParserService,
     );
     const logger = setCommandLogger(command);
 
     return {
       command,
+      configuredInternalEntity,
       dataSource: dataSource as unknown as GlobalWorkspaceDataSource,
       dataSourceMock: dataSource,
+      internalEntityConfigurationService,
       importCsvOpportunitiesParserService,
       logger,
-      objectMetadataService,
       opportunityRow,
+      objectMetadataService,
       queryRunner,
       unknownEntityRow,
-      workspaceId: workspace.id,
+      workspaceId,
     };
   };
 
@@ -126,6 +148,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
       command,
       dataSource,
       dataSourceMock,
+      configuredInternalEntity,
       logger,
       objectMetadataService,
       opportunityRow,
@@ -168,20 +191,23 @@ describe('ImportCsvOpportunitiesCommand', () => {
     );
 
     expect(advisoryLockCall?.[1]).toStrictEqual([
-      `import-csv-opportunities:${workspaceId}`,
+      `${IMPORT_LOCK_PREFIX}:${workspaceId}`,
     ]);
     expect(insertCall?.[0]).toContain('ON CONFLICT (id) DO NOTHING');
     expect(insertCall?.[0]).toContain('RETURNING id');
     expect(insertCall?.[1]).toStrictEqual([
       opportunityRow.id,
-      'Deal A',
-      INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+      opportunityRow.name,
+      configuredInternalEntity.id,
     ]);
     expect(insertCall?.[2]).toBe(queryRunner);
     expect(insertCall?.[3]).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
     expect(verificationCall?.[1]).toStrictEqual([[opportunityRow.id]]);
     expect(logger.warn).toHaveBeenCalledWith(
-      `InternalEntity UNKNOWN introuvable, opportunité ${unknownEntityRow.id} ignorée`,
+      buildUnknownInternalEntityWarning({
+        entityName: unknownEntityRow.entityName,
+        opportunityId: unknownEntityRow.id,
+      }),
     );
   });
 

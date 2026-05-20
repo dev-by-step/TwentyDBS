@@ -17,14 +17,15 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
 import {
-  INTERNAL_ENTITY_SEEDS,
-  type InternalEntitySeed,
-} from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+  buildMissingInternalEntityAfterMigrationError,
+  buildUnknownInternalEntitiesCsvWarning,
+} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
+import { type InternalEntitySeed } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import { InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
 import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import {
   buildWorkspaceSqlTableName,
   INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
-  resolveInternalEntitySeedId,
   resolveObjectTableNameOrThrow,
   validateUuidOrThrow,
 } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
@@ -56,6 +57,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly internalEntityConfigurationService: InternalEntityConfigurationService,
     private readonly importCsvOpportunitiesParserService: ImportCsvOpportunitiesParserService,
   ) {
     super(workspaceIteratorService);
@@ -387,10 +389,11 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   ): Promise<void> {
     this.logger.log('Seed des InternalEntity...');
 
-    const seeds = Object.values(INTERNAL_ENTITY_SEEDS);
+    const seeds =
+      this.internalEntityConfigurationService.getInternalEntitySeeds();
 
     if (seeds.length === 0) {
-      this.logger.warn('Aucune InternalEntity configurée dans les seeds');
+      this.logger.warn('Aucune InternalEntity configurée');
 
       return;
     }
@@ -453,7 +456,10 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       await this.importCsvOpportunitiesParserService.readCsvOpportunities();
 
     for (const row of csvRows) {
-      const entityId = resolveInternalEntitySeedId(row.entityName);
+      const entityId =
+        this.internalEntityConfigurationService.resolveInternalEntityId(
+          row.entityName,
+        );
 
       if (!isDefined(entityId)) {
         skippedCount += 1;
@@ -483,11 +489,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
 
     if (unresolvedEntityNames.size > 0) {
       this.logger.warn(
-        `InternalEntity inconnue(s) dans le CSV: ${[
-          ...unresolvedEntityNames,
-        ].join(
-          ', ',
-        )}. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.`,
+        buildUnknownInternalEntitiesCsvWarning([...unresolvedEntityNames]),
       );
     }
   }
@@ -704,9 +706,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const nullCount = parseInt(result?.[0]?.count ?? '0', 10);
 
     if (nullCount > 0) {
-      throw new Error(
-        `${nullCount} opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.`,
-      );
+      throw new Error(buildMissingInternalEntityAfterMigrationError(nullCount));
     }
 
     this.logger.log(
