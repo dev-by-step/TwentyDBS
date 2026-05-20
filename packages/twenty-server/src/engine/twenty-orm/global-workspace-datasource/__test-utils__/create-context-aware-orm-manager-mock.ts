@@ -43,7 +43,11 @@ export const createContextAwareOrmManagerMock = ({
         throw new Error(WORKSPACE_CONTEXT_REQUIRED_ERROR);
       }
 
-      return repositoryFactory(workspaceId, objectMetadataName, permissionOptions);
+      return repositoryFactory(
+        workspaceId,
+        objectMetadataName,
+        permissionOptions,
+      );
     },
   );
 

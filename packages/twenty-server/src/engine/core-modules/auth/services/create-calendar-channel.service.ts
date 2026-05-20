@@ -17,6 +17,7 @@ export type CreateCalendarChannelInput = {
   connectedAccountId: string;
   handle: string;
   calendarVisibility?: CalendarChannelVisibility;
+  visibleInternalEntityIds?: string[];
   skipMessageChannelConfiguration?: boolean;
   transactionManager: EntityManager;
 };
@@ -35,6 +36,7 @@ export class CreateCalendarChannelService {
       connectedAccountId,
       handle,
       calendarVisibility,
+      visibleInternalEntityIds,
       skipMessageChannelConfiguration,
       transactionManager,
     } = input;
@@ -51,6 +53,7 @@ export class CreateCalendarChannelService {
           handle,
           visibility:
             calendarVisibility || CalendarChannelVisibility.SHARE_EVERYTHING,
+          visibleInternalEntityIds: visibleInternalEntityIds ?? [],
           syncStatus: skipMessageChannelConfiguration
             ? CalendarChannelSyncStatus.ONGOING
             : CalendarChannelSyncStatus.NOT_SYNCED,

@@ -28,7 +28,9 @@ describe('groupCalendarFormUtils', () => {
     });
 
     it('maps ENTITY_ONLY to specific', () => {
-      expect(deriveAudienceModeFromSharingScope('ENTITY_ONLY')).toBe('specific');
+      expect(deriveAudienceModeFromSharingScope('ENTITY_ONLY')).toBe(
+        'specific',
+      );
     });
 
     it('falls back to specific for null or unknown scopes', () => {
@@ -82,9 +84,7 @@ describe('groupCalendarFormUtils', () => {
           { id: 'row-1', internalEntityId: 'entity-mine' },
           { id: 'row-2', internalEntityId: 'entity-other' },
         ],
-        personAudienceRows: [
-          { id: 'p-1', workspaceMemberId: 'member-1' },
-        ],
+        personAudienceRows: [{ id: 'p-1', workspaceMemberId: 'member-1' }],
         manageableEventEntityIds: new Set(['entity-mine']),
       });
 

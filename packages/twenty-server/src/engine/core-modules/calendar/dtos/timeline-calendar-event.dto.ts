@@ -25,6 +25,18 @@ export class LinksMetadataDTO {
   secondaryLinks: LinkMetadataDTO[] | null;
 }
 
+@ObjectType('TimelineCalendarEventResponsibleEntity')
+export class TimelineCalendarEventResponsibleEntityDTO {
+  @Field(() => UUIDScalarType)
+  id: string;
+
+  @Field(() => String, { nullable: true })
+  name: string | null;
+
+  @Field(() => String, { nullable: true })
+  color: string | null;
+}
+
 @ObjectType('TimelineCalendarEvent')
 export class TimelineCalendarEventDTO {
   @Field(() => UUIDScalarType)
@@ -71,4 +83,7 @@ export class TimelineCalendarEventDTO {
 
   @Field(() => UUIDScalarType, { nullable: true })
   ownerEntityId: string | null;
+
+  @Field(() => [TimelineCalendarEventResponsibleEntityDTO])
+  responsibleEntities: TimelineCalendarEventResponsibleEntityDTO[];
 }

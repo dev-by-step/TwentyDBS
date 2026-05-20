@@ -5,6 +5,7 @@ export const UPDATE_CALENDAR_CHANNEL = gql`
     updateCalendarChannel(input: $input) {
       id
       visibility
+      visibleInternalEntityIds
       isContactAutoCreationEnabled
       contactAutoCreationPolicy
     }

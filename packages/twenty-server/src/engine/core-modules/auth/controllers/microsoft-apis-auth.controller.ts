@@ -79,6 +79,7 @@ export class MicrosoftAPIsAuthController {
         redirectLocation,
         calendarVisibility,
         messageVisibility,
+        visibleInternalEntityIds,
         skipMessageChannelConfiguration,
       } = user;
 
@@ -115,6 +116,7 @@ export class MicrosoftAPIsAuthController {
           refreshToken,
           calendarVisibility,
           messageVisibility,
+          visibleInternalEntityIds,
           skipMessageChannelConfiguration,
         });
 

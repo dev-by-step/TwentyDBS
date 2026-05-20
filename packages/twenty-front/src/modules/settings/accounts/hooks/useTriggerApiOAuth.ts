@@ -36,12 +36,14 @@ export const useTriggerApisOAuth = () => {
         redirectLocation,
         messageVisibility,
         calendarVisibility,
+        visibleInternalEntityIds,
         loginHint,
         skipMessageChannelConfiguration,
       }: {
         redirectLocation?: AppPath | string;
         messageVisibility?: MessageChannelVisibility;
         calendarVisibility?: CalendarChannelVisibility;
+        visibleInternalEntityIds?: string[];
         loginHint?: string;
         skipMessageChannelConfiguration?: boolean;
       } = {},
@@ -61,6 +63,12 @@ export const useTriggerApisOAuth = () => {
 
       params += calendarVisibility
         ? `&calendarVisibility=${calendarVisibility}`
+        : '';
+
+      params += visibleInternalEntityIds?.length
+        ? `&visibleInternalEntityIds=${encodeURIComponent(
+            visibleInternalEntityIds.join(','),
+          )}`
         : '';
 
       params += messageVisibility

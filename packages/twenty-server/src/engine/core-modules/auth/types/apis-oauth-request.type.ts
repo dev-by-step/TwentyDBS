@@ -21,6 +21,7 @@ export type APIsOAuthRequest = Omit<
     redirectLocation?: string;
     calendarVisibility?: CalendarChannelVisibility;
     messageVisibility?: MessageChannelVisibility;
+    visibleInternalEntityIds?: string[];
     skipMessageChannelConfiguration?: boolean;
   };
 };

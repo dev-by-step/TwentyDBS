@@ -376,7 +376,9 @@ export class TimelineCalendarEventService {
         const visibility = shouldMask
           ? CalendarChannelVisibility.METADATA
           : CalendarChannelVisibility.SHARE_EVERYTHING;
-        const eventEntityBadge = calendarEventEntityBadgeMap.get(event.id);
+        const eventEntityBadges =
+          calendarEventEntityBadgeMap.get(event.id) ?? [];
+        const primaryEventEntityBadge = eventEntityBadges[0] ?? null;
 
         return {
           ...omit(event, [
@@ -398,9 +400,14 @@ export class TimelineCalendarEventService {
           location: event.location ?? null,
           conferenceSolution: event.conferenceSolution ?? null,
           conferenceLink: null,
-          entityColor: eventEntityBadge?.color ?? null,
-          entityName: eventEntityBadge?.name ?? null,
-          ownerEntityId: eventEntityBadge?.id ?? null,
+          entityColor: primaryEventEntityBadge?.color ?? null,
+          entityName:
+            eventEntityBadges
+              .map((badge) => badge.name)
+              .filter(isDefined)
+              .join(', ') || null,
+          ownerEntityId: primaryEventEntityBadge?.id ?? null,
+          responsibleEntities: eventEntityBadges,
         };
       });
   }
@@ -413,8 +420,8 @@ export class TimelineCalendarEventService {
     workspaceId: string;
     events: CalendarEventWorkspaceEntity[];
     calendarChannels: CalendarChannelEntity[];
-  }): Promise<Map<string, InternalEntityBadgeInfo>> {
-    if (events.length === 0 || calendarChannels.length === 0) {
+  }): Promise<Map<string, InternalEntityBadgeInfo[]>> {
+    if (events.length === 0) {
       return new Map();
     }
 
@@ -657,8 +664,8 @@ export class TimelineCalendarEventService {
         return [
           calendarChannel.id,
           ownerEntityId != null
-            ? (entityBadgeById.get(ownerEntityId) ?? null)
-            : null,
+            ? [entityBadgeById.get(ownerEntityId)].filter(isDefined)
+            : [],
         ] as const;
       }),
     );
@@ -674,37 +681,30 @@ export class TimelineCalendarEventService {
               ?.map((entityId) => entityBadgeById.get(entityId))
               .filter(isDefined) ?? [];
 
-          if (audienceEntityBadges.length > 0) {
-            return [
-              event.id,
-              {
-                id: audienceEntityBadges[0].id,
-                color: audienceEntityBadges[0].color,
-                name:
-                  audienceEntityBadges
-                    .map((badge) => badge.name)
-                    .filter(isDefined)
-                    .join(', ') || null,
-              } satisfies InternalEntityBadgeInfo,
-            ] as const;
-          }
-
-          const eventEntityBadge = event.calendarChannelEventAssociations
-            .map((association) =>
+          const ownerEntityBadges = event.calendarChannelEventAssociations
+            .flatMap((association) =>
               ownerEntityBadgeByCalendarChannelId.get(
                 association.calendarChannelId,
               ),
             )
-            .find((badge): badge is InternalEntityBadgeInfo =>
+            .filter((badge): badge is InternalEntityBadgeInfo =>
               isDefined(badge),
             );
 
-          return isDefined(eventEntityBadge)
-            ? ([event.id, eventEntityBadge] as const)
+          const eventEntityBadges = [
+            ...ownerEntityBadges,
+            ...audienceEntityBadges,
+          ].filter(
+            (badge, index, badges) =>
+              badges.findIndex(({ id }) => id === badge.id) === index,
+          );
+
+          return eventEntityBadges.length > 0
+            ? ([event.id, eventEntityBadges] as const)
             : null;
         })
         .filter(
-          (entry): entry is readonly [string, InternalEntityBadgeInfo] =>
+          (entry): entry is readonly [string, InternalEntityBadgeInfo[]] =>
             entry !== null,
         ),
     );

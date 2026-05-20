@@ -64,6 +64,9 @@ export class CalendarChannelEntity extends WorkspaceRelatedEntity {
   })
   visibility: CalendarChannelVisibility;
 
+  @Column({ type: 'uuid', array: true, nullable: false, default: [] })
+  visibleInternalEntityIds: string[];
+
   @Column({ type: 'boolean', nullable: false, default: true })
   isContactAutoCreationEnabled: boolean;
 

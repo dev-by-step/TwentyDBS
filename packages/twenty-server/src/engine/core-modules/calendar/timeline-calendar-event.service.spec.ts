@@ -422,6 +422,13 @@ describe('TimelineCalendarEventService', () => {
     );
     expect(result.timelineCalendarEvents[0].entityColor).toBe('#123456');
     expect(result.timelineCalendarEvents[0].entityName).toBe('WeKnow');
+    expect(result.timelineCalendarEvents[0].responsibleEntities).toEqual([
+      {
+        id: 'entity-1',
+        color: '#123456',
+        name: 'WeKnow',
+      },
+    ]);
   });
 
   it('should keep cross-entity group calendar events visible but masked', async () => {

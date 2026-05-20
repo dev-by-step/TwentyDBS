@@ -81,6 +81,7 @@ export class MicrosoftAPIsService {
     refreshToken: string;
     calendarVisibility: CalendarChannelVisibility | undefined;
     messageVisibility: MessageChannelVisibility | undefined;
+    visibleInternalEntityIds?: string[];
     skipMessageChannelConfiguration?: boolean;
   }): Promise<string> {
     const {
@@ -90,6 +91,7 @@ export class MicrosoftAPIsService {
       workspaceMemberId,
       calendarVisibility,
       messageVisibility,
+      visibleInternalEntityIds,
       skipMessageChannelConfiguration,
     } = input;
 
@@ -209,6 +211,7 @@ export class MicrosoftAPIsService {
                 connectedAccountId: newOrExistingConnectedAccountId,
                 handle,
                 calendarVisibility,
+                visibleInternalEntityIds,
                 skipMessageChannelConfiguration,
                 transactionManager,
               });

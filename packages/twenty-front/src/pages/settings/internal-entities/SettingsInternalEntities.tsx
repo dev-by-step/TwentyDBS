@@ -13,14 +13,14 @@ import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBa
 import { ThemeColorPickerMenu } from '@/ui/input/components/ThemeColorPickerMenu';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import {
-  H2Title,
-  IconBuildingSkyscraper,
-  IconColorSwatch,
-} from 'twenty-ui/display';
+import { H2Title, IconColorSwatch } from 'twenty-ui/display';
 import { LightIconButton } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
-import { MAIN_COLORS_LIGHT, MAIN_COLOR_NAMES, type ThemeColor } from 'twenty-ui/theme';
+import {
+  MAIN_COLORS_LIGHT,
+  MAIN_COLOR_NAMES,
+  type ThemeColor,
+} from 'twenty-ui/theme';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type InternalEntityRecord = {
@@ -31,11 +31,11 @@ type InternalEntityRecord = {
 };
 
 const StyledTable = styled.div`
-  display: flex;
-  flex-direction: column;
+  background: ${themeCssVariables.background.primary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.sm};
-  background: ${themeCssVariables.background.primary};
+  display: flex;
+  flex-direction: column;
 `;
 
 const StyledRow = styled.div`
@@ -82,8 +82,7 @@ const resolvePaletteNameFromHex = (hexColor: string | null): ThemeColor => {
 
   const normalized = hexColor.toLowerCase();
   const match = MAIN_COLOR_NAMES.find(
-    (themeColor) =>
-      MAIN_COLORS_LIGHT[themeColor].toLowerCase() === normalized,
+    (themeColor) => MAIN_COLORS_LIGHT[themeColor].toLowerCase() === normalized,
   );
 
   return match ?? MAIN_COLOR_NAMES[0];
@@ -144,8 +143,9 @@ export const SettingsInternalEntities = () => {
       recordGqlFields: { id: true, name: true, color: true },
     });
 
-  const sortedEntities = [...internalEntities].sort((firstEntity, secondEntity) =>
-    firstEntity.name.localeCompare(secondEntity.name),
+  const sortedEntities = [...internalEntities].sort(
+    (firstEntity, secondEntity) =>
+      firstEntity.name.localeCompare(secondEntity.name),
   );
 
   const handleColorSelected = async (entityId: string, colorHex: string) => {

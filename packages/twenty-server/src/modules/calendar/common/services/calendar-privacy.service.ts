@@ -174,7 +174,11 @@ export class CalendarPrivacyService {
                   id: In(calendarChannelIds),
                   workspaceId,
                 },
-                select: ['id', 'connectedAccountId'],
+                select: [
+                  'id',
+                  'connectedAccountId',
+                  'visibleInternalEntityIds',
+                ],
               })
             : [];
 
@@ -302,11 +306,44 @@ export class CalendarPrivacyService {
 
         const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
         const calendarEventIdsWithUnknownOwnerEntity = new Set<string>();
+        const visibleEntityIdsByCalendarEventId = new Map<
+          string,
+          Set<string>
+        >();
+        const visibleInternalEntityIdsByCalendarChannelId = new Map(
+          calendarChannels.map((calendarChannel) => [
+            calendarChannel.id,
+            new Set(calendarChannel.visibleInternalEntityIds ?? []),
+          ]),
+        );
 
         for (const association of calendarChannelEventAssociations) {
           const ownerEntityId = ownerEntityIdByCalendarChannelId.get(
             association.calendarChannelId,
           );
+          const visibleInternalEntityIds =
+            visibleInternalEntityIdsByCalendarChannelId.get(
+              association.calendarChannelId,
+            );
+
+          if (
+            isDefined(visibleInternalEntityIds) &&
+            visibleInternalEntityIds.size > 0
+          ) {
+            const eventVisibleEntityIds =
+              visibleEntityIdsByCalendarEventId.get(
+                association.calendarEventId,
+              ) ?? new Set<string>();
+
+            for (const visibleInternalEntityId of visibleInternalEntityIds) {
+              eventVisibleEntityIds.add(visibleInternalEntityId);
+            }
+
+            visibleEntityIdsByCalendarEventId.set(
+              association.calendarEventId,
+              eventVisibleEntityIds,
+            );
+          }
 
           if (!isDefined(ownerEntityId)) {
             calendarEventIdsWithUnknownOwnerEntity.add(
@@ -333,13 +370,32 @@ export class CalendarPrivacyService {
           }
 
           // Owner-entity members always see their own events, regardless of
-          // any explicit audience grant. Explicit audience is additive on top
-          // of the implicit owner-entity visibility.
+          // any explicit audience grant. When a channel has an explicit
+          // entity access list, that list becomes the channel-level source of
+          // truth for non-owner visibility; legacy channels without that list
+          // keep the previous owner-entity behavior.
+          const channelVisibleEntityIds =
+            visibleEntityIdsByCalendarEventId.get(calendarEventId);
+          const hasExplicitChannelEntityVisibility =
+            isDefined(channelVisibleEntityIds) &&
+            channelVisibleEntityIds.size > 0;
+          const isViewerInChannelVisibleEntity =
+            hasExplicitChannelEntityVisibility &&
+            [...channelVisibleEntityIds].some((id) =>
+              accessibleEntityIds.has(id),
+            );
+
+          if (isViewerInChannelVisibleEntity) {
+            defaultMaskMap.set(calendarEventId, false);
+            continue;
+          }
+
           const ownerEntityIds =
             ownerEntityIdsByCalendarEventId.get(calendarEventId);
           const hasUnknownOwnerEntity =
             calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId);
           const isViewerInOwnerEntity =
+            !hasExplicitChannelEntityVisibility &&
             !hasUnknownOwnerEntity &&
             isDefined(ownerEntityIds) &&
             ownerEntityIds.size > 0 &&

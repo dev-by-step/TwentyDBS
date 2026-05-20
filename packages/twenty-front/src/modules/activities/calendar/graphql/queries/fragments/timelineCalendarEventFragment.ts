@@ -14,6 +14,11 @@ export const timelineCalendarEventFragment = gql`
     entityColor
     entityName
     ownerEntityId
+    responsibleEntities {
+      id
+      name
+      color
+    }
     participants {
       ...TimelineCalendarEventParticipantFragment
     }

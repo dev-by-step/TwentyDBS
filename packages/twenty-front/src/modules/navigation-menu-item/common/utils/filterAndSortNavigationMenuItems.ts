@@ -1,4 +1,5 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { isHiddenObjectMetadataItem } from '@/object-metadata/utils/isHiddenObjectMetadataItem';
 import { type View } from '@/views/types/View';
 import { NavigationMenuItemType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
@@ -7,10 +8,13 @@ import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 export const filterAndSortNavigationMenuItems = (
   navigationMenuItems: NavigationMenuItem[],
   views: Pick<View, 'id' | 'objectMetadataId' | 'key'>[],
-  objectMetadataItems: Pick<EnrichedObjectMetadataItem, 'id' | 'isActive'>[],
+  objectMetadataItems: Pick<
+    EnrichedObjectMetadataItem,
+    'id' | 'isActive' | 'nameSingular'
+  >[],
 ): NavigationMenuItem[] => {
-  const activeObjectMetadataItems = objectMetadataItems.filter(
-    (meta) => meta.isActive,
+  const visibleActiveObjectMetadataItems = objectMetadataItems.filter(
+    (meta) => meta.isActive && !isHiddenObjectMetadataItem(meta),
   );
 
   return navigationMenuItems
@@ -27,7 +31,7 @@ export const filterAndSortNavigationMenuItems = (
       if (item.type === NavigationMenuItemType.OBJECT) {
         return (
           isDefined(item.targetObjectMetadataId) &&
-          activeObjectMetadataItems.some(
+          visibleActiveObjectMetadataItems.some(
             (meta) => meta.id === item.targetObjectMetadataId,
           )
         );
@@ -39,7 +43,7 @@ export const filterAndSortNavigationMenuItems = (
         const view = views.find((view) => view.id === item.viewId);
         return (
           isDefined(view) &&
-          activeObjectMetadataItems.some(
+          visibleActiveObjectMetadataItems.some(
             (meta) => meta.id === view.objectMetadataId,
           )
         );
@@ -49,7 +53,7 @@ export const filterAndSortNavigationMenuItems = (
           isDefined(item.targetRecordId) &&
           isDefined(item.targetObjectMetadataId) &&
           isDefined(item.targetRecordIdentifier) &&
-          activeObjectMetadataItems.some(
+          visibleActiveObjectMetadataItems.some(
             (meta) => meta.id === item.targetObjectMetadataId,
           )
         );

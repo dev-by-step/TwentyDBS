@@ -2,6 +2,7 @@ import { Field, HideField, ObjectType } from '@nestjs/graphql';
 
 import {
   IsBoolean,
+  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -45,6 +46,11 @@ export class CalendarChannelDTO {
   @IsNotEmpty()
   @Field(() => CalendarChannelVisibility)
   visibility: CalendarChannelVisibility;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Field(() => [UUIDScalarType])
+  visibleInternalEntityIds: string[];
 
   @IsBoolean()
   @Field()

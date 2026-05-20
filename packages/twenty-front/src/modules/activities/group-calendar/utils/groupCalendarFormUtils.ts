@@ -119,7 +119,9 @@ export const buildEditInitialFormState = ({
     startsAt: formatDateTimeInputValue(new Date(calendarEvent.startsAt)),
     endsAt: formatDateTimeInputValue(new Date(calendarEvent.endsAt)),
     eventEntityIds,
-    audienceMode: deriveAudienceModeFromSharingScope(calendarEvent.sharingScope),
+    audienceMode: deriveAudienceModeFromSharingScope(
+      calendarEvent.sharingScope,
+    ),
     selectedAudienceEntityIds: audienceEntityIds,
     selectedAudienceMemberIds: personAudienceRows.map(
       (row) => row.workspaceMemberId,

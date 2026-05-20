@@ -1,4 +1,5 @@
 import { NavigationMenuItemType } from 'twenty-shared/types';
+import { MULTI_ENTITY_OBJECT_NAME } from 'twenty-shared/constants';
 
 import { filterAndSortNavigationMenuItems } from '@/navigation-menu-item/common/utils/filterAndSortNavigationMenuItems';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
@@ -243,6 +244,29 @@ describe('filterAndSortNavigationMenuItems', () => {
       [],
       [inactiveObjectMetadataItem],
     );
+    expect(result).toEqual([]);
+  });
+
+  it('should filter out object items for hidden technical objects', () => {
+    const hiddenObjectMetadataItem = {
+      ...mockObjectMetadataItem,
+      id: 'hidden-metadata-id',
+      nameSingular: MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience,
+    } as EnrichedObjectMetadataItem;
+
+    const result = filterAndSortNavigationMenuItems(
+      [
+        {
+          id: 'hidden-obj-1',
+          type: NavigationMenuItemType.OBJECT,
+          targetObjectMetadataId: 'hidden-metadata-id',
+          position: 1,
+        } as NavigationMenuItem,
+      ],
+      [],
+      [hiddenObjectMetadataItem],
+    );
+
     expect(result).toEqual([]);
   });
 

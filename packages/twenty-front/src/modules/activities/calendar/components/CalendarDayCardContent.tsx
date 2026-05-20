@@ -44,13 +44,15 @@ const StyledMonthDay = styled.div`
 const StyledEvents = styled.div`
   align-items: stretch;
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[3]};
+  min-width: 0;
 `;
 
 const StyledEventRowContainer = styled.div`
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 `;
 
 export const CalendarDayCardContent = ({

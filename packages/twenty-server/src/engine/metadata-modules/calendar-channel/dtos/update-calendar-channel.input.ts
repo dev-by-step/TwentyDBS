@@ -2,6 +2,8 @@ import { Field, InputType } from '@nestjs/graphql';
 
 import { Type } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsNotEmpty,
@@ -22,6 +24,13 @@ export class UpdateCalendarChannelInputUpdates {
   @IsEnum(CalendarChannelVisibility)
   @Field(() => CalendarChannelVisibility, { nullable: true })
   visibility?: CalendarChannelVisibility;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  @Field(() => [UUIDScalarType], { nullable: true })
+  visibleInternalEntityIds?: string[];
 
   @IsOptional()
   @IsBoolean()
