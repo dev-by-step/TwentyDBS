@@ -7,6 +7,7 @@ import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { useLastAuthenticatedWorkspaceDomain } from '@/domain-manager/hooks/useLastAuthenticatedWorkspaceDomain';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
 import { useInitializeFormatPreferences } from '@/localization/hooks/useInitializeFormatPreferences';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -17,12 +18,17 @@ import { type ObjectPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type ColorScheme } from 'twenty-ui/input';
 import { useApolloClient } from '@apollo/client/react';
-import { GetCurrentUserDocument } from '~/generated-metadata/graphql';
+import {
+  GetCurrentUserDocument,
+  type GetCurrentUserQuery,
+  type GetCurrentUserQueryVariables,
+} from '~/generated-metadata/graphql';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
 import { dynamicActivate } from '~/utils/i18n/dynamicActivate';
 
 export const useLoadCurrentUser = () => {
   const setCurrentUser = useSetAtomState(currentUserState);
+  const setSelectedEntityId = useSetAtomState(selectedEntityIdState);
   const setAvailableWorkspaces = useSetAtomState(availableWorkspacesState);
   const setCurrentWorkspaceMember = useSetAtomState(
     currentWorkspaceMemberState,
@@ -45,7 +51,10 @@ export const useLoadCurrentUser = () => {
   const client = useApolloClient();
 
   const loadCurrentUser = useCallback(async () => {
-    const currentUserResult = await client.query({
+    const currentUserResult = await client.query<
+      GetCurrentUserQuery,
+      GetCurrentUserQueryVariables
+    >({
       query: GetCurrentUserDocument,
       fetchPolicy: 'network-only',
     });
@@ -63,6 +72,7 @@ export const useLoadCurrentUser = () => {
     let workspaceMember = null;
 
     setCurrentUser(user);
+    setSelectedEntityId(user.entityId ?? null);
 
     if (isDefined(user.workspaceMembers)) {
       setCurrentWorkspaceMembers(user.workspaceMembers);
@@ -135,6 +145,7 @@ export const useLoadCurrentUser = () => {
   }, [
     client,
     setCurrentUser,
+    setSelectedEntityId,
     setCurrentWorkspace,
     isOnAWorkspace,
     setCurrentWorkspaceMembers,

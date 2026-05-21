@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { getRecordsFromRecordConnection } from '@/object-record/cache/utils/getRecordsFromRecordConnection';
@@ -21,11 +23,17 @@ type UseLazyFindManyRecordsWithOffsetParams = Pick<
 export const useLazyFindManyRecordsWithOffset = ({
   objectNameSingular,
 }: UseLazyFindManyRecordsWithOffsetParams) => {
+  const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
 
   const params = useFindManyRecordIndexTableParams(objectNameSingular);
+  const entityScopedFilter = buildEntityScopedRecordFilter({
+    objectNameSingular,
+    filter: params.filter,
+    selectedEntityId,
+  });
 
   const recordGqlFields = useRelevantRecordsGqlFields({
     objectMetadataItem,
@@ -64,6 +72,7 @@ export const useLazyFindManyRecordsWithOffset = ({
           query: findManyRecordsQuery,
           variables: {
             ...params,
+            filter: entityScopedFilter,
             limit,
             offset,
           },
@@ -96,6 +105,7 @@ export const useLazyFindManyRecordsWithOffset = ({
       apolloCoreClient,
       findManyRecordsQuery,
       params,
+      entityScopedFilter,
       objectMetadataItem.namePlural,
       handleFindManyRecordsError,
     ],

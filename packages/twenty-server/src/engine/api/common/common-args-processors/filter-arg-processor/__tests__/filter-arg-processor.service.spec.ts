@@ -1,6 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { FieldMetadataType } from 'twenty-shared/types';
+import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 
 import { fieldMetadataConfigByFieldName } from 'src/engine/api/common/common-args-processors/data-arg-processor/__tests__/constants/field-metadata-config-by-field-name.constant';
 import { FilterArgProcessorService } from 'src/engine/api/common/common-args-processors/filter-arg-processor/filter-arg-processor.service';
@@ -9,6 +9,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 
 import { failingFilterInputsByFieldMetadataType } from './constants/failing-filter-inputs-by-field-metadata-type.constant';
+import { buildInternalEntity } from './factories/internal-entity.factory';
 import { successfulFilterInputsByFieldMetadataType } from './constants/successful-filter-inputs-by-field-metadata-type.constant';
 
 describe('FilterArgProcessorService', () => {
@@ -278,6 +279,57 @@ describe('FilterArgProcessorService', () => {
       });
 
       expect(result).toEqual({ numberField: { in: [1, null, 3] } });
+    });
+  });
+
+  describe('one-to-many relation filter keys', () => {
+    it('should process filter using one-to-many relation join-column alias', () => {
+      const flatFieldMetadataMaps = {
+        byUniversalIdentifier: {
+          'one-to-many-relation-field-universal-id': {
+            id: 'one-to-many-relation-field-id',
+            name: 'internalEntities',
+            type: FieldMetadataType.RELATION,
+            isNullable: true,
+            objectMetadataId: 'object-id',
+            universalIdentifier: 'one-to-many-relation-field-universal-id',
+            settings: {
+              relationType: RelationType.ONE_TO_MANY,
+              junctionTargetFieldId: 'junction-target-field-id',
+            },
+          } as FlatFieldMetadata,
+        },
+        universalIdentifierById: {
+          'one-to-many-relation-field-id':
+            'one-to-many-relation-field-universal-id',
+        },
+        universalIdentifiersByApplicationId: {},
+      } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+      const flatObjectMetadata = {
+        id: 'object-id',
+        nameSingular: 'testObject',
+        namePlural: 'testObjects',
+        isCustom: false,
+        fieldIds: ['one-to-many-relation-field-id'],
+        universalIdentifier: 'test-object-universal-id',
+        labelIdentifierFieldMetadataUniversalIdentifier: null,
+        imageIdentifierFieldMetadataUniversalIdentifier: null,
+      } as unknown as FlatObjectMetadata;
+
+      const internalEntity = buildInternalEntity();
+      const result = filterArgProcessorService.process({
+        filter: {
+          internalEntitiesId: {
+            in: [internalEntity.id],
+          },
+        },
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      });
+
+      expect(result).toEqual({
+        internalEntitiesId: { in: [internalEntity.id] },
+      });
     });
   });
 });

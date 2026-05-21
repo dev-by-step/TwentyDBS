@@ -1,5 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type RecordGqlFieldsAggregate } from '@/object-record/graphql/types/RecordGqlFieldsAggregate';
@@ -28,6 +30,7 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
   filter?: RecordGqlOperationFilter;
   skip?: boolean;
 }) => {
+  const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
@@ -44,13 +47,18 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
   );
 
   const hasReadPermission = objectPermissions.canReadObjectRecords;
+  const entityScopedFilter = buildEntityScopedRecordFilter({
+    objectNameSingular,
+    filter,
+    selectedEntityId,
+  });
 
   const { data, loading, error } = useQuery<RecordGqlOperationFindManyResult>(
     aggregateQuery,
     {
       skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
       variables: {
-        filter,
+        filter: entityScopedFilter,
       },
       client: apolloCoreClient,
     },

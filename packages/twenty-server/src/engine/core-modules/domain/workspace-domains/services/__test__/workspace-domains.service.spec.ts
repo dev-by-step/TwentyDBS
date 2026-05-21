@@ -8,6 +8,7 @@ import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspac
 import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
 describe('WorkspaceDomainsService', () => {
   let workspaceDomainsService: WorkspaceDomainsService;
@@ -213,7 +214,37 @@ describe('WorkspaceDomainsService', () => {
       expect(result?.id).toEqual('workspace-id');
     });
 
-    it('should return 1st workspace if multiple workspaces when IS_MULTIWORKSPACE_ENABLED=false', async () => {
+    it('should return Apple seed workspace if multiple workspaces when IS_MULTIWORKSPACE_ENABLED=false', async () => {
+      jest
+        .spyOn(twentyConfigService, 'get')
+        .mockImplementation((key: string) => {
+          const env = {
+            FRONTEND_URL: 'https://example.com',
+            IS_MULTIWORKSPACE_ENABLED: false,
+          };
+
+          // @ts-expect-error legacy noImplicitAny
+          return env[key];
+        });
+
+      jest.spyOn(workspaceRepository, 'find').mockResolvedValueOnce([
+        {
+          id: 'workspace-id1',
+        },
+        {
+          id: SEED_APPLE_WORKSPACE_ID,
+        },
+      ] as unknown as WorkspaceEntity[]);
+
+      const result =
+        await workspaceDomainsService.getWorkspaceByOriginOrDefaultWorkspace(
+          'https://example.com',
+        );
+
+      expect(result?.id).toEqual(SEED_APPLE_WORKSPACE_ID);
+    });
+
+    it('should return 1st workspace if Apple seed workspace is not present when IS_MULTIWORKSPACE_ENABLED=false', async () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {

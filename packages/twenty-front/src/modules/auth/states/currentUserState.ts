@@ -5,6 +5,7 @@ export type CurrentUser = Pick<
   User,
   | 'id'
   | 'email'
+  | 'entityId'
   | 'supportUserHash'
   | 'canAccessFullAdminPanel'
   | 'canImpersonate'

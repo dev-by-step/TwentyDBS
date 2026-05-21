@@ -1,4 +1,6 @@
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
+import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { turnSortsIntoOrderBy } from '@/object-record/object-sort-dropdown/utils/turnSortsIntoOrderBy';
 import { useRelevantRecordsGqlFields } from '@/object-record/record-field/hooks/useRelevantRecordsGqlFields';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
@@ -19,6 +21,7 @@ import {
 } from 'twenty-shared/utils';
 
 export const useRecordIndexGroupCommonQueryVariables = () => {
+  const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useRecordIndexContextOrThrow();
   const { objectMetadataItems } = useObjectMetadataItems();
 
@@ -90,11 +93,16 @@ export const useRecordIndexGroupCommonQueryVariables = () => {
     requestFilters,
     recordGroupOptionsFilter,
   ]);
+  const entityScopedCombinedFilters = buildEntityScopedRecordFilter({
+    objectNameSingular: objectMetadataItem.nameSingular,
+    filter: combinedFilters,
+    selectedEntityId,
+  });
 
   const recordGroupsLimit = visibleRecordGroupDefinitions.length;
 
   return {
-    combinedFilters,
+    combinedFilters: entityScopedCombinedFilters,
     recordGqlFields,
     orderBy,
     recordGroupsLimit,
