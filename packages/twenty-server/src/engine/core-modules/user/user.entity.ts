@@ -62,6 +62,10 @@ export class UserEntity {
   @Column({ nullable: true })
   defaultAvatarUrl: string;
 
+  @Field(() => UUIDScalarType, { nullable: true })
+  @Column({ nullable: true, type: 'uuid' })
+  entityId: string | null;
+
   @Field()
   @Column({ default: false })
   isEmailVerified: boolean;
