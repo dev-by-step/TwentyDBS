@@ -105,11 +105,7 @@ export const GroupCalendarEventsCard = () => {
       return null;
     }
 
-    const ownerEntityId = (
-      calendarEvent as TimelineCalendarEvent & {
-        ownerEntityId?: string | null;
-      }
-    ).ownerEntityId;
+    const ownerEntityId = calendarEvent.ownerEntityId;
 
     const canManageThisEvent =
       isPlatformAdmin ||

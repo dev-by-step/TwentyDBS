@@ -10,7 +10,9 @@ export const MULTI_ENTITY_OBJECT_NAME = {
   CalendarChannelEventAssociation: 'calendarChannelEventAssociation',
   CalendarEventEntityAudience: 'calendarEventEntityAudience',
   CalendarEventPersonAudience: 'calendarEventPersonAudience',
+  CompanyEntityMembership: 'companyEntityMembership',
   InternalEntity: 'internalEntity',
+  PersonEntityMembership: 'personEntityMembership',
   WorkspaceMemberEntityMembership: 'workspaceMemberEntityMembership',
 } as const;
 

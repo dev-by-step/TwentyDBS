@@ -226,6 +226,9 @@ export const SettingsAccountsListEmptyStateCard = () => {
           <StyledModalDescription>
             {t`Choose which internal entities can see the full details of this Outlook calendar.`}
           </StyledModalDescription>
+          <StyledHint>
+            {t`This only controls visibility of imported event details. Managing or disconnecting the Outlook account remains limited to the account owner.`}
+          </StyledHint>
           {!areManageableEntitiesReady ? (
             <StyledHint>{t`Loading entities...`}</StyledHint>
           ) : manageableEventEntities.length === 0 ? (
@@ -236,6 +239,9 @@ export const SettingsAccountsListEmptyStateCard = () => {
                 <StyledEntityToggle
                   key={entity.id}
                   type="button"
+                  aria-pressed={selectedInternalEntityIds.includes(entity.id)}
+                  data-entity-id={entity.id}
+                  data-testid="microsoft-calendar-visible-internal-entity"
                   selected={selectedInternalEntityIds.includes(entity.id)}
                   chipColor={entity.color}
                   onClick={() => handleToggleVisibleInternalEntity(entity.id)}

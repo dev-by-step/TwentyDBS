@@ -2,11 +2,9 @@ import { t } from '@lingui/core/macro';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 
 import {
-  StyledActions,
-  StyledBackdrop,
-  StyledDialog,
-  StyledRightActions,
-  StyledTitle,
+  StyledDeleteAction,
+  StyledForm,
+  StyledModalTitle,
 } from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
 import {
   type GroupCalendarEventFormState,
@@ -16,6 +14,7 @@ import {
   CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
   CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import {
   CalendarEventAudienceSyncError,
   useGroupCalendarEventAudienceSync,
@@ -33,10 +32,12 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
+import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
+import { ModalContent, ModalFooter, ModalHeader } from 'twenty-ui/layout';
 
 type CalendarEventRecord = {
   __typename: string;
@@ -67,9 +68,6 @@ type GroupCalendarEditEventModalProps = {
   onSaved: () => Promise<unknown> | unknown;
   onDeleted: () => Promise<unknown> | unknown;
 };
-
-const DELETE_CALENDAR_EVENT_MODAL_ID =
-  'group-calendar-delete-event-confirmation';
 
 const emptyFormState: GroupCalendarEventFormState = {
   title: '',
@@ -130,6 +128,7 @@ export const GroupCalendarEditEventModal = ({
       internalEntityId: true,
     },
     filter: { calendarEventId: { eq: eventId } },
+    limit: GROUP_CALENDAR_CONFIG.limits.eventAudience,
     skip: !isAudienceFeatureAvailable,
   });
 
@@ -144,6 +143,7 @@ export const GroupCalendarEditEventModal = ({
       workspaceMemberId: true,
     },
     filter: { calendarEventId: { eq: eventId } },
+    limit: GROUP_CALENDAR_CONFIG.limits.eventAudience,
     skip: !isPersonAudienceFeatureAvailable,
   });
 
@@ -206,7 +206,20 @@ export const GroupCalendarEditEventModal = ({
       isAudienceFeatureAvailable,
       isPersonAudienceFeatureAvailable,
     });
-  const { openModal } = useModal();
+  const { closeModal, openModal } = useModal();
+
+  useEffect(() => {
+    openModal(GROUP_CALENDAR_CONFIG.modalIds.editEvent);
+
+    return () => {
+      closeModal(GROUP_CALENDAR_CONFIG.modalIds.editEvent);
+    };
+  }, [closeModal, openModal]);
+
+  const handleClose = () => {
+    closeModal(GROUP_CALENDAR_CONFIG.modalIds.editEvent);
+    onClose();
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -230,16 +243,19 @@ export const GroupCalendarEditEventModal = ({
         isAudienceFeatureAvailable,
       });
 
-      await updateOneRecord({
-        objectNameSingular: CoreObjectNameSingular.CalendarEvent,
-        idToUpdate: eventId,
-        updateOneRecordInput: {
-          title: formState.title,
-          startsAt: new Date(formState.startsAt).toISOString(),
-          endsAt: new Date(formState.endsAt).toISOString(),
-          sharingScope,
-        },
-      });
+      // Updating the event fields and syncing its audience are independent.
+      const saveOperations: Promise<unknown>[] = [
+        updateOneRecord({
+          objectNameSingular: CoreObjectNameSingular.CalendarEvent,
+          idToUpdate: eventId,
+          updateOneRecordInput: {
+            title: formState.title,
+            startsAt: new Date(formState.startsAt).toISOString(),
+            endsAt: new Date(formState.endsAt).toISOString(),
+            sharingScope,
+          },
+        }),
+      ];
 
       if (isAudienceFeatureAvailable) {
         const desiredEntityIds =
@@ -254,18 +270,22 @@ export const GroupCalendarEditEventModal = ({
             ? formState.selectedAudienceMemberIds
             : [];
 
-        await persistAudience({
-          eventId,
-          desiredEntityIds,
-          desiredMemberIds,
-          existingEntityRows: existingEntityAudienceRows,
-          existingPersonRows: existingPersonAudienceRows,
-        });
+        saveOperations.push(
+          persistAudience({
+            eventId,
+            desiredEntityIds,
+            desiredMemberIds,
+            existingEntityRows: existingEntityAudienceRows,
+            existingPersonRows: existingPersonAudienceRows,
+          }),
+        );
       }
+
+      await Promise.all(saveOperations);
 
       enqueueSuccessSnackBar({ message: t`Event updated.` });
       await onSaved();
-      onClose();
+      handleClose();
     } catch (error) {
       const message =
         error instanceof CalendarEventAudienceSyncError
@@ -281,7 +301,7 @@ export const GroupCalendarEditEventModal = ({
   };
 
   const handleDeleteClick = () => {
-    openModal(DELETE_CALENDAR_EVENT_MODAL_ID);
+    openModal(GROUP_CALENDAR_CONFIG.modalIds.deleteEvent);
   };
 
   const handleDeleteConfirmed = async () => {
@@ -296,7 +316,7 @@ export const GroupCalendarEditEventModal = ({
 
       enqueueSuccessSnackBar({ message: t`Event deleted.` });
       await onDeleted();
-      onClose();
+      handleClose();
     } catch (error) {
       enqueueErrorSnackBar({
         message: error instanceof Error ? error.message : t`An error occurred.`,
@@ -306,36 +326,52 @@ export const GroupCalendarEditEventModal = ({
     }
   };
 
-  if (eventLoading || !isHydrated) {
-    return null;
-  }
+  const shouldRenderForm = !eventLoading && isHydrated;
 
   return (
     <>
-      <StyledBackdrop>
-        <StyledDialog onSubmit={handleSubmit}>
-          <StyledTitle>{t`Edit event`}</StyledTitle>
-          <GroupCalendarEventFormFields
-            state={formState}
-            onPatchState={patchFormState}
-            isAudienceFeatureAvailable={isAudienceFeatureAvailable}
-            isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
-            manageableEventEntities={manageableEventEntities}
-            eventEntitiesEmptyHint={t`You don't manage any entity that owns this event — only audience grants you control are editable.`}
-          />
-          <StyledActions>
-            <Button
-              title={t`Delete`}
-              variant="secondary"
-              accent="danger"
-              onClick={handleDeleteClick}
-              disabled={isSaving || isDeleting}
-            />
-            <StyledRightActions>
+      <ModalStatefulWrapper
+        modalInstanceId={GROUP_CALENDAR_CONFIG.modalIds.editEvent}
+        size="medium"
+        padding="none"
+        isClosable
+        autoHeight
+        renderInDocumentBody
+        onClose={onClose}
+      >
+        {shouldRenderForm && (
+          <StyledForm onSubmit={handleSubmit}>
+            <ModalHeader hasBorderBottom>
+              <StyledModalTitle>{t`Edit event`}</StyledModalTitle>
+            </ModalHeader>
+            <ModalContent contentPadding={5} gap={4}>
+              <GroupCalendarEventFormFields
+                state={formState}
+                onPatchState={patchFormState}
+                isAudienceFeatureAvailable={isAudienceFeatureAvailable}
+                isPersonAudienceFeatureAvailable={
+                  isPersonAudienceFeatureAvailable
+                }
+                manageableEventEntities={manageableEventEntities}
+                eventEntitiesEmptyHint={t`You don't manage any entity that owns this event — only audience grants you control are editable.`}
+              />
+            </ModalContent>
+            <ModalFooter>
+              <StyledDeleteAction>
+                <Button
+                  title={t`Delete`}
+                  variant="secondary"
+                  accent="danger"
+                  type="button"
+                  onClick={handleDeleteClick}
+                  disabled={isSaving || isDeleting}
+                />
+              </StyledDeleteAction>
               <Button
                 title={t`Cancel`}
                 variant="tertiary"
-                onClick={onClose}
+                type="button"
+                onClick={handleClose}
                 disabled={isSaving || isDeleting}
               />
               <Button
@@ -350,12 +386,12 @@ export const GroupCalendarEditEventModal = ({
                     manageableEventEntities.length > 0)
                 }
               />
-            </StyledRightActions>
-          </StyledActions>
-        </StyledDialog>
-      </StyledBackdrop>
+            </ModalFooter>
+          </StyledForm>
+        )}
+      </ModalStatefulWrapper>
       <ConfirmationModal
-        modalInstanceId={DELETE_CALENDAR_EVENT_MODAL_ID}
+        modalInstanceId={GROUP_CALENDAR_CONFIG.modalIds.deleteEvent}
         title={t`Delete this event?`}
         subtitle={t`This action cannot be undone. Audience memberships will be removed too.`}
         confirmButtonText={t`Delete`}

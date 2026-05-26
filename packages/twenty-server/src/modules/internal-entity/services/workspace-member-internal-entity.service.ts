@@ -10,11 +10,22 @@ import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-e
 
 const WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME =
   'workspaceMemberEntityMembership';
+const INTERNAL_ENTITY_OBJECT_NAME = 'internalEntity';
 
 export type WorkspaceMemberInternalEntityContext = {
+  // Default entity used when no explicit active entity is requested.
   currentEntityId: string | null;
+  // Entity currently used for scoped mutations and source tagging.
   activeEntityId: string | null;
+  // Entities the workspace member is attached to.
   entityIds: string[];
+};
+
+export type WorkspaceMemberManageableEntityAccess = {
+  // Entities this user can expose or manage in entity-aware settings.
+  manageableEntityIds: string[];
+  // Stable default entity for metadata-only visibility and fallback ownership.
+  primaryEntityId: string | null;
 };
 
 @Injectable()
@@ -168,6 +179,81 @@ export class WorkspaceMemberInternalEntityService {
     return contexts;
   }
 
+  async resolveManageableEntityIds({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+    canAccessFullAdminPanel,
+  }: {
+    workspaceId: string;
+    workspaceMemberId?: string | null;
+    fallbackEntityId?: string | null;
+    canAccessFullAdminPanel: boolean;
+  }): Promise<string[]> {
+    const { manageableEntityIds } = await this.resolveManageableEntityAccess({
+      workspaceId,
+      workspaceMemberId,
+      fallbackEntityId,
+      canAccessFullAdminPanel,
+    });
+
+    return manageableEntityIds;
+  }
+
+  async resolvePrimaryEntityId({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+  }: {
+    workspaceId: string;
+    workspaceMemberId?: string | null;
+    fallbackEntityId?: string | null;
+  }): Promise<string | null> {
+    const { primaryEntityId } = await this.resolveManageableEntityAccess({
+      workspaceId,
+      workspaceMemberId,
+      fallbackEntityId,
+      canAccessFullAdminPanel: false,
+    });
+
+    return primaryEntityId;
+  }
+
+  async resolveManageableEntityAccess({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+    canAccessFullAdminPanel,
+  }: {
+    workspaceId: string;
+    workspaceMemberId?: string | null;
+    fallbackEntityId?: string | null;
+    canAccessFullAdminPanel: boolean;
+  }): Promise<WorkspaceMemberManageableEntityAccess> {
+    const context = await this.resolveContext({
+      workspaceId,
+      workspaceMemberId,
+      fallbackEntityId,
+    });
+
+    if (canAccessFullAdminPanel) {
+      const allInternalEntityIds =
+        await this.findAllInternalEntityIds(workspaceId);
+
+      if (allInternalEntityIds.length > 0) {
+        return {
+          manageableEntityIds: allInternalEntityIds,
+          primaryEntityId: context.currentEntityId,
+        };
+      }
+    }
+
+    return {
+      manageableEntityIds: context.entityIds,
+      primaryEntityId: context.currentEntityId,
+    };
+  }
+
   private async hasWorkspaceMemberEntityMembershipObject(workspaceId: string) {
     const objectMetadata =
       await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
@@ -177,6 +263,46 @@ export class WorkspaceMemberInternalEntityService {
       });
 
     return isDefined(objectMetadata);
+  }
+
+  private async hasInternalEntityObject(workspaceId: string) {
+    const objectMetadata =
+      await this.objectMetadataService.findOneWithinWorkspace(workspaceId, {
+        where: {
+          nameSingular: INTERNAL_ENTITY_OBJECT_NAME,
+        },
+      });
+
+    return isDefined(objectMetadata);
+  }
+
+  private async findAllInternalEntityIds(workspaceId: string) {
+    if (!(await this.hasInternalEntityObject(workspaceId))) {
+      return [];
+    }
+
+    const internalEntityRecords =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const internalEntityRepository =
+            await this.globalWorkspaceOrmManager.getRepository<
+              Record<string, unknown>
+            >(workspaceId, INTERNAL_ENTITY_OBJECT_NAME, {
+              shouldBypassPermissionChecks: true,
+            });
+
+          return internalEntityRepository.find();
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+
+    return internalEntityRecords
+      .map((internalEntityRecord) =>
+        this.normalizeEntityId(
+          this.extractNonEmptyString(internalEntityRecord, 'id'),
+        ),
+      )
+      .filter(isDefined);
   }
 
   private buildFallbackContext({

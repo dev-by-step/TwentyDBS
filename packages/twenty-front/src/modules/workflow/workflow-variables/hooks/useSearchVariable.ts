@@ -1,3 +1,4 @@
+import { type MessageDescriptor } from '@lingui/core';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useFlowOrThrow } from '@/workflow/hooks/useFlowOrThrow';
 import { useWorkflowVersionIdOrThrow } from '@/workflow/hooks/useWorkflowVersionIdOrThrow';
@@ -7,8 +8,8 @@ import { isDefined } from 'twenty-shared/utils';
 import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
 
 export type VariableSearchResult = {
-  variableLabel: string | undefined;
-  variablePathLabel: string | undefined;
+  variableLabel: string | MessageDescriptor | undefined;
+  variablePathLabel: string | MessageDescriptor | undefined;
   variableType?: string;
   fieldMetadataId?: string;
   compositeFieldSubFieldName?: string;

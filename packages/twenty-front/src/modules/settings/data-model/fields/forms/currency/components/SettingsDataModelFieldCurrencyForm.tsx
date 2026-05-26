@@ -117,8 +117,8 @@ export const SettingsDataModelFieldCurrencyForm = ({
                   disabled={disabled}
                   dropdownId="object-field-format-select"
                   options={[
-                    { label: 'Short', value: fieldMetadataCurrencyFormat[0] },
-                    { label: 'Full', value: fieldMetadataCurrencyFormat[1] },
+                    { label: t`Short`, value: fieldMetadataCurrencyFormat[0] },
+                    { label: t`Full`, value: fieldMetadataCurrencyFormat[1] },
                   ]}
                   selectSizeVariant="small"
                   withSearchInput={false}

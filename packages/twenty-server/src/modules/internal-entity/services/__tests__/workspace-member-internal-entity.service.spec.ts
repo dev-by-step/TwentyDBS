@@ -12,13 +12,23 @@ describe('WorkspaceMemberInternalEntityService', () => {
     find: jest.fn(),
   };
 
+  const mockInternalEntityRepository = {
+    find: jest.fn(),
+  };
+
   const mockObjectMetadataService = {
     findOneWithinWorkspace: jest.fn(),
   };
 
   const mockGlobalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn().mockImplementation(async (fn) => fn()),
-    getRepository: jest.fn().mockResolvedValue(mockMembershipRepository),
+    getRepository: jest.fn().mockImplementation((_workspaceId, objectName) => {
+      if (objectName === 'internalEntity') {
+        return Promise.resolve(mockInternalEntityRepository);
+      }
+
+      return Promise.resolve(mockMembershipRepository);
+    }),
   };
 
   beforeEach(async () => {
@@ -102,5 +112,85 @@ describe('WorkspaceMemberInternalEntityService', () => {
       activeEntityId: 'entity-a',
       entityIds: ['entity-a'],
     });
+  });
+
+  it('should resolve all internal entities for full admin users', async () => {
+    mockObjectMetadataService.findOneWithinWorkspace.mockImplementation(
+      async (
+        _workspaceId: string,
+        options: { where: { nameSingular: string } },
+      ) =>
+        options.where.nameSingular === 'internalEntity'
+          ? { id: 'internal-entity-object-metadata-id' }
+          : { id: 'membership-object-metadata-id' },
+    );
+    mockInternalEntityRepository.find.mockResolvedValue([
+      { id: 'entity-a' },
+      { id: 'entity-b' },
+    ]);
+
+    const result = await service.resolveManageableEntityIds({
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-1',
+      fallbackEntityId: 'entity-a',
+      canAccessFullAdminPanel: true,
+    });
+
+    expect(result).toEqual(['entity-a', 'entity-b']);
+  });
+
+  it('should resolve manageable access with all entities and primary entity for full admin users', async () => {
+    mockObjectMetadataService.findOneWithinWorkspace.mockImplementation(
+      async (
+        _workspaceId: string,
+        options: { where: { nameSingular: string } },
+      ) =>
+        options.where.nameSingular === 'internalEntity'
+          ? { id: 'internal-entity-object-metadata-id' }
+          : { id: 'membership-object-metadata-id' },
+    );
+    mockInternalEntityRepository.find.mockResolvedValue([
+      { id: 'entity-a' },
+      { id: 'entity-b' },
+    ]);
+    mockMembershipRepository.find.mockResolvedValue([
+      {
+        workspaceMemberId: 'workspace-member-1',
+        internalEntityId: 'entity-b',
+      },
+    ]);
+
+    const result = await service.resolveManageableEntityAccess({
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-1',
+      fallbackEntityId: 'entity-b',
+      canAccessFullAdminPanel: true,
+    });
+
+    expect(result).toEqual({
+      manageableEntityIds: ['entity-a', 'entity-b'],
+      primaryEntityId: 'entity-b',
+    });
+  });
+
+  it('should resolve membership entities for non-admin users', async () => {
+    mockObjectMetadataService.findOneWithinWorkspace.mockResolvedValue({
+      id: 'object-metadata-id',
+    });
+    mockMembershipRepository.find.mockResolvedValue([
+      {
+        workspaceMemberId: 'workspace-member-1',
+        internalEntityId: 'entity-a',
+      },
+    ]);
+
+    const result = await service.resolveManageableEntityIds({
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-1',
+      fallbackEntityId: 'entity-b',
+      canAccessFullAdminPanel: false,
+    });
+
+    expect(result).toEqual(['entity-a']);
   });
 });

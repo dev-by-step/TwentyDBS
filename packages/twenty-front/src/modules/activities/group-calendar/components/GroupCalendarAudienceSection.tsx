@@ -6,9 +6,13 @@ import {
   type AudienceMode,
   INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { StyledGroupCalendarSelectableChip } from '@/activities/group-calendar/components/GroupCalendarSelectableChip';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { useEntityMembersCoverage } from '@/activities/group-calendar/hooks/useEntityMembersCoverage';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { IconCheck } from 'twenty-ui/display';
+import { Radio } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type InternalEntityRecord = {
@@ -41,43 +45,10 @@ const StyledRadioGroup = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledRadioOption = styled.label`
-  align-items: center;
-  color: ${themeCssVariables.font.color.primary};
-  display: flex;
-  font-size: ${themeCssVariables.font.size.sm};
-  gap: ${themeCssVariables.spacing[2]};
-`;
-
 const StyledChipsContainer = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledChip = styled.button<{
-  selected: boolean;
-  chipColor?: string | null;
-}>`
-  background: ${({ selected, chipColor }) =>
-    selected
-      ? (chipColor ?? themeCssVariables.background.tertiary)
-      : themeCssVariables.background.secondary};
-  border: 1px solid
-    ${({ selected, chipColor }) =>
-      selected
-        ? (chipColor ?? themeCssVariables.border.color.strong)
-        : themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.pill};
-  color: ${({ selected }) =>
-    selected
-      ? themeCssVariables.font.color.inverted
-      : themeCssVariables.font.color.primary};
-  cursor: pointer;
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
 `;
 
 const StyledMemberChip = styled.button<{
@@ -157,6 +128,7 @@ export const GroupCalendarAudienceSection = ({
     useFindManyRecords<InternalEntityRecord>({
       objectNameSingular: INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
       recordGqlFields: { id: true, name: true, color: true },
+      limit: GROUP_CALENDAR_CONFIG.limits.entityPicker,
     });
 
   const { records: workspaceMembers = [] } =
@@ -166,12 +138,14 @@ export const GroupCalendarAudienceSection = ({
         id: true,
         name: true,
       },
+      limit: GROUP_CALENDAR_CONFIG.limits.workspaceMemberPicker,
       skip: !isPersonAudienceFeatureAvailable,
     });
 
   const { isMemberCoveredBySelectedEntities, entityIdsByMemberId } =
     useEntityMembersCoverage({
       skip: !isPersonAudienceFeatureAvailable,
+      limit: GROUP_CALENDAR_CONFIG.limits.entityMembership,
     });
   const audienceWorkspaceMembers = useMemo(() => {
     const membersByName = new Map<string, WorkspaceMemberAudienceRecord>();
@@ -211,24 +185,21 @@ export const GroupCalendarAudienceSection = ({
     <StyledField as="div">
       {t`Who can see this event?`}
       <StyledRadioGroup>
-        <StyledRadioOption>
-          <input
-            type="radio"
-            name="audience"
-            checked={audienceMode === 'specific'}
-            onChange={() => onAudienceModeChange('specific')}
+        <Radio.Group
+          value={audienceMode}
+          onValueChange={(value) => onAudienceModeChange(value as AudienceMode)}
+        >
+          <Radio
+            name="group-calendar-audience"
+            value="specific"
+            label={t`Only the event entities (and explicit grants)`}
           />
-          {t`Only the event entities (and explicit grants)`}
-        </StyledRadioOption>
-        <StyledRadioOption>
-          <input
-            type="radio"
-            name="audience"
-            checked={audienceMode === 'group'}
-            onChange={() => onAudienceModeChange('group')}
+          <Radio
+            name="group-calendar-audience"
+            value="group"
+            label={t`Everyone in the workspace`}
           />
-          {t`Everyone in the workspace`}
-        </StyledRadioOption>
+        </Radio.Group>
       </StyledRadioGroup>
       {audienceMode === 'specific' && (
         <>
@@ -249,7 +220,7 @@ export const GroupCalendarAudienceSection = ({
                   isEventEntity;
 
                 return (
-                  <StyledChip
+                  <StyledGroupCalendarSelectableChip
                     key={entity.id}
                     type="button"
                     selected={selected}
@@ -266,8 +237,11 @@ export const GroupCalendarAudienceSection = ({
                         : onToggleAudienceEntity(entity.id)
                     }
                   >
-                    {isEventEntity ? `${entity.name} ✓` : entity.name}
-                  </StyledChip>
+                    {entity.name}
+                    {isEventEntity && (
+                      <IconCheck size={themeCssVariables.icon.size.sm} />
+                    )}
+                  </StyledGroupCalendarSelectableChip>
                 );
               })
             )}

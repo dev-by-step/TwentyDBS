@@ -63,6 +63,10 @@ export const WorkflowStepFilterFieldSelect = ({
     rawVariableName: stepFilter.stepOutputKey,
     isFullRecord: stepFilter.isFullRecord ?? false,
   });
+  const variableLabelStr =
+    typeof variableLabel === 'string' ? variableLabel : variableLabel?.id ?? '';
+  const variablePathLabelStr =
+    typeof variablePathLabel === 'string' ? variablePathLabel : variablePathLabel?.id;
 
   const {
     fieldMetadataItem: filterFieldMetadataItem,
@@ -89,7 +93,7 @@ export const WorkflowStepFilterFieldSelect = ({
   const isSelectedFieldNotFound = !isDefined(variableLabel);
   const label = isSelectedFieldNotFound
     ? t`Select a field from a previous step`
-    : variableLabel;
+    : variableLabelStr;
 
   const fullRecordIconProps = stepFilter.isFullRecord
     ? isDefined(filterObjectMetadataItem)
@@ -118,7 +122,7 @@ export const WorkflowStepFilterFieldSelect = ({
             selectedOption={{
               value: stepFilter.stepOutputKey,
               label: disabledLabel,
-              fullLabel: variablePathLabel,
+              fullLabel: variablePathLabelStr,
               Icon: icon,
               iconThemeColor,
             }}
@@ -137,7 +141,7 @@ export const WorkflowStepFilterFieldSelect = ({
         <SelectControl
           selectedOption={{
             label,
-            fullLabel: variablePathLabel,
+            fullLabel: variablePathLabelStr,
             value: stepFilter.stepOutputKey,
             Icon: icon,
             iconThemeColor,

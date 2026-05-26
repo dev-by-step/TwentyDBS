@@ -1,8 +1,11 @@
+import { type MessageDescriptor } from '@lingui/core';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 
 export const getCompositeSubFieldLabelWithFieldLabel = (
   fieldMetadataItem: FieldMetadataItem,
-  subFieldLabel: string,
+  subFieldLabel: string | MessageDescriptor,
 ) => {
-  return `${fieldMetadataItem.label} / ${subFieldLabel}`;
+  const label =
+    typeof subFieldLabel === 'string' ? subFieldLabel : subFieldLabel.id;
+  return `${fieldMetadataItem.label} / ${label}`;
 };

@@ -8,7 +8,7 @@ import { Select } from '@/ui/input/components/Select';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { msg, t } from '@lingui/core/macro';
 import { useMemo } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -134,7 +134,7 @@ export const SettingsDataModelObjectIdentifiersForm = ({
               callToActionButton={
                 label === t`Record label`
                   ? {
-                      text: 'Create Text Field',
+                      text: msg`Create Text Field`,
                       Icon: IconPlus,
                       onClick: () => {
                         navigate('./new-field/select');

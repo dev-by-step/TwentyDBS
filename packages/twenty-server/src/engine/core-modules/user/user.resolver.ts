@@ -199,6 +199,8 @@ export class UserResolver {
 
     const userVarAllowList: string[] = [
       OnboardingStepKeys.ONBOARDING_CONNECT_ACCOUNT_PENDING,
+      OnboardingStepKeys.ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
+      OnboardingStepKeys.ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
       AccountsToReconnectKeys.ACCOUNTS_TO_RECONNECT_INSUFFICIENT_PERMISSIONS,
       AccountsToReconnectKeys.ACCOUNTS_TO_RECONNECT_EMAIL_ALIASES,
     ];

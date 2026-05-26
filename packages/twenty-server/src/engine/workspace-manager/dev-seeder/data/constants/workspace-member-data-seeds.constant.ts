@@ -1,7 +1,4 @@
-import {
-  SEED_APPLE_WORKSPACE_ID,
-  SEED_YCOMBINATOR_WORKSPACE_ID,
-} from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { PRIMARY_DEV_WORKSPACE_USERS } from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { generateRandomUsers } from 'src/engine/workspace-manager/dev-seeder/core/utils/generate-random-users.util';
 import { USER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-users.util';
@@ -95,18 +92,8 @@ export const WORKSPACE_MEMBER_DATA_SEEDS: WorkspaceMemberDataSeed[] = [
   ...randomWorkspaceMembers,
 ];
 
-export const getWorkspaceMemberDataSeeds = (
-  workspaceId: string,
-): WorkspaceMemberDataSeed[] => {
-  // In test environment, only return original members to avoid conflicts
+export const getWorkspaceMemberDataSeeds = (): WorkspaceMemberDataSeed[] => {
   if (process.env.NODE_ENV === 'test') {
-    return originalWorkspaceMembers;
-  }
-
-  if (workspaceId === SEED_APPLE_WORKSPACE_ID) {
-    return originalWorkspaceMembers;
-  } else if (workspaceId === SEED_YCOMBINATOR_WORKSPACE_ID) {
-    // YC workspace gets all 4 original workspace members
     return originalWorkspaceMembers;
   }
 

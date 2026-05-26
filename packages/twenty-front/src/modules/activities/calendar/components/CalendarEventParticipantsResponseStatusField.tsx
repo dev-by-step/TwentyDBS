@@ -1,6 +1,8 @@
 import { useContext, useRef } from 'react';
 import { styled } from '@linaria/react';
 
+import { t } from '@lingui/core/macro';
+
 import { type CalendarEventParticipant } from '@/activities/calendar/types/CalendarEventParticipant';
 import { PropertyBox } from '@/object-record/record-inline-cell/property-box/components/PropertyBox';
 import { ParticipantChip } from '@/activities/components/ParticipantChip';
@@ -94,7 +96,13 @@ export const CalendarEventParticipantsResponseStatusField = ({
             <StyledIconContainer>{Icon}</StyledIconContainer>
 
             <StyledLabelContainer width={72}>
-              <EllipsisDisplay>{responseStatus}</EllipsisDisplay>
+              <EllipsisDisplay>
+                {{
+                  Yes: t`Yes`,
+                  Maybe: t`Maybe`,
+                  No: t`No`,
+                }[responseStatus] ?? responseStatus}
+              </EllipsisDisplay>
             </StyledLabelContainer>
           </StyledLabelAndIconContainer>
           <StyledDiv ref={participantsContainerRef}>

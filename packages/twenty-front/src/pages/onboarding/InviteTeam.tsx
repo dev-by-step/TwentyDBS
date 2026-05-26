@@ -1,7 +1,13 @@
 import { SubTitle } from '@/auth/components/SubTitle';
 import { Title } from '@/auth/components/Title';
+import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { calendarBookingPageIdState } from '@/client-config/states/calendarBookingPageIdState';
+import { SuperadminWorkspaceSetup } from '@/onboarding/components/SuperadminWorkspaceSetup';
+import {
+  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
+  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
+} from '@/onboarding/constants/superadminWorkspaceSetupUserVarKeys';
 import { useSetNextOnboardingStatus } from '@/onboarding/hooks/useSetNextOnboardingStatus';
 import { PageFocusId } from '@/types/PageFocusId';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -66,9 +72,21 @@ export const InviteTeam = () => {
   const { enqueueSuccessSnackBar } = useSnackBar();
   const { sendInvitation } = useCreateWorkspaceInvitation();
   const setNextOnboardingStatus = useSetNextOnboardingStatus();
+  const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const calendarBookingPageId = useAtomStateValue(calendarBookingPageIdState);
   const hasCalendarBooking = isDefined(calendarBookingPageId);
+  const isSuperadminWorkspaceSetupPending =
+    currentUser?.userVars?.[ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING] ===
+    true;
+  const hasSuperadminWorkspaceSetupState =
+    isDefined(
+      currentUser?.userVars?.[ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE],
+    );
+  const shouldShowSuperadminWorkspaceSetup =
+    isSuperadminWorkspaceSetupPending ||
+    (currentUser?.canAccessFullAdminPanel === true &&
+      !hasSuperadminWorkspaceSetupState);
 
   const {
     control,
@@ -163,6 +181,10 @@ export const InviteTeam = () => {
     focusId: PageFocusId.InviteTeam,
     dependencies: [handleSubmit, onSubmit],
   });
+
+  if (shouldShowSuperadminWorkspaceSetup) {
+    return <SuperadminWorkspaceSetup />;
+  }
 
   return (
     <ModalContent isVerticallyCentered isHorizontallyCentered>

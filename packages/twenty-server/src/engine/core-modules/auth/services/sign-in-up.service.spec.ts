@@ -30,7 +30,7 @@ const createSignInUpServiceForTests = () => {
 
   const mockWorkspaceRepository = {
     count: jest.fn(),
-    create: jest.fn(),
+    create: jest.fn((workspace) => workspace),
   };
 
   const mockConfigurationValues: MockConfigurationValues = {
@@ -48,7 +48,11 @@ const createSignInUpServiceForTests = () => {
 
   const queryRunnerMock = {
     manager: {
-      save: jest.fn(),
+      save: jest.fn(async (_entity, value) => ({
+        id: value.id ?? 'saved-id',
+        ...value,
+      })),
+      update: jest.fn(),
     },
     connect: jest.fn(),
     startTransaction: jest.fn(),
@@ -65,21 +69,20 @@ const createSignInUpServiceForTests = () => {
       invalidateWorkspaceInvitation: jest.fn(),
     } as any,
     {
-      create: jest.fn(),
+      create: jest.fn(async () => ({ id: 'user-workspace-id' })),
       checkUserWorkspaceExists: jest.fn(),
     } as any,
     {
+      setOnboardingConnectAccountPending: jest.fn(),
       setOnboardingCreateProfilePending: jest.fn(),
       setOnboardingInviteTeamPending: jest.fn(),
+      setOnboardingSuperadminWorkspaceSetupPending: jest.fn(),
       createOnboardingStatusForWorkspaceMember: jest.fn(),
     } as any,
     {
       emitCustomBatchEvent: jest.fn(),
     } as any,
     mockTwentyConfigService as any,
-    {
-      generateSubdomain: jest.fn(),
-    } as any,
     {
       findUserByEmail: jest.fn(),
       findByEmail: jest.fn(),
@@ -92,7 +95,9 @@ const createSignInUpServiceForTests = () => {
       invalidateAndRecompute: jest.fn(),
     } as any,
     {
-      createWorkspaceCustomApplication: jest.fn(),
+      createWorkspaceCustomApplication: jest
+        .fn()
+        .mockResolvedValue({ universalIdentifier: 'custom-app-id' }),
     } as any,
     {
       uploadWorkspaceLogoFromUrl: jest.fn(),
@@ -114,7 +119,7 @@ const createSignInUpServiceForTests = () => {
 };
 
 describe('SignInUpService workspace-creation policy', () => {
-  it('grants bootstrap owner server permissions when multi-workspace is enabled and unrestricted', async () => {
+  it('keeps bootstrap server permissions disabled for non-designated first user when multi-workspace is enabled and unrestricted', async () => {
     const {
       service,
       mockUserRepository,
@@ -137,13 +142,13 @@ describe('SignInUpService workspace-creation policy', () => {
 
     expect(mockUserRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        canImpersonate: true,
-        canAccessFullAdminPanel: true,
+        canImpersonate: false,
+        canAccessFullAdminPanel: false,
       }),
     );
   });
 
-  it('grants bootstrap owner server permissions when multi-workspace is enabled and restricted', async () => {
+  it('keeps bootstrap server permissions disabled for non-designated first user when multi-workspace is enabled and restricted', async () => {
     const {
       service,
       mockUserRepository,
@@ -163,6 +168,41 @@ describe('SignInUpService workspace-creation policy', () => {
     await service.signUpWithoutWorkspace(mockPartialUserPayload, {
       provider: AuthProviderEnum.Google,
     } as any);
+
+    expect(mockUserRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canImpersonate: false,
+        canAccessFullAdminPanel: false,
+      }),
+    );
+  });
+
+  it('grants bootstrap owner server permissions to the designated admin email', async () => {
+    const {
+      service,
+      mockUserRepository,
+      mockWorkspaceRepository,
+      mockConfigurationValues,
+    } = createSignInUpServiceForTests();
+
+    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = true;
+    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
+      false;
+    mockWorkspaceRepository.count.mockResolvedValue(0);
+    mockUserRepository.count.mockResolvedValue(0);
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await service.signUpWithoutWorkspace(
+      {
+        ...mockPartialUserPayload,
+        email: 'aline@devbystep.fr',
+      },
+      {
+        provider: AuthProviderEnum.Google,
+      } as any,
+    );
 
     expect(mockUserRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -253,6 +293,39 @@ describe('SignInUpService workspace-creation policy', () => {
     ).rejects.toMatchObject({
       code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
     });
+  });
+
+  it('marks superadmin workspace setup as pending for the bootstrap admin workspace', async () => {
+    const {
+      service,
+      mockUserRepository,
+      mockWorkspaceRepository,
+      mockConfigurationValues,
+    } = createSignInUpServiceForTests();
+
+    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = true;
+    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
+      false;
+    mockWorkspaceRepository.count.mockResolvedValue(0);
+    mockUserRepository.count.mockResolvedValue(0);
+
+    await service.signUpOnNewWorkspace({
+      type: 'newUserWithPicture',
+      newUserWithPicture: {
+        ...mockPartialUserPayload,
+        email: 'aline@devbystep.fr',
+      },
+    } as any);
+
+    expect(
+      (service as any).onboardingService
+        .setOnboardingSuperadminWorkspaceSetupPending,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: true,
+      }),
+      expect.anything(),
+    );
   });
 
   it('throws SIGNUP_DISABLED when creating workspace in single-workspace mode after bootstrap', async () => {

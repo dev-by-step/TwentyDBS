@@ -1,50 +1,52 @@
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { type CompositeFieldType } from '@/settings/data-model/types/CompositeFieldType';
 import { FieldMetadataType } from 'twenty-shared/types';
 
 export const COMPOSITE_FIELD_SUB_FIELD_LABELS: {
-  [key in CompositeFieldType]: Record<string, string>;
+  [key in CompositeFieldType]: Record<string, MessageDescriptor>;
 } = {
   [FieldMetadataType.CURRENCY]: {
-    amountMicros: 'Amount',
-    currencyCode: 'Currency',
+    amountMicros: msg`Amount`,
+    currencyCode: msg`Currency`,
   },
   [FieldMetadataType.EMAILS]: {
-    primaryEmail: 'Primary Email',
-    additionalEmails: 'Additional Emails',
+    primaryEmail: msg`Primary Email`,
+    additionalEmails: msg`Additional Emails`,
   },
   [FieldMetadataType.LINKS]: {
-    primaryLinkLabel: 'Link Label',
-    primaryLinkUrl: 'Link URL',
-    secondaryLinks: 'Secondary Links',
+    primaryLinkLabel: msg`Link Label`,
+    primaryLinkUrl: msg`Link URL`,
+    secondaryLinks: msg`Secondary Links`,
   },
   [FieldMetadataType.PHONES]: {
-    primaryPhoneNumber: 'Primary Phone Number',
-    primaryPhoneCountryCode: 'Primary Phone Country Code',
-    primaryPhoneCallingCode: 'Primary Phone Calling Code',
-    additionalPhones: 'Additional Phones',
+    primaryPhoneNumber: msg`Primary Phone Number`,
+    primaryPhoneCountryCode: msg`Primary Phone Country Code`,
+    primaryPhoneCallingCode: msg`Primary Phone Calling Code`,
+    additionalPhones: msg`Additional Phones`,
   },
   [FieldMetadataType.FULL_NAME]: {
-    firstName: 'First Name',
-    lastName: 'Last Name',
+    firstName: msg`First Name`,
+    lastName: msg`Last Name`,
   },
   [FieldMetadataType.ADDRESS]: {
-    addressStreet1: 'Address 1',
-    addressStreet2: 'Address 2',
-    addressCity: 'City',
-    addressState: 'State',
-    addressCountry: 'Country',
-    addressPostcode: 'Post Code',
-    addressLat: 'Latitude',
-    addressLng: 'Longitude',
+    addressStreet1: msg`Address 1`,
+    addressStreet2: msg`Address 2`,
+    addressCity: msg`City`,
+    addressState: msg`State`,
+    addressCountry: msg`Country`,
+    addressPostcode: msg`Post Code`,
+    addressLat: msg`Latitude`,
+    addressLng: msg`Longitude`,
   },
   [FieldMetadataType.ACTOR]: {
-    source: 'Source',
-    name: 'Name',
-    workspaceMemberId: 'Workspace Member',
-    context: 'Context',
+    source: msg`Source`,
+    name: msg`Name`,
+    workspaceMemberId: msg`Workspace Member`,
+    context: msg`Context`,
   },
   [FieldMetadataType.RICH_TEXT]: {
-    blocknote: 'BlockNote',
-    markdown: 'Markdown',
+    blocknote: msg`BlockNote`,
+    markdown: msg`Markdown`,
   },
 };

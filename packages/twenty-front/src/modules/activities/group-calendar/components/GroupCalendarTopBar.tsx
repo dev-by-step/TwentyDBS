@@ -13,11 +13,12 @@ import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { GroupCalendarCreateEventModal } from '@/activities/group-calendar/components/GroupCalendarCreateEventModal';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { type GroupCalendarDisplayMode } from '@/activities/group-calendar/types/GroupCalendarDisplayMode';
 import { type GroupCalendarViewMode } from '@/activities/group-calendar/types/GroupCalendarViewMode';
+import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { dateLocaleState } from '~/localization/states/dateLocaleState';
-import { useState } from 'react';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -140,7 +141,7 @@ export const GroupCalendarTopBar = ({
 }: GroupCalendarTopBarProps) => {
   const { t } = useLingui();
   const { localeCatalog } = useAtomStateValue(dateLocaleState);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const { openModal } = useModal();
 
   const viewModes: { label: string; mode: GroupCalendarViewMode }[] = [
     { label: t`Day`, mode: 'DAY' },
@@ -177,7 +178,9 @@ export const GroupCalendarTopBar = ({
             variant="secondary"
             Icon={IconPlus}
             title={t`New event`}
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() =>
+              openModal(GROUP_CALENDAR_CONFIG.modalIds.createEvent)
+            }
           />
           <Button
             size="small"
@@ -227,13 +230,10 @@ export const GroupCalendarTopBar = ({
           </StyledViewModeSelector>
         </StyledRight>
       </StyledContainer>
-      {isCreateModalOpen && (
-        <GroupCalendarCreateEventModal
-          selectedDate={selectedDate}
-          onClose={() => setIsCreateModalOpen(false)}
-          onCreated={onEventCreated}
-        />
-      )}
+      <GroupCalendarCreateEventModal
+        selectedDate={selectedDate}
+        onCreated={onEventCreated}
+      />
     </>
   );
 };

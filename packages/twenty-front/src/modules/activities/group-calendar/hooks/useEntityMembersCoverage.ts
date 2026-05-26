@@ -23,8 +23,9 @@ export type EntityMembersCoverage = {
 // via one of the selected entities". Consumed by the audience picker (to grey
 // out chips) and by the persist logic (to skip redundant person-audience rows).
 export const useEntityMembersCoverage = ({
+  limit,
   skip = false,
-}: { skip?: boolean } = {}): EntityMembersCoverage => {
+}: { limit?: number; skip?: boolean } = {}): EntityMembersCoverage => {
   const { records: memberships = [] } =
     useFindManyRecords<WorkspaceMemberEntityMembershipRecord>({
       objectNameSingular: WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME,
@@ -33,6 +34,7 @@ export const useEntityMembersCoverage = ({
         workspaceMemberId: true,
         internalEntityId: true,
       },
+      limit,
       skip,
     });
 

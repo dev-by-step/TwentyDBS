@@ -5,13 +5,8 @@ import { v4 } from 'uuid';
 
 import { type CalendarChannel } from '@/accounts/types/CalendarChannel';
 import {
-  StyledActions,
-  StyledBackdrop,
-  StyledDialog,
-  StyledField,
-  StyledRightActions,
-  StyledSelect,
-  StyledTitle,
+  StyledForm,
+  StyledModalTitle,
 } from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
 import {
   type GroupCalendarEventFormState,
@@ -22,6 +17,7 @@ import {
   CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
   CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import {
   CalendarEventAudienceSyncError,
   useGroupCalendarEventAudienceSync,
@@ -37,16 +33,24 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useMyCalendarChannels } from '@/settings/accounts/hooks/useMyCalendarChannels';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { Select } from '@/ui/input/components/Select';
+import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
+import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
+import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
+import { ModalContent, ModalFooter, ModalHeader } from 'twenty-ui/layout';
 
 type GroupCalendarCreateEventModalProps = {
   selectedDate: Date;
-  onClose: () => void;
   onCreated: () => Promise<unknown> | unknown;
 };
+
+type GroupCalendarCreateEventModalContentProps =
+  GroupCalendarCreateEventModalProps;
 
 const buildInitialState = (selectedDate: Date): GroupCalendarEventFormState => {
   const defaultStart = startOfHour(addHours(selectedDate, 1));
@@ -62,12 +66,40 @@ const buildInitialState = (selectedDate: Date): GroupCalendarEventFormState => {
 
 export const GroupCalendarCreateEventModal = ({
   selectedDate,
-  onClose,
   onCreated,
 }: GroupCalendarCreateEventModalProps) => {
+  const isModalOpened = useAtomComponentStateValue(
+    isModalOpenedComponentState,
+    GROUP_CALENDAR_CONFIG.modalIds.createEvent,
+  );
+
+  return (
+    <ModalStatefulWrapper
+      modalInstanceId={GROUP_CALENDAR_CONFIG.modalIds.createEvent}
+      size="medium"
+      padding="none"
+      isClosable
+      autoHeight
+      renderInDocumentBody
+    >
+      {isModalOpened && (
+        <GroupCalendarCreateEventModalContent
+          selectedDate={selectedDate}
+          onCreated={onCreated}
+        />
+      )}
+    </ModalStatefulWrapper>
+  );
+};
+
+const GroupCalendarCreateEventModalContent = ({
+  selectedDate,
+  onCreated,
+}: GroupCalendarCreateEventModalContentProps) => {
   const { channels, loading: calendarChannelsLoading } =
     useMyCalendarChannels();
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
+  const { closeModal } = useModal();
   const { objectMetadataItems } = useObjectMetadataItems();
   const isAudienceFeatureAvailable = objectMetadataItems.some(
     (objectMetadataItem) =>
@@ -160,6 +192,10 @@ export const GroupCalendarCreateEventModal = ({
   const selectedCalendarChannelId =
     calendarChannelId || channels[0]?.id || null;
 
+  const handleClose = () => {
+    closeModal(GROUP_CALENDAR_CONFIG.modalIds.createEvent);
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -210,6 +246,8 @@ export const GroupCalendarCreateEventModal = ({
         sharingScope,
       });
 
+      // Calendar participant mutations are authorized from the event's channel
+      // association, so the association must exist before the rest runs.
       await createCalendarChannelEventAssociation({
         calendarEventId: createdEvent.id,
         calendarChannelId: selectedCalendarChannelId,
@@ -217,16 +255,20 @@ export const GroupCalendarCreateEventModal = ({
         recurringEventExternalId: null,
       });
 
+      const postCreateOperations: Promise<unknown>[] = [];
+
       if (isDefined(currentWorkspaceMember)) {
-        await createCalendarEventParticipant({
-          calendarEventId: createdEvent.id,
-          workspaceMemberId: currentWorkspaceMember.id,
-          displayName:
-            `${currentWorkspaceMember.name.firstName} ${currentWorkspaceMember.name.lastName}`.trim(),
-          handle: currentWorkspaceMember.userEmail,
-          isOrganizer: true,
-          responseStatus: 'ACCEPTED',
-        });
+        postCreateOperations.push(
+          createCalendarEventParticipant({
+            calendarEventId: createdEvent.id,
+            workspaceMemberId: currentWorkspaceMember.id,
+            displayName:
+              `${currentWorkspaceMember.name.firstName} ${currentWorkspaceMember.name.lastName}`.trim(),
+            handle: currentWorkspaceMember.userEmail,
+            isOrganizer: true,
+            responseStatus: 'ACCEPTED',
+          }),
+        );
       }
 
       if (isAudienceFeatureAvailable) {
@@ -241,16 +283,20 @@ export const GroupCalendarCreateEventModal = ({
             ? formState.selectedAudienceMemberIds
             : [];
 
-        await persistAudience({
-          eventId: createdEvent.id,
-          desiredEntityIds,
-          desiredMemberIds,
-        });
+        postCreateOperations.push(
+          persistAudience({
+            eventId: createdEvent.id,
+            desiredEntityIds,
+            desiredMemberIds,
+          }),
+        );
       }
+
+      await Promise.all(postCreateOperations);
 
       enqueueSuccessSnackBar({ message: t`Event created.` });
       await onCreated();
-      onClose();
+      handleClose();
     } catch (error) {
       const message =
         error instanceof CalendarEventAudienceSyncError
@@ -266,9 +312,11 @@ export const GroupCalendarCreateEventModal = ({
   };
 
   return (
-    <StyledBackdrop>
-      <StyledDialog onSubmit={handleSubmit}>
-        <StyledTitle>{t`New event`}</StyledTitle>
+    <StyledForm onSubmit={handleSubmit}>
+      <ModalHeader hasBorderBottom>
+        <StyledModalTitle>{t`New event`}</StyledModalTitle>
+      </ModalHeader>
+      <ModalContent contentPadding={5} gap={4}>
         <GroupCalendarEventFormFields
           state={formState}
           onPatchState={patchFormState}
@@ -276,45 +324,41 @@ export const GroupCalendarCreateEventModal = ({
           isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
           manageableEventEntities={manageableEventEntities}
           afterTitleField={
-            <StyledField>
-              {t`Calendar`}
-              <StyledSelect
-                disabled={calendarChannelsLoading || channels.length === 0}
-                value={selectedCalendarChannelId ?? ''}
-                onChange={(event) => setCalendarChannelId(event.target.value)}
-                required
-              >
-                {channels.map((channel: CalendarChannel) => (
-                  <option key={channel.id} value={channel.id}>
-                    {channel.handle}
-                  </option>
-                ))}
-              </StyledSelect>
-            </StyledField>
+            <Select
+              dropdownId="group-calendar-create-event-calendar-channel"
+              label={t`Calendar`}
+              disabled={calendarChannelsLoading || channels.length === 0}
+              value={selectedCalendarChannelId ?? ''}
+              onChange={(value) => setCalendarChannelId(value)}
+              options={channels.map((channel: CalendarChannel) => ({
+                label: channel.handle,
+                value: channel.id,
+              }))}
+              fullWidth
+            />
           }
         />
-        <StyledActions>
-          <StyledRightActions style={{ marginLeft: 'auto' }}>
-            <Button
-              title={t`Cancel`}
-              variant="tertiary"
-              onClick={onClose}
-              disabled={isSaving}
-            />
-            <Button
-              title={t`Create`}
-              variant="secondary"
-              type="submit"
-              disabled={
-                isSaving ||
-                !manageableEntitiesReady ||
-                manageableEventEntities.length === 0 ||
-                formState.eventEntityIds.length === 0
-              }
-            />
-          </StyledRightActions>
-        </StyledActions>
-      </StyledDialog>
-    </StyledBackdrop>
+      </ModalContent>
+      <ModalFooter>
+        <Button
+          title={t`Cancel`}
+          variant="tertiary"
+          type="button"
+          onClick={handleClose}
+          disabled={isSaving}
+        />
+        <Button
+          title={t`Create`}
+          variant="secondary"
+          type="submit"
+          disabled={
+            isSaving ||
+            !manageableEntitiesReady ||
+            manageableEventEntities.length === 0 ||
+            formState.eventEntityIds.length === 0
+          }
+        />
+      </ModalFooter>
+    </StyledForm>
   );
 };

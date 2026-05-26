@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME } from '@/activities/group-calendar/constants/CalendarEventAudience';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
@@ -33,6 +34,7 @@ export const useCurrentUserEntityIds = (): Set<string> => {
       filter: {
         workspaceMemberId: { eq: currentWorkspaceMember?.id ?? '' },
       },
+      limit: GROUP_CALENDAR_CONFIG.limits.entityMembership,
       skip: !isDefined(currentWorkspaceMember),
     });
 

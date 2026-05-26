@@ -27,6 +27,7 @@ type InitInternalEntitiesCommandInternals = {
   seedInternalEntities: (
     dataSource: GlobalWorkspaceDataSource,
     internalEntitySqlTable: string,
+    workspaceMemberEntityMembershipSqlTable: string,
     workspaceId: string,
   ) => Promise<void>;
   backfillOpportunities: (
@@ -108,20 +109,48 @@ describe('InitInternalEntitiesCommand', () => {
     };
   };
 
-  it('should seed internal entities in a single upsert query', async () => {
+  it('should normalize duplicate internal entities before seeding them', async () => {
     const { commandInternals, dataSource, dataSourceMock, workspaceId } =
       buildCommandContext();
 
     await commandInternals.seedInternalEntities(
       dataSource,
       '"workspace_abc"."internalEntity"',
+      '"workspace_abc"."workspaceMemberEntityMembership"',
       workspaceId,
     );
 
-    expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(3);
+
+    const [membershipUpdateQuery, membershipUpdateParameters] =
+      dataSourceMock.query.mock.calls[0];
+
+    expect(membershipUpdateQuery).toContain(
+      'UPDATE "workspace_abc"."workspaceMemberEntityMembership"',
+    );
+    expect(membershipUpdateQuery).toContain('duplicate_entity_ids');
+    expect(membershipUpdateQuery).toContain(
+      'SET "internalEntityId" = duplicate_entity_ids.canonical_id',
+    );
+    expect(membershipUpdateParameters).toEqual(
+      expect.arrayContaining([
+        INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        INTERNAL_ENTITY_SEEDS.WEKNOW.name,
+        workspaceId,
+      ]),
+    );
+
+    const [duplicateDeleteQuery, duplicateDeleteParameters] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(duplicateDeleteQuery).toContain(
+      'DELETE FROM "workspace_abc"."internalEntity"',
+    );
+    expect(duplicateDeleteQuery).toContain('duplicate_entity_ids');
+    expect(duplicateDeleteParameters).toEqual(membershipUpdateParameters);
 
     const [query, parameters, queryRunner, options] =
-      dataSourceMock.query.mock.calls[0];
+      dataSourceMock.query.mock.calls[2];
 
     expect(query).toContain('INSERT INTO "workspace_abc"."internalEntity"');
     expect(query).toContain('ON CONFLICT ("id") DO UPDATE');

@@ -69,8 +69,9 @@ export const setRequestExtraParams = (
     request.params.messageVisibility = messageVisibility;
   }
 
-  const parsedVisibleInternalEntityIds =
-    parseVisibleInternalEntityIds(visibleInternalEntityIds);
+  const parsedVisibleInternalEntityIds = parseVisibleInternalEntityIds(
+    visibleInternalEntityIds,
+  );
 
   if (parsedVisibleInternalEntityIds) {
     (request.params as Record<string, unknown>).visibleInternalEntityIds =

@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { type WorkflowRunStatus } from '@/workflow/types/Workflow';
 import { WorkflowDiagramCanvasBase } from '@/workflow/workflow-diagram/components/WorkflowDiagramCanvasBase';
 
@@ -11,6 +12,7 @@ export const WorkflowRunDiagramCanvas = ({
 }: {
   workflowRunStatus: WorkflowRunStatus;
 }) => {
+  const { t } = useLingui();
   const tagProps = getWorkflowRunStatusTagProps({
     workflowRunStatus,
   });
@@ -26,7 +28,7 @@ export const WorkflowRunDiagramCanvas = ({
         }}
         tagContainerTestId="workflow-run-status"
         tagColor={tagProps.color}
-        tagText={tagProps.text}
+        tagText={t(tagProps.text)}
       />
     </ReactFlowProvider>
   );

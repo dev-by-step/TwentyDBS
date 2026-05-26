@@ -24,6 +24,10 @@ export class InternalEntityAccessUpdateOnePreQueryHook
       'updateOne',
     );
 
-    return payload;
+    return this.internalEntityAccessPolicyService.validateUpdatePayload(
+      authContext,
+      objectName,
+      payload,
+    );
   }
 }

@@ -296,7 +296,7 @@ const GENERATE_CALENDAR_EVENT_PARTICIPANT_SEEDS = (
   );
 
   const PERSON_IDS = PERSON_DATA_SEEDS.map((person) => person.id);
-  const WORKSPACE_MEMBER_IDS = getWorkspaceMemberDataSeeds(workspaceId).map(
+  const WORKSPACE_MEMBER_IDS = getWorkspaceMemberDataSeeds().map(
     (member) => member.id,
   );
 

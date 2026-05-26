@@ -20,7 +20,7 @@ type DemoCompanyRecord = {
   companySeedKey: SeedIdKey;
   workspaceMemberId: string;
   companyName: string;
-  companyDomain: string;
+  companyDomain: string | null;
   companyCity: string;
   companyEmployees: number;
   companyLinkedinUrl: string;
@@ -33,7 +33,7 @@ export const INTERNAL_ENTITY_DEMO_RECORDS = [
     companySeedKey: 'ID_1',
     workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
     companyName: 'WEKNOW',
-    companyDomain: 'weknow.fr',
+    companyDomain: null,
     companyCity: 'Paris',
     companyEmployees: 32,
     companyLinkedinUrl: 'https://linkedin.com/company/weknow',
@@ -403,7 +403,7 @@ export const INTERNAL_ENTITY_DEMO_RECORDS = [
     companySeedKey: 'ID_11',
     workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
     companyName: 'ALLSENSIA',
-    companyDomain: 'allsensia.fr',
+    companyDomain: null,
     companyCity: 'Lyon',
     companyEmployees: 24,
     companyLinkedinUrl: 'https://linkedin.com/company/allsensia',
@@ -557,7 +557,7 @@ export const INTERNAL_ENTITY_DEMO_RECORDS = [
     companySeedKey: 'ID_16',
     workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
     companyName: 'ANGLE INTELLIGENCE',
-    companyDomain: 'angle-intelligence.fr',
+    companyDomain: 'https://www.angleintelligence.com',
     companyCity: 'Bordeaux',
     companyEmployees: 14,
     companyLinkedinUrl: 'https://linkedin.com/company/angle-intelligence',

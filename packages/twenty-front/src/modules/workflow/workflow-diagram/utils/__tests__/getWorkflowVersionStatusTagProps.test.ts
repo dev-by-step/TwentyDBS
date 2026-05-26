@@ -10,7 +10,11 @@ describe('getWorkflowVersionStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "gray",
-  "text": "Archived",
+  "text": {
+    "id": "Archived",
+    "message": "Archived",
+    "values": {},
+  },
 }
 `);
   });
@@ -23,7 +27,11 @@ describe('getWorkflowVersionStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "yellow",
-  "text": "Draft",
+  "text": {
+    "id": "Draft",
+    "message": "Draft",
+    "values": {},
+  },
 }
 `);
   });
@@ -36,7 +44,11 @@ describe('getWorkflowVersionStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "green",
-  "text": "Active",
+  "text": {
+    "id": "Active",
+    "message": "Active",
+    "values": {},
+  },
 }
 `);
   });
@@ -49,7 +61,11 @@ describe('getWorkflowVersionStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "gray",
-  "text": "Deactivated",
+  "text": {
+    "id": "Deactivated",
+    "message": "Deactivated",
+    "values": {},
+  },
 }
 `);
   });
@@ -62,7 +78,11 @@ describe('getWorkflowVersionStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "gray",
-  "text": "Deactivated",
+  "text": {
+    "id": "Deactivated",
+    "message": "Deactivated",
+    "values": {},
+  },
 }
 `);
   });

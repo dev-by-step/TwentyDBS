@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { type WorkflowVersionStatus } from '@/workflow/types/Workflow';
 import { WorkflowDiagramCanvasBase } from '@/workflow/workflow-diagram/components/WorkflowDiagramCanvasBase';
 import { WorkflowDiagramDefaultEdgeReadonly } from '@/workflow/workflow-diagram/workflow-edges/components/WorkflowDiagramDefaultEdgeReadonly';
@@ -12,6 +13,7 @@ export const WorkflowDiagramCanvasReadonly = ({
 }: {
   versionStatus: WorkflowVersionStatus;
 }) => {
+  const { t } = useLingui();
   const tagProps = getWorkflowVersionStatusTagProps({
     workflowVersionStatus: versionStatus,
   });
@@ -28,7 +30,7 @@ export const WorkflowDiagramCanvasReadonly = ({
         }}
         tagContainerTestId="workflow-visualizer-status"
         tagColor={tagProps.color}
-        tagText={tagProps.text}
+        tagText={t(tagProps.text)}
       />
     </ReactFlowProvider>
   );

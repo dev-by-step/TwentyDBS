@@ -2,6 +2,7 @@ import {
   CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME,
   CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
 } from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { useEntityMembersCoverage } from '@/activities/group-calendar/hooks/useEntityMembersCoverage';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
@@ -73,6 +74,7 @@ export const useGroupCalendarEventAudienceSync = ({
     objectNameSingular: CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME,
   });
   const { isMemberCoveredBySelectedEntities } = useEntityMembersCoverage({
+    limit: GROUP_CALENDAR_CONFIG.limits.entityMembership,
     skip: !isPersonAudienceFeatureAvailable,
   });
 

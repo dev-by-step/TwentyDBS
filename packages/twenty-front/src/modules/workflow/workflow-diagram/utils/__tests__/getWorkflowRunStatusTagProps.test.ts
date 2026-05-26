@@ -10,7 +10,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "gray",
-  "text": "Not started",
+  "text": {
+    "id": "Not started",
+    "message": "Not started",
+    "values": {},
+  },
 }
 `);
   });
@@ -23,7 +27,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "yellow",
-  "text": "Running",
+  "text": {
+    "id": "Running",
+    "message": "Running",
+    "values": {},
+  },
 }
 `);
   });
@@ -36,7 +44,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "green",
-  "text": "Completed",
+  "text": {
+    "id": "Completed",
+    "message": "Completed",
+    "values": {},
+  },
 }
 `);
   });
@@ -49,7 +61,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "blue",
-  "text": "Enqueued",
+  "text": {
+    "id": "Enqueued",
+    "message": "Enqueued",
+    "values": {},
+  },
 }
 `);
   });
@@ -62,7 +78,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "red",
-  "text": "Failed",
+  "text": {
+    "id": "Failed",
+    "message": "Failed",
+    "values": {},
+  },
 }
 `);
   });
@@ -75,7 +95,11 @@ describe('getWorkflowRunStatusTagProps', () => {
     expect(result).toMatchInlineSnapshot(`
 {
   "color": "red",
-  "text": "Failed",
+  "text": {
+    "id": "Failed",
+    "message": "Failed",
+    "values": {},
+  },
 }
 `);
   });

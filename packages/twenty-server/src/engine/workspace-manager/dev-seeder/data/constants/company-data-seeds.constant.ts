@@ -7,7 +7,7 @@ import { INTERNAL_ENTITY_DEMO_RECORDS } from 'src/engine/workspace-manager/dev-s
 type CompanyDataSeed = {
   id: string;
   name: string;
-  domainNamePrimaryLinkUrl: string;
+  domainNamePrimaryLinkUrl: string | null;
   addressAddressCity: string;
   employees: number;
   linkedinLinkPrimaryLinkUrl: string;
@@ -8581,3 +8581,14 @@ export const COMPANY_DATA_SEEDS: CompanyDataSeed[] =
       position: index + 1,
     };
   });
+
+const DEFAULT_COMPANY_DATA_SEED_IDS = new Set([
+  COMPANY_DATA_SEED_IDS.ID_1,
+  COMPANY_DATA_SEED_IDS.ID_6,
+  COMPANY_DATA_SEED_IDS.ID_11,
+  COMPANY_DATA_SEED_IDS.ID_16,
+]);
+
+export const DEFAULT_COMPANY_DATA_SEEDS = COMPANY_DATA_SEEDS.filter((company) =>
+  DEFAULT_COMPANY_DATA_SEED_IDS.has(company.id),
+);

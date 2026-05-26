@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME } from '@/activities/group-calendar/constants/CalendarEventAudience';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
@@ -53,6 +54,7 @@ export const useManageableEventEntities = (): {
     useFindManyRecords<InternalEntityRecord>({
       objectNameSingular: INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
       recordGqlFields: { id: true, name: true, color: true },
+      limit: GROUP_CALENDAR_CONFIG.limits.entityPicker,
       skip: !isPlatformAdmin,
     });
 
@@ -72,6 +74,7 @@ export const useManageableEventEntities = (): {
       filter: {
         workspaceMemberId: { eq: currentWorkspaceMember?.id ?? '' },
       },
+      limit: GROUP_CALENDAR_CONFIG.limits.entityMembership,
       skip: isPlatformAdmin || !isDefined(currentWorkspaceMember),
     });
 

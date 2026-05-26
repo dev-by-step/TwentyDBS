@@ -171,6 +171,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     await this.seedInternalEntities(
       dataSource,
       internalEntitySqlTable,
+      workspaceMemberEntityMembershipSqlTable,
       validatedWorkspaceId,
     );
     await this.backfillOpportunities(dataSource, opportunitySqlTable);
@@ -711,6 +712,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   private async seedInternalEntities(
     dataSource: GlobalWorkspaceDataSource,
     internalEntitySqlTable: string,
+    workspaceMemberEntityMembershipSqlTable: string,
     workspaceId: string,
   ): Promise<void> {
     this.logger.log('Seed des InternalEntity...');
@@ -722,6 +724,51 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
 
       return;
     }
+
+    const { valuesSql: seedIdentifierValuesSql, parameters: seedParameters } =
+      this.buildInternalEntitySeedIdentifierBatch(seeds);
+    const workspaceIdParameterIndex = seedParameters.length + 1;
+
+    await this.runAdminQuery(
+      dataSource,
+      `WITH seed_values(id, name) AS (
+         VALUES ${seedIdentifierValuesSql}
+       ),
+       duplicate_entity_ids AS (
+         SELECT internal_entity."id" AS duplicate_id,
+                seed_values.id AS canonical_id
+         FROM ${internalEntitySqlTable} internal_entity
+         INNER JOIN seed_values
+           ON seed_values.name = internal_entity."name"
+         WHERE internal_entity."workspaceId" = $${workspaceIdParameterIndex}
+           AND internal_entity."id" != seed_values.id
+       )
+       UPDATE ${workspaceMemberEntityMembershipSqlTable} workspace_member_membership
+       SET "internalEntityId" = duplicate_entity_ids.canonical_id,
+           "updatedAt" = NOW()
+       FROM duplicate_entity_ids
+       WHERE workspace_member_membership."internalEntityId" = duplicate_entity_ids.duplicate_id`,
+      [...seedParameters, workspaceId],
+    );
+
+    await this.runAdminQuery(
+      dataSource,
+      `WITH seed_values(id, name) AS (
+         VALUES ${seedIdentifierValuesSql}
+       ),
+       duplicate_entity_ids AS (
+         SELECT internal_entity."id" AS duplicate_id
+         FROM ${internalEntitySqlTable} internal_entity
+         INNER JOIN seed_values
+           ON seed_values.name = internal_entity."name"
+         WHERE internal_entity."workspaceId" = $${workspaceIdParameterIndex}
+           AND internal_entity."id" != seed_values.id
+       )
+       DELETE FROM ${internalEntitySqlTable} internal_entity
+       USING duplicate_entity_ids
+       WHERE internal_entity."id" = duplicate_entity_ids.duplicate_id`,
+      [...seedParameters, workspaceId],
+    );
 
     const { valuesSql, parameters } = this.buildInternalEntitySeedBatch(
       seeds,
@@ -761,6 +808,25 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
         return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${
           offset + 4
         }, 0, NOW(), NOW())`;
+      })
+      .join(', ');
+
+    return { valuesSql, parameters };
+  }
+
+  private buildInternalEntitySeedIdentifierBatch(seeds: InternalEntitySeed[]): {
+    valuesSql: string;
+    parameters: string[];
+  } {
+    const parameters: string[] = [];
+
+    const valuesSql = seeds
+      .map((seed, index) => {
+        const offset = index * 2;
+
+        parameters.push(seed.id, seed.name);
+
+        return `($${offset + 1}::uuid, $${offset + 2})`;
       })
       .join(', ');
 

@@ -182,8 +182,8 @@ export const SettingsAccountsConnectionForm = ({
                   <Select
                     label={t`IMAP Encryption`}
                     options={[
-                      { label: 'SSL/TLS', value: true },
-                      { label: 'None', value: false },
+                      { label: t`SSL/TLS`, value: true },
+                      { label: t`None`, value: false },
                     ]}
                     value={field.value}
                     onChange={field.onChange}
@@ -281,7 +281,7 @@ export const SettingsAccountsConnectionForm = ({
                     label={t`SMTP Encryption`}
                     options={[
                       { label: 'SSL/TLS', value: true },
-                      { label: 'STARTTLS', value: false },
+                      { label: t`STARTTLS`, value: false },
                     ]}
                     value={field.value}
                     onChange={field.onChange}

@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 
+import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
@@ -375,7 +376,59 @@ describe('InternalEntityAccessPolicyService', () => {
     ).resolves.toEqual({
       data: {
         name: 'New Entity',
+        workspaceId: authContext.workspace.id,
       },
+    });
+  });
+
+  it('should deny internal entity creation to a workspace admin without superadmin access', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleUniversalIdentifier: STANDARD_ROLE.admin.universalIdentifier,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'internalEntity', {
+        data: {
+          name: 'New Entity',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should normalize internal entity create payloads for a superadmin', async () => {
+    const { service, authContext } = buildServiceContext({
+      canAccessFullAdminPanel: true,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'internalEntity', {
+        data: {
+          name: '  New Entity  ',
+        },
+      }),
+    ).resolves.toEqual({
+      data: {
+        name: 'New Entity',
+        workspaceId: authContext.workspace.id,
+      },
+    });
+  });
+
+  it('should reject blank internal entity names', async () => {
+    const { service, authContext } = buildServiceContext({
+      canAccessFullAdminPanel: true,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'internalEntity', {
+        data: {
+          name: '   ',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
     });
   });
 
@@ -404,6 +457,24 @@ describe('InternalEntityAccessPolicyService', () => {
         'updateOne',
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('should deny an entity manager from updating an internal entity', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      roleUniversalIdentifier: STANDARD_ROLE.entityManager.universalIdentifier,
+    });
+
+    await expect(
+      service.assertSingleMutationAllowed(
+        authContext,
+        'internalEntity',
+        faker.string.uuid(),
+        'updateOne',
+      ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
   });
 
   it('should deny a standard user from updating another user opportunity', async () => {

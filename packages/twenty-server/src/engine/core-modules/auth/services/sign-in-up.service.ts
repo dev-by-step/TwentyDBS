@@ -15,6 +15,7 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
+import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import {
   PASSWORD_REGEX,
   compareHash,
@@ -28,7 +29,6 @@ import {
   type SignInUpBaseParams,
   type SignInUpNewUserPayload,
 } from 'src/engine/core-modules/auth/types/signInUp.type';
-import { SubdomainManagerService } from 'src/engine/core-modules/domain/subdomain-manager/services/subdomain-manager.service';
 import { EnterprisePlanService } from 'src/engine/core-modules/enterprise/services/enterprise-plan.service';
 import { FileCorePictureService } from 'src/engine/core-modules/file/file-core-picture/services/file-core-picture.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
@@ -40,6 +40,10 @@ import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/use
 import { UserService } from 'src/engine/core-modules/user/services/user.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceInvitationService } from 'src/engine/core-modules/workspace-invitation/services/workspace-invitation.service';
+import {
+  TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
+  TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+} from 'src/engine/core-modules/workspace/constants/twenty-dbs-workspace.constant';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -60,7 +64,6 @@ export class SignInUpService {
     private readonly onboardingService: OnboardingService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly subdomainManagerService: SubdomainManagerService,
     private readonly userService: UserService,
     private readonly metricsService: MetricsService,
     private readonly workspaceCacheService: WorkspaceCacheService,
@@ -493,7 +496,8 @@ export class SignInUpService {
 
     await this.assertWorkspaceCreationAllowed(userData);
 
-    const shouldGrantServerAdmin = !(await this.hasServerAdmin());
+    const shouldGrantServerAdmin =
+      isBootstrapAdminEmail(email) && !(await this.hasServerAdmin());
 
     const isWorkEmailFound = isWorkEmail(email);
 
@@ -507,11 +511,9 @@ export class SignInUpService {
     try {
       const workspaceToCreate = this.workspaceRepository.create({
         id: workspaceId,
-        subdomain: await this.subdomainManagerService.generateSubdomain(
-          isWorkEmailFound ? { userEmail: email } : {},
-        ),
+        subdomain: TWENTY_DBS_WORKSPACE_SUBDOMAIN,
         workspaceCustomApplicationId,
-        displayName: '',
+        displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
         inviteHash: v4(),
         activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
       });
@@ -592,6 +594,19 @@ export class SignInUpService {
         queryRunner,
       );
 
+      if (
+        user.canAccessFullAdminPanel === true ||
+        isBootstrapAdminEmail(email)
+      ) {
+        await this.onboardingService.setOnboardingSuperadminWorkspaceSetupPending(
+          {
+            workspaceId: workspace.id,
+            value: true,
+          },
+          queryRunner,
+        );
+      }
+
       await queryRunner.commitTransaction();
 
       return { user, workspace };
@@ -626,7 +641,9 @@ export class SignInUpService {
 
     await this.assertSignUpEnabled();
 
-    const shouldGrantServerAdmin = !(await this.hasServerAdmin());
+    const shouldGrantServerAdmin =
+      isBootstrapAdminEmail(newUserParams.email) &&
+      !(await this.hasServerAdmin());
 
     return this.saveNewUser(
       await this.computePartialUserFromUserPayload(newUserParams, authParams),

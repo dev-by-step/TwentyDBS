@@ -1,5 +1,5 @@
 import { useSnackBarOnQueryError } from '@/apollo/hooks/useSnackBarOnQueryError';
-import { GROUP_CALENDAR_DEFAULT_PAGE_SIZE } from '@/activities/group-calendar/constants/GroupCalendar';
+import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { getGroupTimelineCalendarEvents } from '@/activities/group-calendar/graphql/queries/getGroupTimelineCalendarEvents';
 import { useGroupCalendarNavigation } from '@/activities/group-calendar/hooks/useGroupCalendarNavigation';
 import { ENTITY_FILTER_VIEW_MODE } from '@/entity-filter/constants/entityFilterViewMode';
@@ -20,7 +20,7 @@ export const useGroupCalendarEvents = () => {
     client: apolloCoreClient,
     variables: {
       page: 1,
-      pageSize: GROUP_CALENDAR_DEFAULT_PAGE_SIZE,
+      pageSize: GROUP_CALENDAR_CONFIG.defaultPageSize,
       startDate: navigation.startDate.toISOString(),
       endDate: navigation.endDate.toISOString(),
       includeMaskedEvents,

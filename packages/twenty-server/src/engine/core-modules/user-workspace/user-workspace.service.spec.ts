@@ -24,6 +24,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleValidationService } from 'src/engine/metadata-modules/role-validation/services/role-validation.service';
+import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
@@ -32,6 +33,7 @@ describe('UserWorkspaceService', () => {
   let service: UserWorkspaceService;
   let userWorkspaceRepository: Repository<UserWorkspaceEntity>;
   let userRepository: Repository<UserEntity>;
+  let roleRepository: Repository<RoleEntity>;
   let workspaceInvitationService: WorkspaceInvitationService;
   let approvedAccessDomainService: ApprovedAccessDomainService;
   let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
@@ -70,6 +72,12 @@ describe('UserWorkspaceService', () => {
           provide: getRepositoryToken(RoleTargetEntity),
           useValue: {
             findOneOrFail: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(RoleEntity),
+          useValue: {
+            findOne: jest.fn(),
           },
         },
         {
@@ -159,6 +167,7 @@ describe('UserWorkspaceService', () => {
       getRepositoryToken(UserWorkspaceEntity),
     );
     userRepository = module.get(getRepositoryToken(UserEntity));
+    roleRepository = module.get(getRepositoryToken(RoleEntity));
     workspaceInvitationService = module.get<WorkspaceInvitationService>(
       WorkspaceInvitationService,
     );
@@ -368,6 +377,48 @@ describe('UserWorkspaceService', () => {
       });
     });
 
+    it('should assign admin role to bootstrap admin email when joining a workspace', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'aline@devbystep.fr',
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-01'),
+        deletedAt: null,
+      } as unknown as UserEntity;
+      const workspace = {
+        id: 'workspace-id',
+        defaultRoleId: 'default-role-id',
+      } as WorkspaceEntity;
+      const userWorkspace = {
+        id: 'user-workspace-id',
+        userId: user.id,
+        workspaceId: workspace.id,
+      } as UserWorkspaceEntity;
+
+      jest.spyOn(service, 'checkUserWorkspaceExists').mockResolvedValue(null);
+      jest.spyOn(roleRepository, 'findOne').mockResolvedValue({
+        id: 'admin-role-id',
+      } as RoleEntity);
+      jest.spyOn(service, 'create').mockResolvedValue(userWorkspace);
+      jest.spyOn(service, 'createWorkspaceMember').mockResolvedValue(undefined);
+      jest
+        .spyOn(userRoleService, 'assignRoleToManyUserWorkspace')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(workspaceInvitationService, 'invalidateWorkspaceInvitation')
+        .mockResolvedValue(undefined);
+
+      await service.addUserToWorkspaceIfUserNotInWorkspace(user, workspace);
+
+      expect(
+        userRoleService.assignRoleToManyUserWorkspace,
+      ).toHaveBeenCalledWith({
+        workspaceId: workspace.id,
+        userWorkspaceIds: [userWorkspace.id],
+        roleId: 'admin-role-id',
+      });
+    });
+
     it('should not add user to workspace if already in workspace', async () => {
       const user = {
         id: 'user-id',
@@ -400,6 +451,49 @@ describe('UserWorkspaceService', () => {
       );
       expect(service.create).not.toHaveBeenCalled();
       expect(service.createWorkspaceMember).not.toHaveBeenCalled();
+    });
+
+    it('should promote bootstrap admin email on existing workspace membership', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'aline@devbystep.fr',
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-01'),
+        deletedAt: null,
+      } as unknown as UserEntity;
+      const workspace = {
+        id: 'workspace-id',
+        defaultRoleId: 'default-role-id',
+      } as WorkspaceEntity;
+      const userWorkspace = {
+        id: 'user-workspace-id',
+        userId: user.id,
+        workspaceId: workspace.id,
+      } as UserWorkspaceEntity;
+
+      jest
+        .spyOn(service, 'checkUserWorkspaceExists')
+        .mockResolvedValue(userWorkspace);
+      jest.spyOn(service, 'create').mockResolvedValue(userWorkspace);
+      jest.spyOn(service, 'createWorkspaceMember').mockResolvedValue(undefined);
+      jest.spyOn(roleRepository, 'findOne').mockResolvedValue({
+        id: 'admin-role-id',
+      } as RoleEntity);
+      jest
+        .spyOn(userRoleService, 'assignRoleToManyUserWorkspace')
+        .mockResolvedValue(undefined);
+
+      await service.addUserToWorkspaceIfUserNotInWorkspace(user, workspace);
+
+      expect(service.create).not.toHaveBeenCalled();
+      expect(service.createWorkspaceMember).not.toHaveBeenCalled();
+      expect(
+        userRoleService.assignRoleToManyUserWorkspace,
+      ).toHaveBeenCalledWith({
+        workspaceId: workspace.id,
+        userWorkspaceIds: [userWorkspace.id],
+        roleId: 'admin-role-id',
+      });
     });
 
     it('should throw an exception if workspace has no default role', async () => {

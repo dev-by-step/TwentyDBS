@@ -347,6 +347,7 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     await this.workspaceManagerService.init({
       workspace,
       userId: user.id,
+      userEmail: user.email,
     });
 
     await this.featureFlagService.enableFeatureFlags(

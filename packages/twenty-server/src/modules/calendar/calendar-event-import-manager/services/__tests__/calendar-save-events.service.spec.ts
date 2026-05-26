@@ -93,7 +93,9 @@ describe('CalendarSaveEventsService', () => {
 
     expect(calendarEventRepository.insert).not.toHaveBeenCalled();
     expect(calendarEventRepository.updateMany).not.toHaveBeenCalled();
-    expect(calendarChannelEventAssociationRepository.insert).toHaveBeenCalledWith(
+    expect(
+      calendarChannelEventAssociationRepository.insert,
+    ).toHaveBeenCalledWith(
       [
         {
           calendarEventId: 'calendar-event-1',

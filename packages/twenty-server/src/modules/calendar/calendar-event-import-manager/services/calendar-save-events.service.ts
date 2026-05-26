@@ -135,7 +135,9 @@ export class CalendarSaveEventsService {
           );
           const existingCalendarEventBySignature = new Map(
             existingCalendarEvents
-              .map((event) => [getCalendarEventSignature(event), event] as const)
+              .map(
+                (event) => [getCalendarEventSignature(event), event] as const,
+              )
               .filter(
                 (
                   entry,
@@ -306,43 +308,44 @@ export class CalendarSaveEventsService {
             | 'eventExternalId'
             | 'calendarChannelId'
             | 'recurringEventExternalId'
-          >[] = fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents.flatMap(
-            ({
-              fetchedCalendarEvent,
-              existingCalendarEvent,
-              newlyCreatedCalendarEvent,
-            }) => {
-              const calendarEventId =
-                existingCalendarEvent?.id ?? newlyCreatedCalendarEvent?.id;
+          >[] =
+            fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents.flatMap(
+              ({
+                fetchedCalendarEvent,
+                existingCalendarEvent,
+                newlyCreatedCalendarEvent,
+              }) => {
+                const calendarEventId =
+                  existingCalendarEvent?.id ?? newlyCreatedCalendarEvent?.id;
 
-              if (!calendarEventId) {
-                throw new Error(
-                  `Calendar event id not found for event with iCalUid ${fetchedCalendarEvent.iCalUid} - should never happen`,
-                );
-              }
+                if (!calendarEventId) {
+                  throw new Error(
+                    `Calendar event id not found for event with iCalUid ${fetchedCalendarEvent.iCalUid} - should never happen`,
+                  );
+                }
 
-              const existingAssociation =
-                existingCalendarChannelEventAssociations.find(
-                  (association) =>
-                    association.calendarEventId === calendarEventId ||
-                    association.eventExternalId === fetchedCalendarEvent.id,
-                );
+                const existingAssociation =
+                  existingCalendarChannelEventAssociations.find(
+                    (association) =>
+                      association.calendarEventId === calendarEventId ||
+                      association.eventExternalId === fetchedCalendarEvent.id,
+                  );
 
-              if (existingAssociation) {
-                return [];
-              }
+                if (existingAssociation) {
+                  return [];
+                }
 
-              return [
-                {
-                  calendarEventId,
-                  eventExternalId: fetchedCalendarEvent.id,
-                  calendarChannelId: calendarChannel.id,
-                  recurringEventExternalId:
-                    fetchedCalendarEvent.recurringEventExternalId ?? '',
-                },
-              ];
-            },
-          );
+                return [
+                  {
+                    calendarEventId,
+                    eventExternalId: fetchedCalendarEvent.id,
+                    calendarChannelId: calendarChannel.id,
+                    recurringEventExternalId:
+                      fetchedCalendarEvent.recurringEventExternalId ?? '',
+                  },
+                ];
+              },
+            );
 
           if (calendarChannelEventAssociationsToSave.length > 0) {
             await calendarChannelEventAssociationRepository.insert(

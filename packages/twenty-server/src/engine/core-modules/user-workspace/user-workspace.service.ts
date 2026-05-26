@@ -16,6 +16,7 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
+import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import { type AvailableWorkspace } from 'src/engine/core-modules/auth/dto/available-workspaces.dto';
 import { LoginTokenService } from 'src/engine/core-modules/auth/token/services/login-token.service';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
@@ -36,9 +37,11 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleValidationService } from 'src/engine/metadata-modules/role-validation/services/role-validation.service';
+import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 import { assert } from 'src/utils/assert';
 import { getDomainNameByEmail } from 'src/utils/get-domain-name-by-email';
@@ -53,6 +56,8 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(RoleTargetEntity)
     private readonly roleTargetRepository: Repository<RoleTargetEntity>,
+    @InjectRepository(RoleEntity)
+    private readonly roleRepository: Repository<RoleEntity>,
     private readonly roleValidationService: RoleValidationService,
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
@@ -190,13 +195,20 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     );
 
     if (existingUserWorkspace) {
+      await this.ensureBootstrapAdminRole({
+        user,
+        workspace,
+        userWorkspaceId: existingUserWorkspace.id,
+      });
+
       return;
     }
 
-    const resolvedRoleId = await this.resolveRoleIdForNewMember(
-      roleId,
+    const resolvedRoleId = await this.resolveRoleIdForNewMember({
+      requestedRoleId: roleId,
+      userEmail: user.email,
       workspace,
-    );
+    });
 
     const userWorkspace = await this.create({
       userId: user.id,
@@ -224,17 +236,31 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     });
   }
 
-  private async resolveRoleIdForNewMember(
-    roleId: string | null | undefined,
-    workspace: WorkspaceEntity,
-  ): Promise<string> {
-    if (isDefined(roleId)) {
+  private async resolveRoleIdForNewMember({
+    requestedRoleId,
+    userEmail,
+    workspace,
+  }: {
+    requestedRoleId: string | null | undefined;
+    userEmail: string;
+    workspace: WorkspaceEntity;
+  }): Promise<string> {
+    const bootstrapAdminRoleId = await this.findBootstrapAdminRoleId({
+      userEmail,
+      workspaceId: workspace.id,
+    });
+
+    if (isDefined(bootstrapAdminRoleId)) {
+      return bootstrapAdminRoleId;
+    }
+
+    if (isDefined(requestedRoleId)) {
       await this.roleValidationService.validateRoleAssignableToUsersOrThrow(
-        roleId,
+        requestedRoleId,
         workspace.id,
       );
 
-      return roleId;
+      return requestedRoleId;
     }
 
     const defaultRoleId = workspace.defaultRoleId;
@@ -247,6 +273,52 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     }
 
     return defaultRoleId;
+  }
+
+  private async ensureBootstrapAdminRole({
+    user,
+    workspace,
+    userWorkspaceId,
+  }: {
+    user: Pick<UserEntity, 'email'>;
+    workspace: WorkspaceEntity;
+    userWorkspaceId: string;
+  }): Promise<void> {
+    const bootstrapAdminRoleId = await this.findBootstrapAdminRoleId({
+      userEmail: user.email,
+      workspaceId: workspace.id,
+    });
+
+    if (!isDefined(bootstrapAdminRoleId)) {
+      return;
+    }
+
+    await this.userRoleService.assignRoleToManyUserWorkspace({
+      workspaceId: workspace.id,
+      userWorkspaceIds: [userWorkspaceId],
+      roleId: bootstrapAdminRoleId,
+    });
+  }
+
+  private async findBootstrapAdminRoleId({
+    userEmail,
+    workspaceId,
+  }: {
+    userEmail: string;
+    workspaceId: string;
+  }): Promise<string | undefined> {
+    if (!isBootstrapAdminEmail(userEmail)) {
+      return undefined;
+    }
+
+    const adminRole = await this.roleRepository.findOne({
+      where: {
+        workspaceId,
+        universalIdentifier: STANDARD_ROLE.admin.universalIdentifier,
+      },
+    });
+
+    return adminRole?.id;
   }
 
   public async getUserCount(workspaceId: string): Promise<number | undefined> {

@@ -113,11 +113,14 @@ export const SettingsAccountsCalendarChannelDetails = ({
     isReady: areManageableEntitiesReady,
   } = useManageableEventEntities();
 
-  const updateChannel = useCallback((update: Record<string, unknown>) => {
-    updateMetadataChannel({
-      variables: { input: { id: calendarChannel.id, update } },
-    });
-  }, [calendarChannel.id, updateMetadataChannel]);
+  const updateChannel = useCallback(
+    (update: Record<string, unknown>) => {
+      updateMetadataChannel({
+        variables: { input: { id: calendarChannel.id, update } },
+      });
+    },
+    [calendarChannel.id, updateMetadataChannel],
+  );
 
   const handleVisibilityChange = (value: CalendarChannelVisibility) => {
     updateChannel({ visibility: value });
@@ -187,13 +190,16 @@ export const SettingsAccountsCalendarChannelDetails = ({
       <Section>
         <H2Title
           title={t`Entity access`}
-          description={t`Choose which internal entities can see full details from this imported calendar.`}
+          description={t`Choose which internal entities can see full details from this imported calendar. This does not grant permission to manage or disconnect the connected account.`}
         />
         <StyledEntityAccessCard rounded>
           <StyledEntityAccessHeader>
             <IconHierarchy2 size={16} />
             {t`Visible internal entities`}
           </StyledEntityAccessHeader>
+          <StyledHint>
+            {t`Only the connected account owner can change account-level settings.`}
+          </StyledHint>
           {calendarChannel.visibility ===
           CalendarChannelVisibility.SHARE_EVERYTHING ? (
             <StyledHint>
@@ -209,6 +215,7 @@ export const SettingsAccountsCalendarChannelDetails = ({
                 <StyledEntityToggle
                   key={entity.id}
                   type="button"
+                  aria-pressed={selectedInternalEntityIds.includes(entity.id)}
                   selected={selectedInternalEntityIds.includes(entity.id)}
                   chipColor={entity.color}
                   onClick={() => handleToggleVisibleInternalEntity(entity.id)}

@@ -35,6 +35,25 @@ async function dropSchemasSequentially() {
     }
     // oxlint-disable-next-line no-console
     console.log('All schemas dropped successfully.');
+
+    // Reset activation status so workspace init re-triggers on next login
+    await performQuery(
+      `UPDATE public.workspace
+       SET "activationStatus" = 'PENDING_CREATION'
+       WHERE "activationStatus" != 'PENDING_CREATION'`,
+      'Resetting workspace activation status...',
+    );
+
+    // Reset onboarding status so user sees setup screens again
+    await performQuery(
+      `UPDATE public."user"
+       SET "onboardingStatus" = 'WORKSPACE_ACTIVATION'
+       WHERE "onboardingStatus" IS DISTINCT FROM 'WORKSPACE_ACTIVATION'`,
+      'Resetting user onboarding status...',
+    );
+
+    // oxlint-disable-next-line no-console
+    console.log('Workspace and user states reset for re-onboarding.');
   } catch (err) {
     // oxlint-disable-next-line no-console
     console.error('Error during schema dropping:', err);

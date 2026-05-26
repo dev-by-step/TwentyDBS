@@ -4,6 +4,10 @@ import { msg } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
 
 import {
+  CommonQueryRunnerException,
+  CommonQueryRunnerExceptionCode,
+} from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
+import {
   type CreateManyResolverArgs,
   type CreateOneResolverArgs,
   type DeleteManyResolverArgs,
@@ -14,6 +18,7 @@ import {
   type GroupByResolverArgs,
   type MergeManyResolverArgs,
   type RestoreManyResolverArgs,
+  type UpdateOneResolverArgs,
   type UpdateManyResolverArgs,
 } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -264,6 +269,17 @@ export class InternalEntityAccessPolicyService {
   ): Promise<CreateOneResolverArgs<Record<string, unknown>>> {
     await this.assertCanCreate(authContext, objectName, payload.data);
 
+    if (isUserAuthContext(authContext) && objectName === 'internalEntity') {
+      return {
+        ...payload,
+        data: this.normalizeInternalEntityDataOrThrow({
+          authContext,
+          payloadData: payload.data,
+          nameIsRequired: true,
+        }),
+      };
+    }
+
     return payload;
   }
 
@@ -276,7 +292,39 @@ export class InternalEntityAccessPolicyService {
       await this.assertCanCreate(authContext, objectName, data);
     }
 
+    if (isUserAuthContext(authContext) && objectName === 'internalEntity') {
+      return {
+        ...payload,
+        data: payload.data.map((data) =>
+          this.normalizeInternalEntityDataOrThrow({
+            authContext,
+            payloadData: data,
+            nameIsRequired: true,
+          }),
+        ),
+      };
+    }
+
     return payload;
+  }
+
+  async validateUpdatePayload(
+    authContext: WorkspaceAuthContext,
+    objectName: string,
+    payload: UpdateOneResolverArgs<Record<string, unknown>>,
+  ): Promise<UpdateOneResolverArgs<Record<string, unknown>>> {
+    if (!isUserAuthContext(authContext) || objectName !== 'internalEntity') {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      data: this.normalizeInternalEntityDataOrThrow({
+        authContext,
+        payloadData: payload.data,
+        nameIsRequired: false,
+      }),
+    };
   }
 
   async scopeBulkMutationPayload<T extends BulkMutationArgs>(
@@ -289,9 +337,9 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (!(await this.isPlatformAdmin(authContext))) {
+      if (!(await this.isInternalEntitySuperAdmin(authContext))) {
         this.throwPermissionDenied(
-          msg`Only platform administrators can perform bulk updates on internal entity settings.`,
+          msg`Only superadmins can modify internal entity settings.`,
         );
       }
     } else if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
@@ -334,9 +382,26 @@ export class InternalEntityAccessPolicyService {
       return payload;
     }
 
-    return {
+    const scopedPayload = {
       ...payload,
       filter: scopedFilter,
+    };
+
+    if (
+      objectName !== 'internalEntity' ||
+      !('data' in scopedPayload) ||
+      !isUserAuthContext(authContext)
+    ) {
+      return scopedPayload;
+    }
+
+    return {
+      ...scopedPayload,
+      data: this.normalizeInternalEntityDataOrThrow({
+        authContext,
+        payloadData: scopedPayload.data,
+        nameIsRequired: false,
+      }),
     };
   }
 
@@ -354,12 +419,12 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.isPlatformAdmin(authContext)) {
+      if (await this.isInternalEntitySuperAdmin(authContext)) {
         return payload;
       }
 
       this.throwPermissionDenied(
-        msg`Duplicate detection on internal entities is reserved to platform administrators.`,
+        msg`Duplicate detection on internal entities is reserved to superadmins.`,
       );
     }
 
@@ -467,8 +532,14 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (
-      (objectName === 'internalEntity' ||
-        objectName === 'companyEntityMembership' ||
+      objectName === 'internalEntity' &&
+      (await this.isInternalEntitySuperAdmin(authContext))
+    ) {
+      return;
+    }
+
+    if (
+      (objectName === 'companyEntityMembership' ||
         objectName === 'personEntityMembership') &&
       (await this.isPlatformAdmin(authContext))
     ) {
@@ -529,15 +600,8 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      // Platform admins already returned earlier in this method, so we only
-      // need to check the entity-manager role here (avoids a redundant
-      // isPlatformAdmin lookup inside canManageEntityScopedRecords).
-      if (method === 'updateOne' && (await this.isEntityManager(authContext))) {
-        return;
-      }
-
       this.throwPermissionDenied(
-        msg`Only platform administrators can create, restore, delete, or destroy internal entities.`,
+        msg`Only superadmins can create, update, restore, delete, or destroy internal entities.`,
       );
     }
 
@@ -599,12 +663,12 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.isPlatformAdmin(authContext)) {
+      if (await this.isInternalEntitySuperAdmin(authContext)) {
         return;
       }
 
       this.throwPermissionDenied(
-        msg`Only platform administrators can create internal entities.`,
+        msg`Only superadmins can create internal entities.`,
       );
     }
 
@@ -1563,5 +1627,81 @@ export class InternalEntityAccessPolicyService {
         userFriendlyMessage,
       },
     );
+  }
+
+  private normalizeInternalEntityDataOrThrow({
+    authContext,
+    payloadData,
+    nameIsRequired,
+  }: {
+    authContext: UserWorkspaceAuthContext;
+    payloadData?: Record<string, unknown>;
+    nameIsRequired: boolean;
+  }): Record<string, unknown> {
+    if (!isDefined(payloadData)) {
+      throw new CommonQueryRunnerException(
+        'Payload data is required',
+        CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        {
+          userFriendlyMessage: msg`Payload data is required.`,
+        },
+      );
+    }
+
+    const normalizedData: Record<string, unknown> = {
+      ...payloadData,
+      workspaceId: authContext.workspace.id,
+    };
+    const rawName = normalizedData.name;
+
+    if (rawName !== undefined) {
+      if (typeof rawName !== 'string') {
+        throw new CommonQueryRunnerException(
+          'Internal entity name must be a string',
+          CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+          {
+            userFriendlyMessage: msg`Internal entity name must be a string.`,
+          },
+        );
+      }
+
+      normalizedData.name = rawName.trim();
+    }
+
+    const normalizedName = normalizedData.name;
+
+    if (
+      (nameIsRequired || normalizedName !== undefined) &&
+      (typeof normalizedName !== 'string' || normalizedName.length === 0)
+    ) {
+      throw new CommonQueryRunnerException(
+        'Internal entity name is required',
+        CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        {
+          userFriendlyMessage: msg`Internal entity name is required.`,
+        },
+      );
+    }
+
+    if (
+      isDefined(payloadData.workspaceId) &&
+      payloadData.workspaceId !== authContext.workspace.id
+    ) {
+      throw new CommonQueryRunnerException(
+        'Internal entity workspaceId does not match the current workspace',
+        CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        {
+          userFriendlyMessage: msg`Internal entities can only be created in the current workspace.`,
+        },
+      );
+    }
+
+    return normalizedData;
+  }
+
+  private async isInternalEntitySuperAdmin(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<boolean> {
+    return authContext.user.canAccessFullAdminPanel;
   }
 }

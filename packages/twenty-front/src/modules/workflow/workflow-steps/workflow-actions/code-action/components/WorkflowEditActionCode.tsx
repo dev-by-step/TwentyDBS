@@ -299,7 +299,11 @@ export const WorkflowEditActionCode = ({
       href: '#',
     },
     {
-      children: isDefined(action.name) ? action.name : CODE_ACTION.defaultLabel,
+      children: isDefined(action.name)
+        ? action.name
+        : typeof CODE_ACTION.defaultLabel === 'string'
+          ? CODE_ACTION.defaultLabel
+          : CODE_ACTION.defaultLabel.id,
       href: '#',
     },
     {

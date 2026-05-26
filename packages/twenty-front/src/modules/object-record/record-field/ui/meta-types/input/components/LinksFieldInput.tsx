@@ -1,4 +1,5 @@
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
+import { t } from '@lingui/core/macro';
 import { useLinksField } from '@/object-record/record-field/ui/meta-types/hooks/useLinksField';
 import { LinksFieldMenuItem } from '@/object-record/record-field/ui/meta-types/input/components/LinksFieldMenuItem';
 import { MULTI_ITEM_FIELD_INPUT_DROPDOWN_ID_PREFIX } from '@/object-record/record-field/ui/meta-types/input/constants/MultiItemFieldInputDropdownClickOutsideId';
@@ -91,7 +92,7 @@ export const LinksFieldInput = () => {
       onEscape={handleEscape}
       onEnter={handleEnter}
       onClickOutside={handleClickOutside}
-      placeholder="URL"
+      placeholder={t`URL`}
       fieldMetadataType={FieldMetadataType.LINKS}
       validateInput={(input) => ({
         isValid: absoluteUrlSchema.safeParse(input).success,

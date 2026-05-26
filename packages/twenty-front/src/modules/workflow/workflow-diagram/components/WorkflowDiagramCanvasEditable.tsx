@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useWorkflowWithCurrentVersion } from '@/workflow/hooks/useWorkflowWithCurrentVersion';
@@ -167,6 +168,8 @@ export const WorkflowDiagramCanvasEditable = () => {
     return null;
   }
 
+  const { t } = useLingui();
+
   const tagProps = getWorkflowVersionStatusTagProps({
     workflowVersionStatus: workflowWithCurrentVersion.currentVersion.status,
   });
@@ -192,7 +195,7 @@ export const WorkflowDiagramCanvasEditable = () => {
         }}
         tagContainerTestId="workflow-visualizer-status"
         tagColor={tagProps.color}
-        tagText={tagProps.text}
+        tagText={t(tagProps.text)}
         onConnect={onConnect}
         onReconnect={handleReconnect}
         onNodeDragStop={onNodeDragStop}

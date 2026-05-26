@@ -12,6 +12,7 @@ import {
   GenerateSdkClientJob,
   GenerateSdkClientJobData,
 } from 'src/engine/core-modules/sdk-client/jobs/generate-sdk-client.job';
+import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
@@ -20,6 +21,7 @@ import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { TwentyStandardApplicationService } from 'src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service';
+import { InternalEntitySchemaService } from 'src/modules/internal-entity/services/internal-entity-schema.service';
 
 @Injectable()
 export class WorkspaceManagerService {
@@ -39,14 +41,17 @@ export class WorkspaceManagerService {
     private readonly applicationService: ApplicationService,
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
+    private readonly internalEntitySchemaService: InternalEntitySchemaService,
   ) {}
 
   public async init({
     workspace,
     userId,
+    userEmail,
   }: {
     workspace: WorkspaceEntity;
     userId: string;
+    userEmail: string;
   }): Promise<void> {
     const workspaceId = workspace.id;
     const schemaCreationStart = performance.now();
@@ -76,6 +81,8 @@ export class WorkspaceManagerService {
         workspaceId,
       },
     );
+
+    await this.internalEntitySchemaService.ensureSchema(workspaceId);
 
     const dataSourceMetadataCreationEnd = performance.now();
 
@@ -114,17 +121,20 @@ export class WorkspaceManagerService {
     await this.setupDefaultRoles({
       workspaceId,
       userId,
+      userEmail,
       workspaceCustomFlatApplication,
     });
   }
 
   private async setupDefaultRoles({
     userId,
+    userEmail,
     workspaceId,
     workspaceCustomFlatApplication,
   }: {
     workspaceId: string;
     userId: string;
+    userEmail: string;
     workspaceCustomFlatApplication: FlatApplication;
   }): Promise<void> {
     const adminRole = await this.roleRepository.findOne({
@@ -133,18 +143,6 @@ export class WorkspaceManagerService {
         workspaceId,
       },
     });
-
-    if (adminRole) {
-      const userWorkspace = await this.userWorkspaceRepository.findOneOrFail({
-        where: { workspaceId, userId },
-      });
-
-      await this.userRoleService.assignRoleToManyUserWorkspace({
-        workspaceId,
-        userWorkspaceIds: [userWorkspace.id],
-        roleId: adminRole.id,
-      });
-    }
 
     const memberRole = await this.roleService.createMemberRole({
       workspaceId,
@@ -157,6 +155,20 @@ export class WorkspaceManagerService {
 
     await this.workspaceRepository.update(workspaceId, {
       defaultRoleId: memberRole.id,
+    });
+
+    const userWorkspace = await this.userWorkspaceRepository.findOneOrFail({
+      where: { workspaceId, userId },
+    });
+    const initialRoleId =
+      adminRole && isBootstrapAdminEmail(userEmail)
+        ? adminRole.id
+        : memberRole.id;
+
+    await this.userRoleService.assignRoleToManyUserWorkspace({
+      workspaceId,
+      userWorkspaceIds: [userWorkspace.id],
+      roleId: initialRoleId,
     });
   }
 }

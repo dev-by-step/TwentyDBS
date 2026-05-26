@@ -1,5 +1,6 @@
 import { BaseChip } from '@/object-record/record-field/ui/form-types/components/BaseChip';
 import { useSearchVariable } from '@/workflow/workflow-variables/hooks/useSearchVariable';
+import { isString } from '@sniptt/guards';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
@@ -31,8 +32,8 @@ export const VariableChip = ({
   });
 
   const isVariableNotFound = !isDefined(variableLabel);
-  const label = isVariableNotFound ? t`Not Found` : variableLabel;
-  const title = isVariableNotFound ? t`Variable not found` : variablePathLabel;
+  const label = isVariableNotFound ? t`Not Found` : isString(variableLabel) ? variableLabel : variableLabel?.id ?? '';
+  const title = isVariableNotFound ? t`Variable not found` : isString(variablePathLabel) ? variablePathLabel : variablePathLabel?.id ?? '';
 
   return (
     <BaseChip

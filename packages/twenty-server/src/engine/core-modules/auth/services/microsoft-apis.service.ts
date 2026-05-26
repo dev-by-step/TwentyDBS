@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import {
   CalendarChannelSyncStage,
-  type CalendarChannelVisibility,
+  CalendarChannelVisibility,
   ConnectedAccountProvider,
   MessageChannelSyncStage,
   type MessageChannelVisibility,
@@ -25,8 +25,10 @@ import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decora
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { CalendarChannelEntityAccessService } from 'src/engine/metadata-modules/calendar-channel/services/calendar-channel-entity-access.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -58,6 +60,7 @@ export class MicrosoftAPIsService {
     private readonly calendarChannelSyncStatusService: CalendarChannelSyncStatusService,
     private readonly createMessageChannelService: CreateMessageChannelService,
     private readonly createCalendarChannelService: CreateCalendarChannelService,
+    private readonly calendarChannelEntityAccessService: CalendarChannelEntityAccessService,
     private readonly createConnectedAccountService: CreateConnectedAccountService,
     private readonly updateConnectedAccountOnReconnectService: UpdateConnectedAccountOnReconnectService,
     private readonly twentyConfigService: TwentyConfigService,
@@ -66,6 +69,8 @@ export class MicrosoftAPIsService {
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     @InjectRepository(CalendarChannelEntity)
@@ -109,6 +114,18 @@ export class MicrosoftAPIsService {
           throw new AuthException(
             `User workspace not found for user ${userId} in workspace ${workspaceId}`,
             AuthExceptionCode.INVALID_INPUT,
+          );
+        }
+
+        const user = await this.userRepository.findOne({
+          where: { id: userId },
+          select: ['id', 'entityId', 'canAccessFullAdminPanel'],
+        });
+
+        if (!isDefined(user)) {
+          throw new AuthException(
+            `User ${userId} not found`,
+            AuthExceptionCode.USER_NOT_FOUND,
           );
         }
 
@@ -203,18 +220,33 @@ export class MicrosoftAPIsService {
             if (
               this.twentyConfigService.get(
                 'CALENDAR_PROVIDER_MICROSOFT_ENABLED',
-              ) &&
-              existingCalendarChannels.length === 0
+              )
             ) {
-              await this.createCalendarChannelService.createCalendarChannel({
-                workspaceId,
-                connectedAccountId: newOrExistingConnectedAccountId,
-                handle,
-                calendarVisibility,
-                visibleInternalEntityIds,
-                skipMessageChannelConfiguration,
-                transactionManager,
-              });
+              if (existingCalendarChannels.length === 0) {
+                await this.createCalendarChannelService.createCalendarChannel({
+                  workspaceId,
+                  connectedAccountId: newOrExistingConnectedAccountId,
+                  handle,
+                  calendarVisibility,
+                  visibleInternalEntityIds,
+                  skipMessageChannelConfiguration,
+                  workspaceMemberId,
+                  fallbackEntityId: user.entityId,
+                  canAccessFullAdminPanel: user.canAccessFullAdminPanel,
+                  transactionManager,
+                });
+              } else {
+                await this.updateExistingCalendarChannelsConfiguration({
+                  workspaceId,
+                  workspaceMemberId,
+                  fallbackEntityId: user.entityId,
+                  canAccessFullAdminPanel: user.canAccessFullAdminPanel,
+                  calendarVisibility,
+                  visibleInternalEntityIds,
+                  existingCalendarChannels,
+                  transactionManager,
+                });
+              }
             }
           },
         );
@@ -299,5 +331,67 @@ export class MicrosoftAPIsService {
       },
       authContext,
     );
+  }
+
+  private async updateExistingCalendarChannelsConfiguration({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+    canAccessFullAdminPanel,
+    calendarVisibility,
+    visibleInternalEntityIds,
+    existingCalendarChannels,
+    transactionManager,
+  }: {
+    workspaceId: string;
+    workspaceMemberId: string;
+    fallbackEntityId?: string | null;
+    canAccessFullAdminPanel: boolean;
+    calendarVisibility?: CalendarChannelVisibility;
+    visibleInternalEntityIds?: string[];
+    existingCalendarChannels: CalendarChannelEntity[];
+    transactionManager: EntityManager;
+  }): Promise<void> {
+    if (
+      !isDefined(calendarVisibility) &&
+      !isDefined(visibleInternalEntityIds)
+    ) {
+      return;
+    }
+
+    const calendarChannelRepository = transactionManager.getRepository(
+      CalendarChannelEntity,
+    );
+
+    for (const existingCalendarChannel of existingCalendarChannels) {
+      const nextVisibility =
+        calendarVisibility ??
+        existingCalendarChannel.visibility ??
+        CalendarChannelVisibility.SHARE_EVERYTHING;
+      const requestedVisibleInternalEntityIds =
+        visibleInternalEntityIds ??
+        existingCalendarChannel.visibleInternalEntityIds ??
+        [];
+      const validatedVisibleInternalEntityIds =
+        await this.calendarChannelEntityAccessService.resolveVisibleInternalEntityIds(
+          {
+            workspaceId,
+            workspaceMemberId,
+            fallbackEntityId,
+            canAccessFullAdminPanel,
+            requestedVisibleInternalEntityIds,
+            shouldDefaultToPrimaryEntity:
+              nextVisibility === CalendarChannelVisibility.METADATA,
+          },
+        );
+
+      await calendarChannelRepository.update(
+        { id: existingCalendarChannel.id, workspaceId },
+        {
+          visibility: nextVisibility,
+          visibleInternalEntityIds: validatedVisibleInternalEntityIds,
+        },
+      );
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import { type VariableSearchResult } from '@/workflow/workflow-variables/hooks/useSearchVariable';
 import type { FindRecordsOutputSchema } from '@/workflow/workflow-variables/types/FindRecordsOutputSchema';
 import { searchRecordOutputSchema as searchRecordOutputSchemaUtil } from '@/workflow/workflow-variables/utils/searchVariableThroughRecordOutputSchema';
@@ -84,7 +85,7 @@ export const searchVariableThroughFindRecordsOutputSchema = ({
     }
 
     return searchRecordOutputSchemaUtil({
-      stepName: `${stepName} > ${searchRecordOutputSchema[searchResultKey]?.label ?? 'First'}`,
+      stepName: `${stepName} > ${searchRecordOutputSchema[searchResultKey]?.label ?? msg`First`}`,
       recordOutputSchema: recordSchema,
       selectedField: fieldName,
       path: pathSegments,
@@ -95,7 +96,7 @@ export const searchVariableThroughFindRecordsOutputSchema = ({
 
   if (searchResultKey === 'totalCount') {
     const label =
-      searchRecordOutputSchema[searchResultKey]?.label ?? 'Total Count';
+      searchRecordOutputSchema[searchResultKey]?.label ?? msg`Total Count`;
     const basePath = `${stepName} > ${label}`;
     return {
       variableLabel: label,
@@ -108,11 +109,11 @@ export const searchVariableThroughFindRecordsOutputSchema = ({
 
   if (searchResultKey === 'all') {
     const label =
-      searchRecordOutputSchema[searchResultKey]?.label ?? 'All Records';
+      searchRecordOutputSchema[searchResultKey]?.label ?? msg`All Records`;
     const basePath = `${stepName} > ${label}`;
     return {
       variableLabel:
-        searchRecordOutputSchema[searchResultKey]?.label ?? 'All Records',
+        searchRecordOutputSchema[searchResultKey]?.label ?? msg`All Records`,
       variablePathLabel: stepNameLabel
         ? `${basePath} (${stepNameLabel})`
         : basePath,

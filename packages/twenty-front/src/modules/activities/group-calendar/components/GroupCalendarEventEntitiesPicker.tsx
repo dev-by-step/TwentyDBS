@@ -2,6 +2,7 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 
 import { StyledField } from '@/activities/group-calendar/components/GroupCalendarEventDialogStyles';
+import { StyledGroupCalendarSelectableChip } from '@/activities/group-calendar/components/GroupCalendarSelectableChip';
 import { type ManageableEventEntity } from '@/activities/group-calendar/hooks/useManageableEventEntities';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -9,31 +10,6 @@ const StyledEntityPicker = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledEntityToggle = styled.button<{
-  selected: boolean;
-  chipColor?: string | null;
-}>`
-  background: ${({ selected, chipColor }) =>
-    selected
-      ? (chipColor ?? themeCssVariables.background.tertiary)
-      : themeCssVariables.background.secondary};
-  border: 1px solid
-    ${({ selected, chipColor }) =>
-      selected
-        ? (chipColor ?? themeCssVariables.border.color.strong)
-        : themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.pill};
-  color: ${({ selected }) =>
-    selected
-      ? themeCssVariables.font.color.inverted
-      : themeCssVariables.font.color.primary};
-  cursor: pointer;
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
 `;
 
 const StyledHint = styled.span`
@@ -76,7 +52,7 @@ export const GroupCalendarEventEntitiesPicker = ({
       ) : (
         <StyledEntityPicker>
           {manageableEventEntities.map((entity) => (
-            <StyledEntityToggle
+            <StyledGroupCalendarSelectableChip
               key={entity.id}
               type="button"
               selected={selectedEventEntityIds.includes(entity.id)}
@@ -84,7 +60,7 @@ export const GroupCalendarEventEntitiesPicker = ({
               onClick={() => onToggleEventEntity(entity.id)}
             >
               {entity.name}
-            </StyledEntityToggle>
+            </StyledGroupCalendarSelectableChip>
           ))}
         </StyledEntityPicker>
       )}

@@ -14,10 +14,7 @@ import { RoleDTO } from 'src/engine/metadata-modules/role/dtos/role.dto';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RoleService } from 'src/engine/metadata-modules/role/role.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
-import {
-  SEED_APPLE_WORKSPACE_ID,
-  SEED_YCOMBINATOR_WORKSPACE_ID,
-} from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
 import { API_KEY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/api-key-data-seeds.constant';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
@@ -90,13 +87,6 @@ export class DevSeederPermissionsService {
         USER_WORKSPACE_DATA_SEED_IDS.TIM,
         USER_WORKSPACE_DATA_SEED_IDS.PHIL,
         USER_WORKSPACE_DATA_SEED_IDS.LOUIS_WEKNOW,
-      ];
-    } else if (workspaceId === SEED_YCOMBINATOR_WORKSPACE_ID) {
-      adminUserWorkspaceId = USER_WORKSPACE_DATA_SEED_IDS.TIM_ACME;
-      memberUserWorkspaceIds = [
-        USER_WORKSPACE_DATA_SEED_IDS.JONY_ACME,
-        USER_WORKSPACE_DATA_SEED_IDS.JANE_ACME,
-        USER_WORKSPACE_DATA_SEED_IDS.PHIL_ACME,
       ];
     }
 
