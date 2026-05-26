@@ -26,5 +26,6 @@ export const buildIdentifierGqlFields = (
     ...(isDefined(imageIdentifierField) && {
       [imageIdentifierField.name]: true,
     }),
+    color: true,
   };
 };
