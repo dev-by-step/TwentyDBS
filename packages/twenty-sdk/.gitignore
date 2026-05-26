@@ -4,3 +4,4 @@ node_modules
 storybook-static
 src/front-component-renderer/__stories__/example-sources-built
 src/front-component-renderer/__stories__/example-sources-built-preact
+src/**/*.d.ts
