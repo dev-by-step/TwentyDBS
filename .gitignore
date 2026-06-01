@@ -64,3 +64,7 @@ docs/DATA_MIGRATION.md
 # Données de production (données réelles clients)
 docs/*.csv
 *.csv
+
+# Fichiers locaux de déploiement Dokku
+ssh.txt
+.dokku/frontend-build/

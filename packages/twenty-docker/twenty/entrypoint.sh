@@ -1,8 +1,36 @@
 #!/bin/sh
 set -e
 
-setup_and_migrate_db() {
+is_worker_command() {
+    if [ "$#" -ge 2 ] && [ "$1" = "yarn" ] && [ "$2" = "worker:prod" ]; then
+        return 0
+    fi
+
+    if [ "$#" -ge 2 ] && [ "$1" = "node" ] && [ "$2" = "dist/queue-worker/queue-worker" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+should_skip_db_migrations() {
     if [ "${DISABLE_DB_MIGRATIONS}" = "true" ]; then
+        return 0
+    fi
+
+    is_worker_command "$@"
+}
+
+should_skip_cron_registration() {
+    if [ "${DISABLE_CRON_JOBS_REGISTRATION}" = "true" ]; then
+        return 0
+    fi
+
+    is_worker_command "$@"
+}
+
+setup_and_migrate_db() {
+    if should_skip_db_migrations "$@"; then
         echo "Database setup and migrations are disabled, skipping..."
         return
     fi
@@ -24,7 +52,7 @@ setup_and_migrate_db() {
 }
 
 register_background_jobs() {
-    if [ "${DISABLE_CRON_JOBS_REGISTRATION}" = "true" ]; then
+    if should_skip_cron_registration "$@"; then
         echo "Cron job registration is disabled, skipping..."
         return
     fi
@@ -37,8 +65,8 @@ register_background_jobs() {
     fi
 }
 
-setup_and_migrate_db
-register_background_jobs
+setup_and_migrate_db "$@"
+register_background_jobs "$@"
 
 # Continue with the original Docker command
 exec "$@"

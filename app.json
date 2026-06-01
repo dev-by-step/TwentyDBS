@@ -1,0 +1,33 @@
+{
+  "name": "twenty-dbs",
+  "env": {
+    "APP_SECRET": {
+      "description": "Secret used by Twenty for JWT, sessions, and encryption.",
+      "generator": "secret",
+      "required": true
+    },
+    "NODE_PORT": {
+      "description": "Internal container port used by the Twenty server.",
+      "value": "3000",
+      "required": true,
+      "sync": true
+    },
+    "PG_DATABASE_URL": {
+      "description": "PostgreSQL DSN for the Twenty server.",
+      "required": true
+    },
+    "REDIS_URL": {
+      "description": "Redis DSN for the Twenty server and worker.",
+      "required": true
+    },
+    "SERVER_URL": {
+      "description": "Public base URL of the deployed Twenty instance.",
+      "required": true
+    },
+    "STORAGE_TYPE": {
+      "description": "Storage driver used by Twenty.",
+      "value": "local",
+      "required": true
+    }
+  }
+}

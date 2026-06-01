@@ -1,5 +1,14 @@
 .git
 .env
 **/node_modules
+.cache
+.claude
+.claude-pr
+.cursor
+.idea
+.nx
+.swc
+MEMORY.md
+ssh.txt
 .nx/cache
 packages/twenty-server/.env
