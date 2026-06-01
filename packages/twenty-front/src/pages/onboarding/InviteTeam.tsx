@@ -34,6 +34,8 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { z } from 'zod';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { useCreateWorkspaceInvitation } from '@/workspace-invitation/hooks/useCreateWorkspaceInvitation';
+import { useMutation } from '@apollo/client/react';
+import { SKIP_INVITE_TEAM_ONBOARDING_STEP } from '@/onboarding/graphql/mutations/skipInviteTeamOnboardingStep';
 
 const StyledAnimatedContainer = styled.div`
   display: flex;
@@ -71,6 +73,7 @@ export const InviteTeam = () => {
   const { copyToClipboard } = useCopyToClipboard();
   const { enqueueSuccessSnackBar } = useSnackBar();
   const { sendInvitation } = useCreateWorkspaceInvitation();
+  const [skipInviteTeamMutation] = useMutation(SKIP_INVITE_TEAM_ONBOARDING_STEP);
   const setNextOnboardingStatus = useSetNextOnboardingStatus();
   const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
@@ -149,13 +152,19 @@ export const InviteTeam = () => {
         ),
       );
 
-      const result = await sendInvitation({ emails });
+      if (emails.length === 0) {
+        const result = await skipInviteTeamMutation();
 
-      if (isDefined(result.error)) {
-        throw result.error;
-      }
+        if (isDefined(result.error)) {
+          throw result.error;
+        }
+      } else {
+        const result = await sendInvitation({ emails });
 
-      if (emails.length > 0) {
+        if (isDefined(result.error)) {
+          throw result.error;
+        }
+
         enqueueSuccessSnackBar({
           message: t`Invite link sent to email addresses`,
           options: {
@@ -166,7 +175,13 @@ export const InviteTeam = () => {
 
       setNextOnboardingStatus();
     },
-    [enqueueSuccessSnackBar, sendInvitation, setNextOnboardingStatus, t],
+    [
+      enqueueSuccessSnackBar,
+      sendInvitation,
+      setNextOnboardingStatus,
+      skipInviteTeamMutation,
+      t,
+    ],
   );
 
   const handleSkip = async () => {

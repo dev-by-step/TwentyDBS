@@ -223,6 +223,18 @@ export class OnboardingService {
     );
   }
 
+  async advanceFromInviteTeamStep({ workspaceId }: { workspaceId: string }) {
+    await this.setOnboardingInviteTeamPending({
+      workspaceId,
+      value: false,
+    });
+
+    await this.setOnboardingBookOnboardingPending({
+      workspaceId,
+      value: true,
+    });
+  }
+
   async setOnboardingCreateProfilePending(
     {
       userId,

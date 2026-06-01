@@ -52,6 +52,18 @@ export class OnboardingResolver {
 
   @Mutation(() => OnboardingStepSuccessDTO)
   @UseGuards(NoPermissionGuard)
+  async skipInviteTeamOnboardingStep(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<OnboardingStepSuccessDTO> {
+    await this.onboardingService.advanceFromInviteTeamStep({
+      workspaceId: workspace.id,
+    });
+
+    return { success: true };
+  }
+
+  @Mutation(() => OnboardingStepSuccessDTO)
+  @UseGuards(NoPermissionGuard)
   async completeSuperadminWorkspaceSetup(
     @Args('input') input: CompleteSuperadminWorkspaceSetupInput,
     @AuthUser() user: AuthContextUser,
