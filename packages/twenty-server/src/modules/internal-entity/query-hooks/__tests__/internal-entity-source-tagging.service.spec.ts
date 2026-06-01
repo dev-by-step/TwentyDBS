@@ -160,6 +160,113 @@ describe('InternalEntitySourceTaggingService', () => {
     );
   });
 
+  it('should preserve an explicit internalEntity relation on opportunity createOne payloads', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateOnePayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: {
+          name: 'Opportunity A',
+          internalEntity: {
+            connect: {
+              where: {
+                id: explicitInternalEntityId,
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(payload.data).toEqual({
+      name: 'Opportunity A',
+      internalEntity: {
+        connect: {
+          where: {
+            id: explicitInternalEntityId,
+          },
+        },
+      },
+    });
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should preserve explicit internalEntity assignments on opportunity createMany payloads', async () => {
+    const { service, makeAuthContext } = buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateManyPayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: [
+          {
+            name: 'Opportunity A',
+            internalEntityId: explicitInternalEntityId,
+          },
+          {
+            name: 'Opportunity B',
+            internalEntity: {
+              connect: {
+                where: {
+                  id: explicitInternalEntityId,
+                },
+              },
+            },
+          },
+        ],
+      },
+    );
+
+    expect(payload.data).toEqual([
+      {
+        name: 'Opportunity A',
+        internalEntityId: explicitInternalEntityId,
+      },
+      {
+        name: 'Opportunity B',
+        internalEntity: {
+          connect: {
+            where: {
+              id: explicitInternalEntityId,
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('should only inject the active internal entity on opportunity createMany records that are missing one', async () => {
+    const { service, internalEntityId, makeAuthContext } =
+      buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateManyPayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: [
+          { name: 'Opportunity A' },
+          {
+            name: 'Opportunity B',
+            internalEntityId: explicitInternalEntityId,
+          },
+        ],
+      },
+    );
+
+    expect(payload.data).toEqual([
+      { name: 'Opportunity A', internalEntityId },
+      {
+        name: 'Opportunity B',
+        internalEntityId: explicitInternalEntityId,
+      },
+    ]);
+  });
+
   it('should validate person create payloads and fail when the user has no internal entity', async () => {
     const { dataSource, service, makeAuthContext } = buildServiceContext();
 
@@ -177,6 +284,30 @@ describe('InternalEntitySourceTaggingService', () => {
       code: CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
     });
 
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should bypass source tagging validation for technical import company creations', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+
+    const payload = await service.tagCreateOnePayload(
+      {
+        ...makeAuthContext({ entityId: null }),
+        shouldBypassInternalEntitySourceTagging: true,
+      },
+      'company',
+      {
+        data: {
+          id: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+          name: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+        },
+      },
+    );
+
+    expect(payload.data).toEqual({
+      id: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+      name: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+    });
     expect(dataSource.query).not.toHaveBeenCalled();
   });
 
@@ -244,6 +375,22 @@ describe('InternalEntitySourceTaggingService', () => {
       authContext: makeAuthContext(),
       objectName: 'opportunity',
       records: [{ id: opportunity.id }] as ObjectRecord[],
+    });
+
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should skip auto-membership creation when technical import bypass is enabled', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const company = buildCompanyRecord();
+
+    await service.createMembershipsForRecords({
+      authContext: {
+        ...makeAuthContext(),
+        shouldBypassInternalEntitySourceTagging: true,
+      },
+      objectName: 'company',
+      records: [{ id: company.id }] as ObjectRecord[],
     });
 
     expect(dataSource.query).not.toHaveBeenCalled();

@@ -24,6 +24,15 @@ jest.mock('twenty-ui/display', () => ({
   useIcons: jest.fn(),
 }));
 
+jest.mock('twenty-shared/utils', () => {
+  const actual = jest.requireActual('twenty-shared/utils');
+
+  return {
+    ...actual,
+    isDefined: (value: unknown) => value !== undefined && value !== null,
+  };
+});
+
 describe('useBuildSpreadSheetImportFields', () => {
   const mockGetIcon = jest.fn().mockReturnValue('MockIcon');
   const mockUseIcons = useIcons as jest.MockedFunction<typeof useIcons>;
@@ -464,5 +473,120 @@ describe('useBuildSpreadSheetImportFields', () => {
         type: FieldMetadataType.EMAILS,
       },
     });
+  });
+
+  it('adds opportunity csv aliases for stage and relation id headers', () => {
+    const targetObjectMetadata = createMockObjectMetadataItem({
+      id: 'company-target-object-id',
+      nameSingular: 'company',
+      namePlural: 'companies',
+      labelSingular: 'Company',
+      labelPlural: 'Companies',
+      fields: [
+        createMockFieldMetadataItem({
+          id: 'company-id-field',
+          name: 'id',
+          label: 'ID',
+          type: FieldMetadataType.UUID,
+        }),
+      ],
+      indexMetadatas: [
+        {
+          id: 'primary-key-index',
+          name: 'primaryKeyIndex',
+          createdAt: '2023-01-01',
+          updatedAt: '2023-01-01',
+          isUnique: true,
+          indexFieldMetadatas: [
+            {
+              id: 'index-field-1',
+              fieldMetadataId: 'company-id-field',
+              createdAt: '2023-01-01',
+              updatedAt: '2023-01-01',
+              order: 0,
+            },
+          ],
+        },
+      ] as IndexMetadataItem[],
+    });
+
+    const RelationTestWrapper = ({ children }: { children: ReactNode }) => (
+      <JotaiProvider store={jotaiStore}>
+        <JestObjectMetadataItemSetter
+          objectMetadataItems={[targetObjectMetadata]}
+        >
+          {children}
+        </JestObjectMetadataItemSetter>
+      </JotaiProvider>
+    );
+
+    const { result } = renderHook(() => useBuildSpreadsheetImportFields(), {
+      wrapper: RelationTestWrapper,
+    });
+
+    const fieldMetadataItems: FieldMetadataItem[] = [
+      createMockFieldMetadataItem({
+        id: 'stage-field-id',
+        type: FieldMetadataType.SELECT,
+        name: 'stage',
+        label: 'Stage',
+        options: [
+          {
+            id: 'customer-option-id',
+            label: 'Customer',
+            value: 'CUSTOMER',
+            color: 'yellow',
+            position: 0,
+          },
+          {
+            id: 'proposal-option-id',
+            label: 'Proposal',
+            value: 'PROPOSAL',
+            color: 'turquoise',
+            position: 1,
+          },
+        ],
+      }),
+      createMockFieldMetadataItem({
+        id: 'company-relation-field-id',
+        type: FieldMetadataType.RELATION,
+        name: 'company',
+        label: 'Company',
+        relation: {
+          type: RelationType.MANY_TO_ONE,
+          targetObjectMetadata: {
+            id: 'company-target-object-id',
+            nameSingular: 'company',
+            namePlural: 'companies',
+          },
+        } as any,
+      }),
+    ];
+
+    const spreadsheetImportFields =
+      result.current.buildSpreadsheetImportFields(fieldMetadataItems);
+
+    const stageField = spreadsheetImportFields.find(
+      (field) => field.key === 'stage',
+    );
+    const companyIdField = spreadsheetImportFields.find(
+      (field) => field.key === 'id (company)',
+    );
+
+    expect(stageField?.searchAliases).toEqual(['Étape', 'Etape']);
+    expect(stageField?.fieldType).toMatchObject({
+      type: 'select',
+      options: expect.arrayContaining([
+        expect.objectContaining({
+          value: 'CUSTOMER',
+          aliases: ['GAGNE'],
+        }),
+        expect.objectContaining({
+          value: 'PROPOSAL',
+          aliases: ['PROPOSITION_ENVOYEE'],
+        }),
+      ]),
+    });
+    expect(companyIdField?.searchAliases).toEqual(['Entreprise Id']);
   });
 });

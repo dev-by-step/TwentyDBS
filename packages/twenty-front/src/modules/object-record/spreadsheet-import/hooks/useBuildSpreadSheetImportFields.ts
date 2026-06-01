@@ -2,6 +2,7 @@ import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMeta
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
+import { INTERNAL_ENTITY_OBJECT_NAME_SINGULAR } from '@/internal-entity/constants/InternalEntityObjectNameSingular';
 
 import { getSpreadSheetFieldValidationDefinitions } from '@/object-record/spreadsheet-import/utils/getSpreadSheetFieldValidationDefinitions';
 import { getRelationConnectSubFieldKey } from '@/object-record/spreadsheet-import/utils/spreadSheetGetRelationConnectSubFieldKey';
@@ -20,8 +21,81 @@ import {
   getUniqueConstraintsFields,
   isDefined,
 } from 'twenty-shared/utils';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useIcons } from 'twenty-ui/display';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
+
+const OPPORTUNITY_STAGE_OPTION_ALIASES_BY_VALUE: Partial<
+  Record<string, string[]>
+> = {
+  CUSTOMER: ['GAGNE'],
+  MEETING: ['RDV_PLANIFIE'],
+  NEW: ['PROPOSITION_A_TRAITER'],
+  PROPOSAL: ['PROPOSITION_ENVOYEE'],
+};
+
+const getBaseFieldSearchAliases = (fieldMetadataItem: FieldMetadataItem) => {
+  switch (fieldMetadataItem.name) {
+    case 'name':
+      return ['Nom'];
+    case 'stage':
+      return ['Étape', 'Etape'];
+    default:
+      return [];
+  }
+};
+
+const getCompositeFieldSearchAliases = ({
+  fieldMetadataItem,
+  subFieldName,
+}: {
+  fieldMetadataItem: FieldMetadataItem;
+  subFieldName: string;
+}) => {
+  if (fieldMetadataItem.name === 'amount' && subFieldName === 'amountMicros') {
+    return ['Montant / Amount'];
+  }
+
+  if (fieldMetadataItem.name === 'amount' && subFieldName === 'currencyCode') {
+    return ['Montant / Currency'];
+  }
+
+  return [];
+};
+
+const getRelationConnectFieldSearchAliases = ({
+  fieldMetadataItem,
+  uniqueConstraintField,
+}: {
+  fieldMetadataItem: FieldMetadataItem;
+  uniqueConstraintField: FieldMetadataItem;
+}) => {
+  const targetObjectNameSingular =
+    fieldMetadataItem.relation?.targetObjectMetadata.nameSingular;
+
+  if (
+    targetObjectNameSingular === INTERNAL_ENTITY_OBJECT_NAME_SINGULAR &&
+    uniqueConstraintField.name === 'name'
+  ) {
+    return ['Société', 'Societe'];
+  }
+
+  if (
+    targetObjectNameSingular === CoreObjectNameSingular.Company &&
+    uniqueConstraintField.name === 'id'
+  ) {
+    return ['Entreprise Id'];
+  }
+
+  if (
+    targetObjectNameSingular === CoreObjectNameSingular.Person &&
+    uniqueConstraintField.name === 'id'
+  ) {
+    return ['Point de contact Id'];
+  }
+
+  return [];
+};
 
 export const useBuildSpreadsheetImportFields = () => {
   const { getIcon } = useIcons();
@@ -105,6 +179,7 @@ export const useBuildSpreadsheetImportFields = () => {
     return {
       Icon: getIcon(fieldMetadataItem.icon),
       label: fieldMetadataItem.label,
+      searchAliases: getBaseFieldSearchAliases(fieldMetadataItem),
       key: fieldMetadataItem.name,
       fieldMetadataItemId: fieldMetadataItem.id,
       fieldType: { type: 'input' },
@@ -145,6 +220,10 @@ export const useBuildSpreadsheetImportFields = () => {
                 label,
                 subFieldName,
               ),
+            searchAliases: getCompositeFieldSearchAliases({
+              fieldMetadataItem,
+              subFieldName,
+            }),
             isNestedField: true,
             isCompositeSubField: true,
             compositeSubFieldKey: subFieldName,
@@ -191,6 +270,10 @@ export const useBuildSpreadsheetImportFields = () => {
                 uniqueConstraintField.name,
                 subFieldName,
               ),
+            searchAliases: getRelationConnectFieldSearchAliases({
+              fieldMetadataItem,
+              uniqueConstraintField,
+            }),
             isNestedField: true,
             isCompositeSubField: true,
             compositeSubFieldKey: subFieldName,
@@ -214,6 +297,11 @@ export const useBuildSpreadsheetImportFields = () => {
         type: isMulti ? 'multiSelect' : 'select',
         options:
           fieldMetadataItem.options?.map((option) => ({
+            aliases:
+              fieldMetadataItem.name === 'stage'
+                ? (OPPORTUNITY_STAGE_OPTION_ALIASES_BY_VALUE[option.value] ??
+                  [])
+                : [],
             label: option.label,
             value: option.value,
             color: option.color,
@@ -268,6 +356,10 @@ export const useBuildSpreadsheetImportFields = () => {
                 fieldMetadataItem,
                 uniqueConstraintField,
               ),
+              searchAliases: getRelationConnectFieldSearchAliases({
+                fieldMetadataItem,
+                uniqueConstraintField,
+              }),
               key: getRelationConnectSubFieldKey(
                 fieldMetadataItem,
                 uniqueConstraintField,

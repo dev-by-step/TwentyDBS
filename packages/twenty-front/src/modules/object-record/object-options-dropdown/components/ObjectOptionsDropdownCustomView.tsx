@@ -2,6 +2,7 @@ import { ObjectOptionsDropdownMenuViewName } from '@/object-record/object-option
 import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { useObjectOptionsForBoard } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsForBoard';
+import { useOpenObjectRecordsSpreadsheetImportDialog } from '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog';
 import { recordIndexCalendarLayoutState } from '@/object-record/record-index/states/recordIndexCalendarLayoutState';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
@@ -27,6 +28,7 @@ import {
   AppTooltip,
   IconCalendar,
   IconCalendarWeek,
+  IconFileImport,
   IconLayoutList,
   IconListDetails,
   IconShare,
@@ -45,6 +47,11 @@ export const ObjectOptionsDropdownCustomView = ({
   const { t } = useLingui();
   const { recordIndexId, objectMetadataItem, onContentChange, closeDropdown } =
     useObjectOptionsDropdown();
+
+  const { openObjectRecordsSpreadsheetImportDialog } =
+    useOpenObjectRecordsSpreadsheetImportDialog(
+      objectMetadataItem.nameSingular,
+    );
 
   const { currentView } = useGetCurrentViewOnly();
 
@@ -297,6 +304,14 @@ export const ObjectOptionsDropdownCustomView = ({
               width="100%"
             />
           )}
+        </DropdownMenuItemsContainer>
+        <DropdownMenuSeparator />
+        <DropdownMenuItemsContainer scrollable={false}>
+          <MenuItem
+            onClick={() => openObjectRecordsSpreadsheetImportDialog()}
+            LeftIcon={IconFileImport}
+            text={t`Import CSV`}
+          />
         </DropdownMenuItemsContainer>
       </SelectableList>
     </DropdownContent>

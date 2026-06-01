@@ -10,5 +10,6 @@ export const getCompositeSubFieldLabel = (
     SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[compositeFieldType].subFields.find(
       (subField) => subField.subFieldName === subFieldName,
     )?.subFieldLabel || '';
-  return typeof label === 'string' ? label : label.id;
+
+  return typeof label === 'string' ? label : (label.message ?? label.id);
 };

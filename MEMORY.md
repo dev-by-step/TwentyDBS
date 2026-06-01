@@ -35,12 +35,33 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 
 ## Décisions structurantes
 
+- **Pas d'import CSV backend custom** : la mutation `importFromCsv` dédiée aux opportunités a été supprimée. Le frontend Twenty a déjà un dialog d'import générique (`useOpenObjectRecordsSpreadsheetImportDialog`) qui :
+  - fonctionne pour **n'importe quel objet** (pas seulement `opportunity`)
+  - parse le CSV côté client
+  - **auto-match les colonnes aux champs** via Fuse.js (fuzzy search sur les labels, threshold 0.3)
+  - gère **tous les types de champs** (currency → amountMicros, relations → connect, composites, selects, etc.)
+  - utilise l'**upsert** pour éviter les doublons
+  - définit `createdBy` automatiquement avec `source: 'IMPORT'` + `workspaceMemberId`
+  - a un MatchColumns step pour vérification manuelle si l'auto-match est insuffisant
+- **relation-nested-queries.ts fix conservé** : si un `connect` cible un ID inexistant (length === 0), la relation est mise à `null` au lieu de crasher. Protège l'import standard contre les UUIDs de relation invalides dans le CSV.
+- **Bouton "Import CSV" générique** : présent dans le menu Options (DefaultView + CustomView) pour **tous les objets**, pas seulement `opportunity`. Ouvre le dialog d'import standard.
 - **Pas d'objet TypeORM custom pour `InternalEntity`** : tout passe par le Metadata Engine de Twenty (`ObjectMetadataService`, `FieldMetadataService`). Conséquence : `init-internal-entities` est la commande maîtresse pour recréer le schéma après toute évolution.
 - **M2M Twenty = ONE_TO_MANY + junction object** : `Person ↔ InternalEntity` passe par `personEntityMembership` ; idem pour Company, WorkspaceMember, CalendarEvent (audience). Le filtre natif `<field>Id: { in: [...] }` n'est valide **que si** `junctionTargetFieldId` est positionné sur le champ ONE_TO_MANY.
 - **Audience calendrier (Carte 10)** : choix `M2M dédiée` (`calendarEventEntityAudience`) plutôt que champ JSON, pour bénéficier du picker auto-généré et des filtres GQL natifs. Tradeoff accepté : nécessite de relancer `init-internal-entities` après pull.
 - **Header HTTP `ACTIVE_INTERNAL_ENTITY_ID`** : la Vue Groupe = header absent → l'access policy n'applique aucun filtre en lecture. La Vue Société = header peuplé → filtre par entité active.
 - **Pas de fallback par créateur dans le backfill historique** : si une `Opportunity` n'a pas de `Société` dans le CSV, elle reste sans `internalEntityId` et est signalée.
 - **Aline / `ANGLE_INTELLIGENCE`** : seedée comme InternalEntity mais absente du CSV (zéro opportunité). Ne pas l'utiliser comme fallback implicite.
+
+## Session récente : Import CSV générique
+
+- **Problème initial** : l'import UI standard ne remplit que name + amount + createdBy (les colonnes custom du CSV ignorées). `createdBy` = "System".
+- **Approche abandonnée** (1ère tentative) : mutation `importOpportunitiesFromCsv` dédiée avec `ImportCsvService` en SQL raw + `ImportCsvOpportunitiesResolver`. Trop spécifique, duplique la logique existante.
+- **Solution finale** : utiliser le dialog d'import standard `useOpenObjectRecordsSpreadsheetImportDialog` qui est déjà générique. Le fix `relation-nested-queries.ts` (skip connect si ID inexistant) protège contre les UUIDs de relation invalides.
+- **Changements** :
+  - `relation-nested-queries.ts` : `length !== 1` → `> 1` + si `length === 0`, set `null` au lieu de crasher.
+  - `ObjectOptionsDropdownDefaultView.tsx` / `ObjectOptionsDropdownCustomView.tsx` : bouton "Import CSV" pour **tous les objets**, ouvre le dialog standard.
+- **Fichiers supprimés** : `import-csv.service.ts`, `import-csv-opportunities.resolver.ts`, `import-csv-input.ts`, `import-csv-result.dto.ts`.
+- **Fichiers modifiés** : `relation-nested-queries.ts`, `internal-entity.module.ts`, `ObjectOptionsDropdownDefaultView.tsx`, `ObjectOptionsDropdownCustomView.tsx`, `import-csv-opportunities-parser.service.ts` (revert).
 
 ## Pièges connus
 

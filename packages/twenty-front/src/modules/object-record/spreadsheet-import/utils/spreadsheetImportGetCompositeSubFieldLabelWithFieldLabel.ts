@@ -6,6 +6,8 @@ export const getCompositeSubFieldLabelWithFieldLabel = (
   subFieldLabel: string | MessageDescriptor,
 ) => {
   const label =
-    typeof subFieldLabel === 'string' ? subFieldLabel : subFieldLabel.id;
+    typeof subFieldLabel === 'string'
+      ? subFieldLabel
+      : (subFieldLabel.message ?? subFieldLabel.id);
   return `${fieldMetadataItem.label} / ${label}`;
 };

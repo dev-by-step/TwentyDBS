@@ -11,6 +11,7 @@ interface BaseWorkspaceAuthContext {
   type: WorkspaceAuthContextType;
   workspace: NonNullable<RawAuthContext['workspace']>;
   workspaceMetadataVersion?: string;
+  shouldBypassInternalEntitySourceTagging?: boolean;
 }
 
 export interface ApiKeyWorkspaceAuthContext extends BaseWorkspaceAuthContext {

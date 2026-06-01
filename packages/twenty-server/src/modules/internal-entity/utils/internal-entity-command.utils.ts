@@ -14,7 +14,7 @@ export const validateUuidOrThrow = (
   fieldName: string,
 ): string => {
   if (!isValidUuid(value)) {
-    throw new Error(`Invalid ${fieldName}: ${value}`);
+    throw new Error(`${fieldName} invalide: ${value}`);
   }
 
   return value.toLowerCase();

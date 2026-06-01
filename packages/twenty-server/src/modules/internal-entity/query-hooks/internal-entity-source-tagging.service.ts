@@ -58,12 +58,25 @@ export class InternalEntitySourceTaggingService {
 
     this.assertPayloadDataIsDefined(payload.data);
 
-    const internalEntityId =
-      await this.resolveAndValidateUserInternalEntityId(authContext);
-
-    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+    if (
+      this.shouldBypassInternalEntitySourceTagging(authContext) &&
+      objectName !== OPPORTUNITY_OBJECT_NAME
+    ) {
       return payload;
     }
+
+    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+      await this.resolveAndValidateUserInternalEntityId(authContext);
+
+      return payload;
+    }
+
+    if (this.hasExplicitInternalEntityAssignment(payload.data)) {
+      return payload;
+    }
+
+    const internalEntityId =
+      await this.resolveAndValidateUserInternalEntityId(authContext);
 
     return {
       ...payload,
@@ -91,20 +104,53 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    const internalEntityId =
-      await this.resolveAndValidateUserInternalEntityId(authContext);
-
-    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+    if (
+      this.shouldBypassInternalEntitySourceTagging(authContext) &&
+      objectName !== OPPORTUNITY_OBJECT_NAME
+    ) {
       return payload;
     }
+
+    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+      await this.resolveAndValidateUserInternalEntityId(authContext);
+
+      return payload;
+    }
+
+    const hasRecordsMissingInternalEntityAssignment = payload.data.some(
+      (record) => !this.hasExplicitInternalEntityAssignment(record),
+    );
+
+    if (!hasRecordsMissingInternalEntityAssignment) {
+      return payload;
+    }
+
+    const internalEntityId =
+      await this.resolveAndValidateUserInternalEntityId(authContext);
 
     return {
       ...payload,
       data: payload.data.map((record) => ({
         ...record,
-        internalEntityId,
+        ...(this.hasExplicitInternalEntityAssignment(record)
+          ? {}
+          : { internalEntityId }),
       })),
     };
+  }
+
+  private hasExplicitInternalEntityAssignment(
+    record: InternalEntitySourceTaggableRecordInput,
+  ): boolean {
+    return (
+      isDefined(record.internalEntity) || isDefined(record.internalEntityId)
+    );
+  }
+
+  private shouldBypassInternalEntitySourceTagging(
+    authContext: WorkspaceAuthContext,
+  ): boolean {
+    return authContext.shouldBypassInternalEntitySourceTagging === true;
   }
 
   async createMembershipsForRecords({
@@ -119,6 +165,10 @@ export class InternalEntitySourceTaggingService {
     const membershipConfig = getInternalEntityMembershipConfig(objectName);
 
     if (!isDefined(membershipConfig) || records.length === 0) {
+      return;
+    }
+
+    if (this.shouldBypassInternalEntitySourceTagging(authContext)) {
       return;
     }
 

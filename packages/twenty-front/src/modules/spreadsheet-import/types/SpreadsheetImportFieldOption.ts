@@ -4,6 +4,7 @@ export type SpreadsheetImportFieldOption = {
   Icon: IconComponent | null | undefined;
   value: string;
   label: string;
+  aliases?: readonly string[];
   shortLabelForNestedField?: string;
   disabled?: boolean;
   fieldMetadataTypeLabel?: string;

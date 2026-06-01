@@ -26,7 +26,7 @@ describe('internal-entity-command.utils', () => {
     it('should throw for an invalid UUID', () => {
       expect(() =>
         validateUuidOrThrow('workspace;DROP SCHEMA', 'workspaceId'),
-      ).toThrow('Invalid workspaceId: workspace;DROP SCHEMA');
+      ).toThrow('workspaceId invalide: workspace;DROP SCHEMA');
     });
   });
 

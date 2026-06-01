@@ -22,14 +22,14 @@ import {
 
 type CompanyCsvSeed = {
   id: string;
-  name: string;
+  name: string | null;
   position: number;
 };
 
 type PersonCsvSeed = {
   id: string;
-  nameFirstName: string;
-  nameLastName: string;
+  nameFirstName: string | null;
+  nameLastName: string | null;
   emailsPrimaryEmail: string;
   companyId: string | null;
   position: number;
@@ -48,6 +48,7 @@ type OpportunityCsvSeed = {
 };
 
 const IMPORT_LOCK_PREFIX = 'import-csv';
+const GENERATED_CONTACT_EMAIL_DOMAIN = 'import.local';
 
 @Command({
   name: 'import-csv',
@@ -211,7 +212,7 @@ export class ImportCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
       seenCompanyIds.add(row.companyId);
       companies.push({
         id: row.companyId,
-        name: row.name,
+        name: null,
         position: position++,
       });
     }
@@ -232,9 +233,9 @@ export class ImportCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
       seenPersonIds.add(row.personId);
       persons.push({
         id: row.personId,
-        nameFirstName: 'Contact',
-        nameLastName: row.name,
-        emailsPrimaryEmail: `contact-${row.personId.slice(0, 8)}@import.local`,
+        nameFirstName: null,
+        nameLastName: null,
+        emailsPrimaryEmail: `${row.personId}@${GENERATED_CONTACT_EMAIL_DOMAIN}`,
         companyId: row.companyId,
         position: position++,
       });
@@ -290,10 +291,15 @@ export class ImportCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
     const parameters: unknown[] = [];
 
     const valuesSql = companies
-      .map((company, index) => {
-        const offset = index * 5;
+      .map((company) => {
+        const rowParameters = [
+          company.id,
+          company.name,
+          company.position,
+        ] as const;
+        const offset = parameters.length;
 
-        parameters.push(company.id, company.name, String(company.position));
+        parameters.push(...rowParameters);
 
         return `($${offset + 1}, $${offset + 2}, $${offset + 3}, NOW(), NOW())`;
       })
@@ -341,17 +347,18 @@ export class ImportCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
     const parameters: unknown[] = [];
 
     const valuesSql = persons
-      .map((person, index) => {
-        const offset = index * 8;
-
-        parameters.push(
+      .map((person) => {
+        const rowParameters = [
           person.id,
           person.nameFirstName,
           person.nameLastName,
           person.emailsPrimaryEmail,
           person.companyId ?? null,
-          String(person.position),
-        );
+          person.position,
+        ] as const;
+        const offset = parameters.length;
+
+        parameters.push(...rowParameters);
 
         return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, NOW(), NOW())`;
       })
@@ -411,20 +418,21 @@ export class ImportCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
     const parameters: unknown[] = [];
 
     const valuesSql = opportunities
-      .map((opp, index) => {
-        const offset = index * 11;
-
-        parameters.push(
+      .map((opp) => {
+        const rowParameters = [
           opp.id,
           opp.name,
-          String(opp.amountAmountMicros),
+          opp.amountAmountMicros,
           opp.amountCurrencyCode,
           opp.stage,
           opp.pointOfContactId ?? null,
           opp.companyId ?? null,
           opp.internalEntityId,
-          String(opp.position),
-        );
+          opp.position,
+        ] as const;
+        const offset = parameters.length;
+
+        parameters.push(...rowParameters);
 
         return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, NOW(), NOW())`;
       })

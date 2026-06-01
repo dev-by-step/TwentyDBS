@@ -7,7 +7,19 @@ import { type SpreadsheetMatchedOptions } from '@/spreadsheet-import/types/Sprea
 import { spreadsheetImportParseMultiSelectOptionsOrThrow } from '@/spreadsheet-import/utils/spreadsheetImportParseMultiSelectOptionsOrThrow';
 import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { normalizeSearchText } from '~/utils/normalizeSearchText';
 import { uniqueEntries } from './uniqueEntries';
+
+const doesFieldOptionMatchEntry = (
+  fieldOption: { value?: string; label?: string; aliases?: readonly string[] },
+  entry: string,
+) => {
+  const normalizedEntry = normalizeSearchText(entry);
+
+  return [fieldOption.value, fieldOption.label, ...(fieldOption.aliases ?? [])]
+    .filter((candidate): candidate is string => typeof candidate === 'string')
+    .some((candidate) => normalizeSearchText(candidate) === normalizedEntry);
+};
 
 export const setColumn = (
   oldColumn: SpreadsheetColumn,
@@ -22,10 +34,8 @@ export const setColumn = (
     ) as SpreadsheetMatchedOptions[];
 
     const matchedOptions = uniqueData.map((record) => {
-      const value = fieldOptions.find(
-        (fieldOption) =>
-          fieldOption.value === record.entry ||
-          fieldOption.label === record.entry,
+      const value = fieldOptions.find((fieldOption) =>
+        doesFieldOptionMatchEntry(fieldOption, record.entry),
       )?.value;
       return value
         ? ({ ...record, value } as SpreadsheetMatchedOptions)
@@ -71,9 +81,8 @@ export const setColumn = (
     }
 
     const matchedOptions = entries.map((entry) => {
-      const value = fieldOptions.find(
-        (fieldOption) =>
-          fieldOption.value === entry || fieldOption.label === entry,
+      const value = fieldOptions.find((fieldOption) =>
+        doesFieldOptionMatchEntry(fieldOption, entry),
       )?.value;
       return value
         ? ({ entry, value } as SpreadsheetMatchedOptions)

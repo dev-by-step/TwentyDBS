@@ -21,11 +21,9 @@ export const useBatchCreateManyRecords = <
   skipPostOptimisticEffect = false,
   mutationBatchSize = DEFAULT_MUTATION_BATCH_SIZE,
   setBatchedRecordsCount,
-  abortController,
 }: useCreateManyRecordsProps & {
   mutationBatchSize?: number;
   setBatchedRecordsCount?: (count: number) => void;
-  abortController?: AbortController;
 }) => {
   const { createManyRecords } = useCreateManyRecords({
     objectNameSingular,
@@ -47,9 +45,11 @@ export const useBatchCreateManyRecords = <
   const batchCreateManyRecords = async ({
     recordsToCreate,
     upsert,
+    abortController,
   }: {
     recordsToCreate: Partial<CreatedObjectRecord>[];
     upsert?: boolean;
+    abortController?: AbortController;
   }) => {
     const numberOfBatches = Math.ceil(
       recordsToCreate.length / mutationBatchSize,

@@ -1,4 +1,7 @@
+import { buildOpportunityCsvFixtureRows } from 'src/modules/internal-entity/__tests__/factories/opportunity-csv-fixture.factory';
+import { readFileSync } from 'node:fs';
 import { access, readFile, stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 import {
   buildRawCsvOpportunityCsv,
@@ -86,6 +89,19 @@ describe('ImportCsvOpportunitiesParserService', () => {
         stage: 'QUALIFIED',
       },
     ]);
+  });
+
+  it('should parse the real docs/opportunity.csv coherently', async () => {
+    const realCsvContent = readFileSync(
+      resolve(process.cwd(), 'docs/opportunity.csv'),
+      'utf8',
+    );
+
+    mockCsvFile(realCsvContent);
+
+    await expect(service.readCsvOpportunities()).resolves.toStrictEqual(
+      buildOpportunityCsvFixtureRows(),
+    );
   });
 
   it('should reject missing required headers', async () => {

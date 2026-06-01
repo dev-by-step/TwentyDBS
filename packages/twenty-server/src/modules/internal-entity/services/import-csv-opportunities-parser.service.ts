@@ -41,6 +41,7 @@ export class ImportCsvOpportunitiesParserService {
     }
 
     const csvContent = await readFile(csvPath, 'utf8');
+
     const parsed = parse<RawCsvOpportunityRow>(csvContent, {
       delimiter: ',',
       header: true,

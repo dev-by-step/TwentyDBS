@@ -1,6 +1,7 @@
 import { json2csv } from 'json-2-csv';
 import { useMemo } from 'react';
 
+import { getCompositeSubFieldLabel } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldLabel';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
 import { EXPORT_TABLE_DATA_DEFAULT_PAGE_SIZE } from '@/object-record/object-options-dropdown/constants/ExportTableDataDefaultPageSize';
 import { useExportProcessRecordsForCSV } from '@/object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV';
@@ -11,7 +12,6 @@ import {
 } from '@/object-record/record-index/export/hooks/useRecordIndexLazyFetchRecords';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { COMPOSITE_FIELD_SUB_FIELD_LABELS } from '@/settings/data-model/constants/CompositeFieldSubFieldLabel';
 import { formatValueForCSV } from '@/spreadsheet-import/utils/formatValueForCSV';
 import { sanitizeValueForCSVExport } from '@/spreadsheet-import/utils/sanitizeValueForCSVExport';
 import { t } from '@lingui/core/macro';
@@ -73,7 +73,11 @@ export const generateCsv: GenerateExport = ({
     const nestedFieldsWithoutTypename = Object.keys(rows[0][column.field])
       .filter((key) => key !== '__typename')
       .map((key) => {
-        const subFieldLabel = COMPOSITE_FIELD_SUB_FIELD_LABELS[columnType][key];
+        const subFieldLabel = getCompositeSubFieldLabel(
+          columnType,
+          key as Parameters<typeof getCompositeSubFieldLabel>[1],
+        );
+
         return {
           field: `${column.field}.${key}`,
           title: formatValueForCSV(
