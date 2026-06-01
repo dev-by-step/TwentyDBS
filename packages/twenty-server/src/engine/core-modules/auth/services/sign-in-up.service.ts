@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { msg } from '@lingui/core/macro';
@@ -16,6 +16,7 @@ import {
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import {
   PASSWORD_REGEX,
   compareHash,
@@ -44,6 +45,7 @@ import {
   TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
   TWENTY_DBS_WORKSPACE_SUBDOMAIN,
 } from 'src/engine/core-modules/workspace/constants/twenty-dbs-workspace.constant';
+import { WorkspaceService } from 'src/engine/core-modules/workspace/services/workspace.service';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -70,9 +72,12 @@ export class SignInUpService {
     private readonly applicationService: ApplicationService,
     private readonly fileCorePictureService: FileCorePictureService,
     private readonly enterprisePlanService: EnterprisePlanService,
+    private readonly workspaceService: WorkspaceService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
+
+  private readonly logger = new Logger(SignInUpService.name);
 
   async computePartialUserFromUserPayload(
     newUserPayload: SignInUpNewUserPayload,
@@ -508,6 +513,9 @@ export class SignInUpService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let createdWorkspace: WorkspaceEntity;
+    let createdUser: UserEntity;
+
     try {
       const workspaceToCreate = this.workspaceRepository.create({
         id: workspaceId,
@@ -522,6 +530,8 @@ export class SignInUpService {
         WorkspaceEntity,
         workspaceToCreate,
       );
+
+      createdWorkspace = workspace;
 
       const customApplication =
         await this.applicationService.createWorkspaceCustomApplication(
@@ -553,7 +563,7 @@ export class SignInUpService {
       }
 
       const isExistingUser = userData.type === 'existingUser';
-      const user = isExistingUser
+      const user: UserEntity = isExistingUser
         ? userData.existingUser
         : await this.saveNewUser(
             userData.newUserWithPicture,
@@ -607,9 +617,9 @@ export class SignInUpService {
         );
       }
 
-      await queryRunner.commitTransaction();
+      createdUser = user;
 
-      return { user, workspace };
+      await queryRunner.commitTransaction();
     } catch (error) {
       if (queryRunner.isTransactionActive) {
         await queryRunner.rollbackTransaction();
@@ -621,6 +631,24 @@ export class SignInUpService {
         'flatApplicationMaps',
       ]);
     }
+
+    try {
+      await this.workspaceService.activateWorkspace(
+        createdUser as unknown as AuthContextUser,
+        createdWorkspace,
+        { displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME },
+      );
+    } catch (activationError) {
+      this.logger.error(
+        `Auto-activation failed for workspace ${createdWorkspace.id}: ${
+          activationError instanceof Error
+            ? activationError.message
+            : String(activationError)
+        }`,
+      );
+    }
+
+    return { user: createdUser, workspace: createdWorkspace };
   }
 
   async signUpWithoutWorkspace(

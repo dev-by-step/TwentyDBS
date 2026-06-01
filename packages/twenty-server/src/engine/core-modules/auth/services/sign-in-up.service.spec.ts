@@ -106,6 +106,9 @@ const createSignInUpServiceForTests = () => {
       isValid: jest.fn().mockReturnValue(false),
     } as any,
     {
+      activateWorkspace: jest.fn(),
+    } as any,
+    {
       createQueryRunner: jest.fn(() => queryRunnerMock),
     } as any,
   );
