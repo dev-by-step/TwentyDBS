@@ -15,6 +15,7 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
+import { isBootstrapAllowedDomain } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email-domains.constant';
 import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import {
@@ -124,6 +125,12 @@ export class SignInUpService {
           userData: params.userData,
         }),
       };
+    }
+
+    if (params.userData.type === 'newUserWithPicture') {
+      this.assertEmailDomainAllowedForAutoSignUp(
+        params.userData.newUserWithPicture.email ?? '',
+      );
     }
 
     if (params.workspace) {
@@ -702,6 +709,8 @@ export class SignInUpService {
       authParams,
     );
 
+    this.assertEmailDomainAllowedForAutoSignUp(newUserParams.email);
+
     const existingWorkspace = await this.workspaceRepository.findOne({
       where: {},
       order: { createdAt: 'ASC' },
@@ -723,5 +732,19 @@ export class SignInUpService {
     });
 
     return user;
+  }
+
+  private assertEmailDomainAllowedForAutoSignUp(email: string) {
+    if (isBootstrapAllowedDomain(email)) {
+      return;
+    }
+
+    throw new AuthException(
+      'Sign-up is restricted to authorized email domains',
+      AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      {
+        userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
+      },
+    );
   }
 }

@@ -8,9 +8,17 @@ import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/worksp
 import { SignInUpService } from './sign-in-up.service';
 
 const mockPartialUserPayload: SignInUpNewUserPayload = {
-  email: 'first.user@acme.dev',
+  email: 'first.user@weknow.dev',
   firstName: 'First',
   lastName: 'User',
+  locale: 'en',
+  isEmailAlreadyVerified: true,
+};
+
+const mockDisallowedDomainPayload: SignInUpNewUserPayload = {
+  email: 'someone@external-vendor.com',
+  firstName: 'Someone',
+  lastName: 'External',
   locale: 'en',
   isEmailAlreadyVerified: true,
 };
@@ -31,6 +39,7 @@ const createSignInUpServiceForTests = () => {
   const mockWorkspaceRepository = {
     count: jest.fn(),
     create: jest.fn((workspace) => workspace),
+    findOne: jest.fn().mockResolvedValue(null),
   };
 
   const mockConfigurationValues: MockConfigurationValues = {
@@ -379,5 +388,51 @@ describe('SignInUpService workspace-creation policy', () => {
     ).rejects.toMatchObject({
       code: AuthExceptionCode.SIGNUP_DISABLED,
     });
+  });
+});
+
+describe('SignInUpService email-domain restriction', () => {
+  it('rejects sign-up from an email domain outside the authorized list', async () => {
+    const { service } = createSignInUpServiceForTests();
+
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(mockDisallowedDomainPayload, {
+        provider: AuthProviderEnum.Password,
+        password: 'Hunter2!safe',
+      } as any),
+    ).rejects.toMatchObject({
+      code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+    });
+  });
+
+  it('allows sign-up from an authorized domain even without an invitation', async () => {
+    const { service, mockUserRepository, mockWorkspaceRepository } =
+      createSignInUpServiceForTests();
+
+    mockWorkspaceRepository.count.mockResolvedValue(0);
+    mockUserRepository.count.mockResolvedValue(0);
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(
+        {
+          ...mockPartialUserPayload,
+          email: 'newcomer@weknow.dev',
+        },
+        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+      ),
+    ).resolves.toBeDefined();
+
+    expect(mockUserRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'newcomer@weknow.dev',
+      }),
+    );
   });
 });
