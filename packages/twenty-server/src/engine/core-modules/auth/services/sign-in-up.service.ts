@@ -135,6 +135,20 @@ export class SignInUpService {
       return { user: updatedUser, workspace: params.workspace };
     }
 
+    const existingWorkspace = await this.workspaceRepository.findOne({
+      where: {},
+      order: { createdAt: 'ASC' },
+    });
+
+    if (existingWorkspace) {
+      const updatedUser = await this.signInUpOnExistingWorkspace({
+        workspace: existingWorkspace,
+        userData: params.userData,
+      });
+
+      return { user: updatedUser, workspace: existingWorkspace };
+    }
+
     return await this.signUpOnNewWorkspace(params.userData);
   }
 
@@ -279,9 +293,13 @@ export class SignInUpService {
         newUserWithPicture: PartialUserWithPicture;
       };
 
+      const shouldGrantServerAdmin =
+        isBootstrapAdminEmail(userData.newUserWithPicture.email ?? '') &&
+        !(await this.hasServerAdmin());
+
       const user = await this.saveNewUser(userData.newUserWithPicture, {
-        canAccessFullAdminPanel: false,
-        canImpersonate: false,
+        canAccessFullAdminPanel: shouldGrantServerAdmin,
+        canImpersonate: shouldGrantServerAdmin,
       });
 
       await this.activateOnboardingForUser({
@@ -295,6 +313,18 @@ export class SignInUpService {
         params.workspace,
         params.roleId,
       );
+
+      if (
+        shouldGrantServerAdmin ||
+        isBootstrapAdminEmail(userData.newUserWithPicture.email ?? '')
+      ) {
+        await this.onboardingService.setOnboardingSuperadminWorkspaceSetupPending(
+          {
+            workspaceId: params.workspace.id,
+            value: true,
+          },
+        );
+      }
 
       return user;
     }
@@ -667,18 +697,31 @@ export class SignInUpService {
       );
     }
 
-    await this.assertSignUpEnabled();
-
-    const shouldGrantServerAdmin =
-      isBootstrapAdminEmail(newUserParams.email) &&
-      !(await this.hasServerAdmin());
-
-    return this.saveNewUser(
-      await this.computePartialUserFromUserPayload(newUserParams, authParams),
-      {
-        canImpersonate: shouldGrantServerAdmin,
-        canAccessFullAdminPanel: shouldGrantServerAdmin,
-      },
+    const newUserWithPicture = await this.computePartialUserFromUserPayload(
+      newUserParams,
+      authParams,
     );
+
+    const existingWorkspace = await this.workspaceRepository.findOne({
+      where: {},
+      order: { createdAt: 'ASC' },
+    });
+
+    if (existingWorkspace) {
+      return this.signInUpOnExistingWorkspace({
+        workspace: existingWorkspace,
+        userData: {
+          type: 'newUserWithPicture',
+          newUserWithPicture,
+        },
+      });
+    }
+
+    const { user } = await this.signUpOnNewWorkspace({
+      type: 'newUserWithPicture',
+      newUserWithPicture,
+    });
+
+    return user;
   }
 }
