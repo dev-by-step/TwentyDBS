@@ -1,7 +1,4 @@
-export const BOOTSTRAP_ADMIN_EMAILS = [
-  'aline@weknow.dev',
-  'aline@devbystep.fr',
-] as const;
+export const BOOTSTRAP_ADMIN_EMAILS = ['issa.kane@efrei.net'] as const;
 
 export const isBootstrapAdminEmail = (email: string) =>
   BOOTSTRAP_ADMIN_EMAILS.includes(

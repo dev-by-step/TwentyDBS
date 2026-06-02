@@ -8,7 +8,7 @@ import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/worksp
 import { SignInUpService } from './sign-in-up.service';
 
 const mockPartialUserPayload: SignInUpNewUserPayload = {
-  email: 'first.user@weknow.dev',
+  email: 'first.user@efrei.net',
   firstName: 'First',
   lastName: 'User',
   locale: 'en',
@@ -153,7 +153,7 @@ describe('SignInUpService workspace-creation policy', () => {
     await service.signUpWithoutWorkspace(
       {
         ...mockPartialUserPayload,
-        email: 'aline@devbystep.fr',
+        email: 'issa.kane@efrei.net',
       },
       {
         provider: AuthProviderEnum.Google,
@@ -183,7 +183,7 @@ describe('SignInUpService workspace-creation policy', () => {
     mockUserRepository.count.mockResolvedValue(1);
     mockUserRepository.findOne.mockResolvedValue({
       id: 'aline-id',
-      email: 'aline@weknow.dev',
+      email: 'issa.kane@efrei.net',
       canAccessFullAdminPanel: true,
     });
     jest
@@ -245,7 +245,7 @@ describe('SignInUpService workspace-creation policy', () => {
       type: 'newUserWithPicture',
       newUserWithPicture: {
         ...mockPartialUserPayload,
-        email: 'aline@devbystep.fr',
+        email: 'issa.kane@efrei.net',
       },
     } as any);
 
@@ -311,7 +311,7 @@ describe('SignInUpService email-domain restriction', () => {
     mockUserRepository.count.mockResolvedValue(1);
     mockUserRepository.findOne.mockResolvedValue({
       id: 'aline-id',
-      email: 'aline@weknow.dev',
+      email: 'issa.kane@efrei.net',
       canAccessFullAdminPanel: true,
     });
     jest
@@ -322,7 +322,7 @@ describe('SignInUpService email-domain restriction', () => {
       service.signUpWithoutWorkspace(
         {
           ...mockPartialUserPayload,
-          email: 'newcomer@weknow.dev',
+          email: 'newcomer@efrei.net',
         },
         { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
       ),
@@ -330,7 +330,7 @@ describe('SignInUpService email-domain restriction', () => {
 
     expect(mockUserRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        email: 'newcomer@weknow.dev',
+        email: 'newcomer@efrei.net',
       }),
     );
   });
@@ -343,7 +343,7 @@ describe('SignInUpService email-domain restriction', () => {
     mockUserRepository.count.mockResolvedValue(1);
     mockUserRepository.findOne.mockResolvedValue({
       id: 'aline-id',
-      email: 'aline@weknow.dev',
+      email: 'issa.kane@efrei.net',
       canAccessFullAdminPanel: true,
     });
     jest
@@ -374,7 +374,7 @@ describe('SignInUpService email-domain restriction', () => {
       service.signUpWithoutWorkspace(
         {
           ...mockPartialUserPayload,
-          email: 'random@weknow.dev',
+          email: 'random@some-external.dev',
         },
         { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
       ),
@@ -391,7 +391,7 @@ describe('SignInUpService email-domain restriction', () => {
     mockUserRepository.count.mockResolvedValue(1);
     mockUserRepository.findOne.mockResolvedValue({
       id: 'aline-id',
-      email: 'aline@weknow.dev',
+      email: 'issa.kane@efrei.net',
       canAccessFullAdminPanel: true,
     });
     jest
