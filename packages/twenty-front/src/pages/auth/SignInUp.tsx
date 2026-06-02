@@ -10,6 +10,7 @@ import { styled } from '@linaria/react';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 
+import { AuthLocaleSwitcher } from '@/auth/components/AuthLocaleSwitcher';
 import { Logo } from '@/auth/components/Logo';
 import { Title } from '@/auth/components/Title';
 import { EmailVerificationSent } from '@/auth/sign-in-up/components/EmailVerificationSent';
@@ -45,6 +46,13 @@ const StyledLoaderContainer = styled.div`
   margin-bottom: ${themeCssVariables.spacing[8]};
   margin-top: ${themeCssVariables.spacing[8]};
   width: 100%;
+`;
+
+const StyledLocaleSwitcherWrapper = styled.div`
+  position: fixed;
+  right: ${themeCssVariables.spacing[6]};
+  top: ${themeCssVariables.spacing[6]};
+  z-index: 10;
 `;
 
 const StandardContent = ({
@@ -205,19 +213,29 @@ export const SignInUp = () => {
 
   if (signInUpStep === SignInUpStep.EmailVerification) {
     return (
-      <ModalContent isVerticallyCentered isHorizontallyCentered>
-        <EmailVerificationSent email={searchParams.get('email')} />
-      </ModalContent>
+      <>
+        <StyledLocaleSwitcherWrapper>
+          <AuthLocaleSwitcher />
+        </StyledLocaleSwitcherWrapper>
+        <ModalContent isVerticallyCentered isHorizontallyCentered>
+          <EmailVerificationSent email={searchParams.get('email')} />
+        </ModalContent>
+      </>
     );
   }
 
   return (
-    <StandardContent
-      workspacePublicData={workspacePublicData}
-      signInUpForm={signInUpForm}
-      signInUpStep={signInUpStep}
-      title={title}
-      onClickOnLogo={onClickOnLogo}
-    />
+    <>
+      <StyledLocaleSwitcherWrapper>
+        <AuthLocaleSwitcher />
+      </StyledLocaleSwitcherWrapper>
+      <StandardContent
+        workspacePublicData={workspacePublicData}
+        signInUpForm={signInUpForm}
+        signInUpStep={signInUpStep}
+        title={title}
+        onClickOnLogo={onClickOnLogo}
+      />
+    </>
   );
 };
