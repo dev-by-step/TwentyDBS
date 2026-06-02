@@ -36,6 +36,8 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { useCreateWorkspaceInvitation } from '@/workspace-invitation/hooks/useCreateWorkspaceInvitation';
 import { useMutation } from '@apollo/client/react';
 import { SKIP_INVITE_TEAM_ONBOARDING_STEP } from '@/onboarding/graphql/mutations/skipInviteTeamOnboardingStep';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 const StyledAnimatedContainer = styled.div`
   display: flex;
@@ -75,6 +77,9 @@ export const InviteTeam = () => {
   const { sendInvitation } = useCreateWorkspaceInvitation();
   const [skipInviteTeamMutation] = useMutation(SKIP_INVITE_TEAM_ONBOARDING_STEP);
   const setNextOnboardingStatus = useSetNextOnboardingStatus();
+  const permissionMap = usePermissionFlagMap();
+  const canInviteTeammates =
+    permissionMap[PermissionFlagType.WORKSPACE_MEMBERS];
   const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const calendarBookingPageId = useAtomStateValue(calendarBookingPageIdState);
@@ -199,6 +204,30 @@ export const InviteTeam = () => {
 
   if (shouldShowSuperadminWorkspaceSetup) {
     return <SuperadminWorkspaceSetup />;
+  }
+
+  if (!canInviteTeammates) {
+    return (
+      <ModalContent isVerticallyCentered isHorizontallyCentered>
+        <Title>
+          <Trans>You're all set</Trans>
+        </Title>
+        <SubTitle>
+          <Trans>
+            A workspace admin will invite new teammates. You can continue and
+            start using the app.
+          </Trans>
+        </SubTitle>
+        <StyledButtonContainer>
+          <MainButton
+            title={hasCalendarBooking ? t`Continue` : t`Finish`}
+            disabled={isSubmitting}
+            onClick={handleSkip}
+            fullWidth
+          />
+        </StyledButtonContainer>
+      </ModalContent>
+    );
   }
 
   return (

@@ -2,15 +2,8 @@
 set -e
 
 is_worker_command() {
-    if [ "$#" -ge 2 ] && [ "$1" = "yarn" ] && [ "$2" = "worker:prod" ]; then
-        return 0
-    fi
-
-    if [ "$#" -ge 2 ] && [ "$1" = "node" ] && [ "$2" = "dist/queue-worker/queue-worker" ]; then
-        return 0
-    fi
-
-    return 1
+    # Our Procfile launches the worker process as `yarn worker:prod`.
+    [ "$#" -ge 2 ] && [ "$1" = "yarn" ] && [ "$2" = "worker:prod" ]
 }
 
 should_skip_db_migrations() {

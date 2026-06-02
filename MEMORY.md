@@ -8,9 +8,11 @@
 ## Projet
 
 - **Nom :** Twenty CRM Multi-Entity (fork de `twentyhq/twenty`).
-- **Repo :** `dev-by-step/twenty-crm` (origin), `twentyhq/twenty` (upstream).
+- **Repo :** `dev-by-step/TwentyDBS` (origin), `twentyhq/twenty` (upstream).
 - **Stack :** voir `docs/ARCHITECTURE.md`. Monorepo Nx + Yarn 4, NestJS + GraphQL Yoga côté serveur, React 18 + Vite + Jotai + Linaria côté front.
 - **Démarrage local :** `yarn dev` (script repo). Équivalent : `yarn start`.
+- **Prod :** https://20.devbystep.fr (Dokku sur `vps-issa` 54.37.39.172, image `.dokku/Dockerfile`, Procfile web+worker, plugins dokku-postgres + dokku-redis + dokku-letsencrypt).
+- **Déploiement :** `git push dokku 10-permissions-entites:main` (branche locale → `main` côté dokku, `deploy-branch` config = `main`). Build sur le VPS via `.dokku/Dockerfile`, 4 GB de swap ajoutés pour le build front.
 
 ## Objectif métier
 
@@ -20,7 +22,7 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 - Calendrier inter-sociétés avec anonymisation des détails (Carte 5), vue groupe (Carte 6), couleur de l'entité responsable (Carte 7).
 - Audience de calendrier per-event (Carte 10).
 
-## État d'avancement (au 2026-05-18)
+## État d'avancement (au 2026-06-02)
 
 | Carte | Branche | Statut |
 |-------|---------|--------|
@@ -31,9 +33,19 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 | 5 | `5-anonymisation-calendrier-tiers` | ✅ |
 | 6 | `6-visualisation-calendrier-groupe` | ✅ |
 | 7 | `7-identification-porteur-calendrier` | ✅ |
-| 10 | `10-permissions-entites` | 🚧 en cours — perms transverses + audience M2M calendrier |
+| 10 | `10-permissions-entites` | ✅ deployé en prod sur https://20.devbystep.fr. Single-tenant + auto-activate + restriction signup + fix skip InviteTeam. |
 
-## Décisions structurantes
+## Décisions structurantes — déploiement et onboarding
+
+- **Single-tenant** : `IS_MULTIWORKSPACE_ENABLED=false`. Le 1er signup crée le workspace `TwentyDBS` + auto-active (cf. `signUpOnNewWorkspace.activateWorkspace`). Les signups suivants rejoignent ce workspace via `signInUpOnExistingWorkspace`. Aucune UI de "création de workspace" n'est jamais affichée.
+- **Auto-signup verrouillé au domaine du super admin** : `SignInUpService.assertEmailDomainAllowedForAutoSignUp` lookup `userRepository.findOne({ where: { canAccessFullAdminPanel: true } })`. Si un super admin existe, seul son domaine email peut s'auto-inscrire. Si aucun super admin (bootstrap), seuls `BOOTSTRAP_ADMIN_EMAILS` (`aline@weknow.dev`, `aline@devbystep.fr`) peuvent créer le 1er compte. Les invitations explicites continuent à bypass le check (via `signInUpWithPersonalInvitation`).
+- **Skip InviteTeam pour non-admins** : nouvelle mutation `skipInviteTeamOnboardingStep` (NoPermissionGuard) + helper `advanceFromInviteTeamStep`. `InviteTeam.tsx` affiche un écran simplifié pour les users sans `WORKSPACE_MEMBERS` (un seul bouton Continue).
+- **Bootstrap admin** : `BOOTSTRAP_ADMIN_EMAILS = ['aline@weknow.dev', 'aline@devbystep.fr']`. Aline obtient `canAccessFullAdminPanel=true` à son signup + onboarding superadmin pour configurer les InternalEntities.
+- **Entrypoint Twenty** : `setup_and_migrate_db` teste désormais la présence de la table `core.keyValuePair` (créée par la 1re migration) au lieu du schema `core` (que TypeORM crée vide à la connexion). Évite que `database:init:prod` soit faussement skippé.
+- **Image Docker Dokku** : `.dokku/Dockerfile` (dérivé de `packages/twenty-docker/twenty/Dockerfile`) embarque le Procfile à `/app/Procfile`. Le worker share l'image avec le web, sélectionné via Procfile + `dokku ps:scale twenty-dbs web=1 worker=1`.
+- **`scripts/dokku/bootstrap-twenty.sh`** : provisionne l'app + services + storage + scaling. Fait `postgres:link --alias PG_DATABASE` et `redis:link` (indispensable, sinon DNS introuvable au boot) + `git:set deploy-branch main`.
+
+## Décisions structurantes — multi-entité
 
 - **Pas d'import CSV backend custom** : la mutation `importFromCsv` dédiée aux opportunités a été supprimée. Le frontend Twenty a déjà un dialog d'import générique (`useOpenObjectRecordsSpreadsheetImportDialog`) qui :
   - fonctionne pour **n'importe quel objet** (pas seulement `opportunity`)
@@ -63,7 +75,14 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 - **Fichiers supprimés** : `import-csv.service.ts`, `import-csv-opportunities.resolver.ts`, `import-csv-input.ts`, `import-csv-result.dto.ts`.
 - **Fichiers modifiés** : `relation-nested-queries.ts`, `internal-entity.module.ts`, `ObjectOptionsDropdownDefaultView.tsx`, `ObjectOptionsDropdownCustomView.tsx`, `import-csv-opportunities-parser.service.ts` (revert).
 
-## Pièges connus
+## Pièges connus — production
+
+- **Premier deploy** : `dokku enter twenty-dbs web -- yarn database:init:prod` n'est plus nécessaire (entrypoint corrigé pour détecter la DB vide via la table `core.keyValuePair`). Si on reset la DB en prod, le redeploy lance désormais l'init automatiquement.
+- **Bootstrap d'une nouvelle instance Dokku** : `scripts/dokku/bootstrap-twenty.sh` doit pouvoir `dokku postgres:link` et `redis:link`. Si on l'a déjà lancé avant l'ajout des links (cas du VPS actuel), il faut les ajouter manuellement.
+- **Init multi-entités après onboarding d'Aline** : actuellement à lancer à la main via `dokku enter twenty-dbs web -- yarn command:prod init-internal-entities`. À automatiser dans `activateWorkspace` ou via la complétion du superadmin setup.
+- **GHA build GHCR (`cd-dokku-build.yaml`)** : push automatique sur GHCR mais Dokku build sur le VPS (pas de pull depuis registry). L'image GHCR sert de backup et de CI sanity check uniquement.
+
+## Pièges connus — code
 
 - **`Invalid filter : … doesn't have any "internalEntitiesId" field"`** : la métadonnée du workspace est incomplète (`junctionTargetFieldId` non posé). Relancer `init-internal-entities`. L'`InternalEntityAccessPolicyService` skippe désormais le filtre quand la metadata n'est pas prête, donc ça ne devrait plus planter — mais le filtrage par entité ne sera effectif qu'après init.
 - **`ObjectMetadataItemNotFoundError: calendarEventEntityAudience cannot be found"`** : même cause, côté front. Le modal `GroupCalendarCreateEventModal` gate désormais l'audience picker via `useObjectMetadataItems` ; les autres composants qui consomment cet objet doivent suivre la même règle.
