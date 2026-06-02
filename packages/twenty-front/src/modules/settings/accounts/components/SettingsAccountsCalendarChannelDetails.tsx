@@ -8,7 +8,15 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { Section } from '@react-email/components';
 import { useCallback, useEffect } from 'react';
-import { H2Title, IconHierarchy2, IconUserPlus } from 'twenty-ui/display';
+import {
+  H2Title,
+  IconCalendarEvent,
+  IconHierarchy2,
+  IconMail,
+  IconPlug,
+  IconUserPlus,
+  IconUsers,
+} from 'twenty-ui/display';
 import { Card } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { CalendarChannelVisibility } from '~/generated/graphql';
@@ -90,6 +98,47 @@ const StyledEntityName = styled.span`
 const StyledHint = styled.span`
   color: ${themeCssVariables.font.color.tertiary};
   font-size: ${themeCssVariables.font.size.xs};
+`;
+
+const StyledImportList = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  list-style: none;
+  margin: 0;
+  padding: 0;
+`;
+
+const StyledImportItem = styled.li`
+  align-items: flex-start;
+  color: ${themeCssVariables.font.color.secondary};
+  display: flex;
+  font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledImportItemContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+`;
+
+const StyledImportItemTitle = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-weight: ${themeCssVariables.font.weight.medium};
+`;
+
+const StyledImportItemDescription = styled.span`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.xs};
+`;
+
+const StyledImportCard = styled(Card)`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[3]};
+  padding: ${themeCssVariables.spacing[4]};
 `;
 
 type SettingsAccountsCalendarChannelDetailsProps = {
@@ -179,6 +228,56 @@ export const SettingsAccountsCalendarChannelDetails = ({
     <StyledDetailsContainer>
       <Section>
         <H2Title
+          title={t`What's imported from this account`}
+          description={t`Connecting the account synchronises the following data into your workspace.`}
+        />
+        <StyledImportCard rounded>
+          <StyledImportList>
+            <StyledImportItem>
+              <IconCalendarEvent size={16} />
+              <StyledImportItemContent>
+                <StyledImportItemTitle>
+                  {t`Calendar events`}
+                </StyledImportItemTitle>
+                <StyledImportItemDescription>
+                  {t`Title, description, location, attendees, dates and recurrence — masked to "Busy" for entities that aren't granted access below.`}
+                </StyledImportItemDescription>
+              </StyledImportItemContent>
+            </StyledImportItem>
+            <StyledImportItem>
+              <IconMail size={16} />
+              <StyledImportItemContent>
+                <StyledImportItemTitle>{t`Emails`}</StyledImportItemTitle>
+                <StyledImportItemDescription>
+                  {t`Subject, body, sender and recipients of received and sent emails (attachments stay on the provider's servers).`}
+                </StyledImportItemDescription>
+              </StyledImportItemContent>
+            </StyledImportItem>
+            <StyledImportItem>
+              <IconUsers size={16} />
+              <StyledImportItemContent>
+                <StyledImportItemTitle>{t`Contacts`}</StyledImportItemTitle>
+                <StyledImportItemDescription>
+                  {t`People you exchange emails with or share calendar events with — automatically added as Persons if auto-creation is enabled below.`}
+                </StyledImportItemDescription>
+              </StyledImportItemContent>
+            </StyledImportItem>
+            <StyledImportItem>
+              <IconPlug size={16} />
+              <StyledImportItemContent>
+                <StyledImportItemTitle>
+                  {t`Connection metadata`}
+                </StyledImportItemTitle>
+                <StyledImportItemDescription>
+                  {t`Encrypted OAuth tokens kept securely so we can keep your data in sync. You can disconnect at any time.`}
+                </StyledImportItemDescription>
+              </StyledImportItemContent>
+            </StyledImportItem>
+          </StyledImportList>
+        </StyledImportCard>
+      </Section>
+      <Section>
+        <H2Title
           title={t`Event visibility`}
           description={t`Define what will be visible to other users in your workspace`}
         />
@@ -210,22 +309,27 @@ export const SettingsAccountsCalendarChannelDetails = ({
               {t`No internal entity is available for your account.`}
             </StyledHint>
           ) : (
-            <StyledEntityPicker>
-              {manageableEventEntities.map((entity) => (
-                <StyledEntityToggle
-                  key={entity.id}
-                  type="button"
-                  aria-pressed={selectedInternalEntityIds.includes(entity.id)}
-                  selected={selectedInternalEntityIds.includes(entity.id)}
-                  chipColor={entity.color}
-                  onClick={() => handleToggleVisibleInternalEntity(entity.id)}
-                  title={entity.name}
-                >
-                  <StyledEntityDot chipColor={entity.color} />
-                  <StyledEntityName>{entity.name}</StyledEntityName>
-                </StyledEntityToggle>
-              ))}
-            </StyledEntityPicker>
+            <>
+              <StyledEntityPicker>
+                {manageableEventEntities.map((entity) => (
+                  <StyledEntityToggle
+                    key={entity.id}
+                    type="button"
+                    aria-pressed={selectedInternalEntityIds.includes(entity.id)}
+                    selected={selectedInternalEntityIds.includes(entity.id)}
+                    chipColor={entity.color}
+                    onClick={() => handleToggleVisibleInternalEntity(entity.id)}
+                    title={entity.name}
+                  >
+                    <StyledEntityDot chipColor={entity.color} />
+                    <StyledEntityName>{entity.name}</StyledEntityName>
+                  </StyledEntityToggle>
+                ))}
+              </StyledEntityPicker>
+              <StyledHint>
+                {t`Unselected entities will only see "Busy" on your calendar slots — they won't see the event title, description, attendees, or location, only that you're unavailable in that time range, along with your entity badge.`}
+              </StyledHint>
+            </>
           )}
         </StyledEntityAccessCard>
       </Section>
