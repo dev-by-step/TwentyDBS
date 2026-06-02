@@ -34,6 +34,7 @@ const createSignInUpServiceForTests = () => {
     create: jest.fn((user) => user),
     save: jest.fn(async (user) => ({ id: 'saved-user-id', ...user })),
     count: jest.fn(),
+    findOne: jest.fn().mockResolvedValue(null),
   };
 
   const mockWorkspaceRepository = {
@@ -131,64 +132,6 @@ const createSignInUpServiceForTests = () => {
 };
 
 describe('SignInUpService workspace-creation policy', () => {
-  it('keeps bootstrap server permissions disabled for non-designated first user when multi-workspace is enabled and unrestricted', async () => {
-    const {
-      service,
-      mockUserRepository,
-      mockWorkspaceRepository,
-      mockConfigurationValues,
-    } = createSignInUpServiceForTests();
-
-    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = true;
-    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
-      false;
-    mockWorkspaceRepository.count.mockResolvedValue(0);
-    mockUserRepository.count.mockResolvedValue(0);
-    jest
-      .spyOn((service as any).userService, 'findUserByEmail')
-      .mockResolvedValue(null);
-
-    await service.signUpWithoutWorkspace(mockPartialUserPayload, {
-      provider: AuthProviderEnum.Google,
-    } as any);
-
-    expect(mockUserRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        canImpersonate: false,
-        canAccessFullAdminPanel: false,
-      }),
-    );
-  });
-
-  it('keeps bootstrap server permissions disabled for non-designated first user when multi-workspace is enabled and restricted', async () => {
-    const {
-      service,
-      mockUserRepository,
-      mockWorkspaceRepository,
-      mockConfigurationValues,
-    } = createSignInUpServiceForTests();
-
-    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = true;
-    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
-      true;
-    mockWorkspaceRepository.count.mockResolvedValue(0);
-    mockUserRepository.count.mockResolvedValue(0);
-    jest
-      .spyOn((service as any).userService, 'findUserByEmail')
-      .mockResolvedValue(null);
-
-    await service.signUpWithoutWorkspace(mockPartialUserPayload, {
-      provider: AuthProviderEnum.Google,
-    } as any);
-
-    expect(mockUserRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        canImpersonate: false,
-        canAccessFullAdminPanel: false,
-      }),
-    );
-  });
-
   it('grants bootstrap owner server permissions to the designated admin email', async () => {
     const {
       service,
@@ -224,7 +167,7 @@ describe('SignInUpService workspace-creation policy', () => {
     );
   });
 
-  it('assigns default non-admin permissions after bootstrap in multi-workspace mode', async () => {
+  it('assigns default non-admin permissions to a same-domain teammate signing up after the super admin', async () => {
     const {
       service,
       mockUserRepository,
@@ -237,35 +180,11 @@ describe('SignInUpService workspace-creation policy', () => {
       false;
     mockWorkspaceRepository.count.mockResolvedValue(1);
     mockUserRepository.count.mockResolvedValue(1);
-    jest
-      .spyOn((service as any).userService, 'findUserByEmail')
-      .mockResolvedValue(null);
-
-    await service.signUpWithoutWorkspace(mockPartialUserPayload, {
-      provider: AuthProviderEnum.Google,
-    } as any);
-
-    expect(mockUserRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        canImpersonate: false,
-        canAccessFullAdminPanel: false,
-      }),
-    );
-  });
-
-  it('does not grant admin to second user signing up before any workspace exists', async () => {
-    const {
-      service,
-      mockUserRepository,
-      mockWorkspaceRepository,
-      mockConfigurationValues,
-    } = createSignInUpServiceForTests();
-
-    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = true;
-    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
-      false;
-    mockWorkspaceRepository.count.mockResolvedValue(0);
-    mockUserRepository.count.mockResolvedValue(1);
+    mockUserRepository.findOne.mockResolvedValue({
+      id: 'aline-id',
+      email: 'aline@weknow.dev',
+      canAccessFullAdminPanel: true,
+    });
     jest
       .spyOn((service as any).userService, 'findUserByEmail')
       .mockResolvedValue(null);
@@ -363,32 +282,6 @@ describe('SignInUpService workspace-creation policy', () => {
     });
   });
 
-  it('keeps single-workspace SIGNUP_DISABLED behavior after first workspace exists', async () => {
-    const { service, mockWorkspaceRepository, mockConfigurationValues } =
-      createSignInUpServiceForTests();
-
-    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = false;
-    mockConfigurationValues.IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS =
-      false;
-    mockWorkspaceRepository.count.mockResolvedValue(1);
-    jest
-      .spyOn((service as any).userService, 'findUserByEmail')
-      .mockResolvedValue(null);
-
-    await expect(
-      service.signUpWithoutWorkspace(mockPartialUserPayload, {
-        provider: AuthProviderEnum.Google,
-      } as any),
-    ).rejects.toBeInstanceOf(AuthException);
-
-    await expect(
-      service.signUpWithoutWorkspace(mockPartialUserPayload, {
-        provider: AuthProviderEnum.Google,
-      } as any),
-    ).rejects.toMatchObject({
-      code: AuthExceptionCode.SIGNUP_DISABLED,
-    });
-  });
 });
 
 describe('SignInUpService email-domain restriction', () => {
@@ -409,12 +302,17 @@ describe('SignInUpService email-domain restriction', () => {
     });
   });
 
-  it('allows sign-up from an authorized domain even without an invitation', async () => {
+  it('allows sign-up from the same domain as the existing super admin', async () => {
     const { service, mockUserRepository, mockWorkspaceRepository } =
       createSignInUpServiceForTests();
 
-    mockWorkspaceRepository.count.mockResolvedValue(0);
-    mockUserRepository.count.mockResolvedValue(0);
+    mockWorkspaceRepository.count.mockResolvedValue(1);
+    mockUserRepository.count.mockResolvedValue(1);
+    mockUserRepository.findOne.mockResolvedValue({
+      id: 'aline-id',
+      email: 'aline@weknow.dev',
+      canAccessFullAdminPanel: true,
+    });
     jest
       .spyOn((service as any).userService, 'findUserByEmail')
       .mockResolvedValue(null);
@@ -434,5 +332,53 @@ describe('SignInUpService email-domain restriction', () => {
         email: 'newcomer@weknow.dev',
       }),
     );
+  });
+
+  it('rejects sign-up when domain does not match the existing super admin (different bootstrap domain)', async () => {
+    const { service, mockUserRepository, mockWorkspaceRepository } =
+      createSignInUpServiceForTests();
+
+    mockWorkspaceRepository.count.mockResolvedValue(1);
+    mockUserRepository.count.mockResolvedValue(1);
+    mockUserRepository.findOne.mockResolvedValue({
+      id: 'aline-id',
+      email: 'aline@weknow.dev',
+      canAccessFullAdminPanel: true,
+    });
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(
+        {
+          ...mockPartialUserPayload,
+          email: 'someone@devbystep.fr',
+        },
+        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+      ),
+    ).rejects.toMatchObject({
+      code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+    });
+  });
+
+  it('rejects first sign-up when email is not a designated bootstrap admin', async () => {
+    const { service } = createSignInUpServiceForTests();
+
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(
+        {
+          ...mockPartialUserPayload,
+          email: 'random@weknow.dev',
+        },
+        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+      ),
+    ).rejects.toMatchObject({
+      code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+    });
   });
 });

@@ -15,7 +15,7 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
-import { isBootstrapAllowedDomain } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email-domains.constant';
+import { getEmailDomain } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email-domains.constant';
 import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import {
@@ -128,7 +128,7 @@ export class SignInUpService {
     }
 
     if (params.userData.type === 'newUserWithPicture') {
-      this.assertEmailDomainAllowedForAutoSignUp(
+      await this.assertEmailDomainAllowedForAutoSignUp(
         params.userData.newUserWithPicture.email ?? '',
       );
     }
@@ -709,7 +709,7 @@ export class SignInUpService {
       authParams,
     );
 
-    this.assertEmailDomainAllowedForAutoSignUp(newUserParams.email);
+    await this.assertEmailDomainAllowedForAutoSignUp(newUserParams.email);
 
     const existingWorkspace = await this.workspaceRepository.findOne({
       where: {},
@@ -734,16 +734,43 @@ export class SignInUpService {
     return user;
   }
 
-  private assertEmailDomainAllowedForAutoSignUp(email: string) {
-    if (isBootstrapAllowedDomain(email)) {
+  private async assertEmailDomainAllowedForAutoSignUp(email: string) {
+    const candidateDomain = getEmailDomain(email);
+
+    const superAdmin = await this.userRepository.findOne({
+      where: { canAccessFullAdminPanel: true },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (superAdmin) {
+      const superAdminDomain = getEmailDomain(superAdmin.email);
+
+      if (
+        candidateDomain !== null &&
+        superAdminDomain !== null &&
+        candidateDomain === superAdminDomain
+      ) {
+        return;
+      }
+
+      throw new AuthException(
+        'Sign-up is restricted to the workspace owner email domain',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+        {
+          userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
+        },
+      );
+    }
+
+    if (isBootstrapAdminEmail(email)) {
       return;
     }
 
     throw new AuthException(
-      'Sign-up is restricted to authorized email domains',
+      'Sign-up requires a designated admin email for the first account',
       AuthExceptionCode.FORBIDDEN_EXCEPTION,
       {
-        userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
+        userFriendlyMessage: msg`Sign-up is restricted. The first account must use an authorized admin email.`,
       },
     );
   }

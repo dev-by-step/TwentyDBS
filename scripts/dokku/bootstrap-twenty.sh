@@ -117,22 +117,32 @@ if ! dokku redis:info "$redis_service_name" >/dev/null 2>&1; then
   dokku redis:create "$redis_service_name"
 fi
 
-pg_dsn="$(dokku postgres:info "$pg_service_name" --dsn)"
-redis_dsn="$(dokku redis:info "$redis_service_name" --dsn)"
+# Link services to the app: required so the app container resolves the service
+# DNS names (e.g. dokku-postgres-<svc>) on the same docker network. The links
+# also expose PG_DATABASE_URL / REDIS_URL automatically; without them, only env
+# values are set and the app cannot reach the services.
+if ! dokku postgres:linked "$pg_service_name" "$app_name" >/dev/null 2>&1; then
+  dokku postgres:link "$pg_service_name" "$app_name" --no-restart --alias PG_DATABASE
+fi
+
+if ! dokku redis:linked "$redis_service_name" "$app_name" >/dev/null 2>&1; then
+  dokku redis:link "$redis_service_name" "$app_name" --no-restart
+fi
 
 dokku builder:set "$app_name" selected dockerfile
 dokku builder-dockerfile:set "$app_name" dockerfile-path .dokku/Dockerfile
+# Dokku default deploy branch is master; we deploy from main.
+dokku git:set "$app_name" deploy-branch main
 dokku ports:set "$app_name" "${port_args[@]}"
 
 if [[ -n "$server_host" && ! "$server_host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   dokku domains:set "$app_name" "$server_host"
 fi
 
+# PG_DATABASE_URL / REDIS_URL are populated by the link commands above.
 dokku config:set --no-restart "$app_name" \
   APP_SECRET="$app_secret" \
   NODE_PORT=3000 \
-  PG_DATABASE_URL="$pg_dsn" \
-  REDIS_URL="$redis_dsn" \
   SERVER_URL="$server_url" \
   STORAGE_TYPE=local
 
