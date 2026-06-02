@@ -77,6 +77,7 @@ const createSignInUpServiceForTests = () => {
     {
       validatePersonalInvitation: jest.fn(),
       invalidateWorkspaceInvitation: jest.fn(),
+      findInvitationsByEmail: jest.fn().mockResolvedValue([]),
     } as any,
     {
       create: jest.fn(async () => ({ id: 'user-workspace-id' })),
@@ -380,5 +381,38 @@ describe('SignInUpService email-domain restriction', () => {
     ).rejects.toMatchObject({
       code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
     });
+  });
+
+  it('accepts a cross-domain sign-up when the email has a pending invitation', async () => {
+    const { service, mockUserRepository, mockWorkspaceRepository } =
+      createSignInUpServiceForTests();
+
+    mockWorkspaceRepository.count.mockResolvedValue(1);
+    mockUserRepository.count.mockResolvedValue(1);
+    mockUserRepository.findOne.mockResolvedValue({
+      id: 'aline-id',
+      email: 'aline@weknow.dev',
+      canAccessFullAdminPanel: true,
+    });
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+    (service as any).workspaceInvitationService.findInvitationsByEmail.mockResolvedValueOnce(
+      [{ id: 'invite-token', context: { email: 'pierre@external.com' } }],
+    );
+
+    await expect(
+      service.signUpWithoutWorkspace(
+        {
+          ...mockPartialUserPayload,
+          email: 'pierre@external.com',
+        },
+        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+      ),
+    ).resolves.toBeDefined();
+
+    expect(
+      (service as any).workspaceInvitationService.findInvitationsByEmail,
+    ).toHaveBeenCalledWith('pierre@external.com');
   });
 });

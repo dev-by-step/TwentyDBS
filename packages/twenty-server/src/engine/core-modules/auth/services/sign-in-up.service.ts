@@ -757,6 +757,10 @@ export class SignInUpService {
         return;
       }
 
+      if (await this.hasPendingInvitationForEmail(email)) {
+        return;
+      }
+
       throw new AuthException(
         'Sign-up is restricted to the workspace owner email domain',
         AuthExceptionCode.FORBIDDEN_EXCEPTION,
@@ -770,6 +774,10 @@ export class SignInUpService {
       return;
     }
 
+    if (await this.hasPendingInvitationForEmail(email)) {
+      return;
+    }
+
     throw new AuthException(
       'Sign-up requires a designated admin email for the first account',
       AuthExceptionCode.FORBIDDEN_EXCEPTION,
@@ -777,5 +785,20 @@ export class SignInUpService {
         userFriendlyMessage: msg`Sign-up is restricted. The first account must use an authorized admin email.`,
       },
     );
+  }
+
+  /**
+   * Recognise users that an admin has pre-invited from the Invite Team step
+   * but who never received the email (e.g. no SMTP configured). If a valid,
+   * non-expired AppToken invitation exists for this address, the signup is
+   * treated as legitimate even if the email domain doesn't match.
+   */
+  private async hasPendingInvitationForEmail(email: string): Promise<boolean> {
+    const invitations =
+      await this.workspaceInvitationService.findInvitationsByEmail(
+        email.trim().toLowerCase(),
+      );
+
+    return invitations.length > 0;
   }
 }
