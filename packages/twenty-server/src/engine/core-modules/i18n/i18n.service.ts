@@ -7,6 +7,7 @@ import {
   setupI18n,
 } from '@lingui/core';
 import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
+import { normalizeLocale } from 'twenty-shared/utils';
 
 import { messages as afMessages } from 'src/engine/core-modules/i18n/locales/generated/af-ZA';
 import { messages as arMessages } from 'src/engine/core-modules/i18n/locales/generated/ar-SA';
@@ -92,8 +93,18 @@ export class I18nService implements OnModuleInit {
     });
   }
 
-  getI18nInstance(locale: keyof typeof APP_LOCALES) {
-    return this.i18nInstancesMap[locale];
+  getI18nInstance(locale: keyof typeof APP_LOCALES | string | null | undefined) {
+    // Defensive: legacy users may have language-only codes ('fr') instead of
+    // full locale codes ('fr-FR'), or an unknown locale; fall back gracefully
+    // to the canonical mapping (which itself returns SOURCE_LOCALE if nothing
+    // matches), so consumers always get a working i18n instance.
+    const normalized = normalizeLocale(
+      locale === null || locale === undefined ? null : String(locale),
+    );
+
+    return (
+      this.i18nInstancesMap[normalized] ?? this.i18nInstancesMap[SOURCE_LOCALE]
+    );
   }
 
   translateMessage({
