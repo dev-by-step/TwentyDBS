@@ -803,6 +803,10 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         ),
     });
 
+    const isWorkspaceDemoDataPrefillEnabled = this.twentyConfigService.get(
+      'IS_WORKSPACE_DEMO_DATA_PREFILL_ENABLED',
+    );
+
     const queryRunner = this.coreDataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -810,9 +814,11 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     try {
       await queryRunner.startTransaction();
 
-      await prefillCompanies(queryRunner.manager, schemaName);
+      if (isWorkspaceDemoDataPrefillEnabled) {
+        await prefillCompanies(queryRunner.manager, schemaName);
 
-      await prefillPeople(queryRunner.manager, schemaName);
+        await prefillPeople(queryRunner.manager, schemaName);
+      }
 
       await prefillWorkflows(
         queryRunner.manager,
@@ -822,7 +828,9 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         flatFieldMetadataMaps,
       );
 
-      await prefillOpportunities(queryRunner.manager, schemaName);
+      if (isWorkspaceDemoDataPrefillEnabled) {
+        await prefillOpportunities(queryRunner.manager, schemaName);
+      }
 
       await prefillDashboards(
         queryRunner.manager,

@@ -1411,6 +1411,15 @@ export class ConfigVariables {
   IS_MULTIWORKSPACE_ENABLED = false;
 
   @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.SERVER_CONFIG,
+    description:
+      'Prefill new workspaces with demo companies, people, and opportunities',
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  IS_WORKSPACE_DEMO_DATA_PREFILL_ENABLED = true;
+
+  @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
     description:
       'Number of inactive days before sending a deletion warning for workspaces. Used in the workspace deletion cron job to determine when to send warning emails.',
