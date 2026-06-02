@@ -127,12 +127,10 @@ export class SignInUpService {
       };
     }
 
-    if (params.userData.type === 'newUserWithPicture') {
-      await this.assertEmailDomainAllowedForAutoSignUp(
-        params.userData.newUserWithPicture.email ?? '',
-      );
-    }
-
+    // When a workspace is explicitly passed (public invite link, SSO,
+    // bootstrap onboarding) the caller's AuthService.checkAccessForSignIn has
+    // already validated access — don't re-apply the auto-signup domain check
+    // here, otherwise externally invited teammates would be rejected.
     if (params.workspace) {
       const updatedUser = await this.signInUpOnExistingWorkspace({
         workspace: params.workspace,
@@ -140,6 +138,12 @@ export class SignInUpService {
       });
 
       return { user: updatedUser, workspace: params.workspace };
+    }
+
+    if (params.userData.type === 'newUserWithPicture') {
+      await this.assertEmailDomainAllowedForAutoSignUp(
+        params.userData.newUserWithPicture.email ?? '',
+      );
     }
 
     const existingWorkspace = await this.workspaceRepository.findOne({
