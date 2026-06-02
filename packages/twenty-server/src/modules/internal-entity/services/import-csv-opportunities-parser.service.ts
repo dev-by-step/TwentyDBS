@@ -24,6 +24,13 @@ type RawCsvOpportunityRow = Record<string, string | undefined>;
 const MAX_CSV_FILE_SIZE_BYTES = 1024 * 1024;
 const MAX_CSV_OPPORTUNITY_ROWS = 100;
 
+export class OpportunityCsvNotFoundError extends Error {
+  constructor() {
+    super('docs/opportunity.csv introuvable');
+    this.name = OpportunityCsvNotFoundError.name;
+  }
+}
+
 @Injectable()
 export class ImportCsvOpportunitiesParserService {
   private readonly logger = new Logger(
@@ -209,7 +216,7 @@ export class ImportCsvOpportunitiesParserService {
       }
     }
 
-    throw new Error('docs/opportunity.csv introuvable');
+    throw new OpportunityCsvNotFoundError();
   }
 
   private formatErrorMessage(error: unknown): string {

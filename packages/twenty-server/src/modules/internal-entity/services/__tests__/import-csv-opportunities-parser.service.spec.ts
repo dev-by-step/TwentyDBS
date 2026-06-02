@@ -1,7 +1,4 @@
-import { buildOpportunityCsvFixtureRows } from 'src/modules/internal-entity/__tests__/factories/opportunity-csv-fixture.factory';
-import { readFileSync } from 'node:fs';
 import { access, readFile, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
 
 import {
   buildRawCsvOpportunityCsv,
@@ -11,7 +8,10 @@ import {
   buildCompanyRecord,
   buildPersonRecord,
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
-import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import {
+  ImportCsvOpportunitiesParserService,
+  OpportunityCsvNotFoundError,
+} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 
 jest.mock('node:fs/promises', () => ({
   access: jest.fn(),
@@ -91,19 +91,6 @@ describe('ImportCsvOpportunitiesParserService', () => {
     ]);
   });
 
-  it('should parse the real docs/opportunity.csv coherently', async () => {
-    const realCsvContent = readFileSync(
-      resolve(process.cwd(), 'docs/opportunity.csv'),
-      'utf8',
-    );
-
-    mockCsvFile(realCsvContent);
-
-    await expect(service.readCsvOpportunities()).resolves.toStrictEqual(
-      buildOpportunityCsvFixtureRows(),
-    );
-  });
-
   it('should reject missing required headers', async () => {
     const rawOpportunityRow = buildRawCsvOpportunityRow({
       Société: '',
@@ -171,5 +158,13 @@ describe('ImportCsvOpportunitiesParserService', () => {
       'CSV trop volumineux',
     );
     expect(mockedReadFile).not.toHaveBeenCalled();
+  });
+
+  it('should throw a dedicated error when the optional CSV file is absent', async () => {
+    mockedAccess.mockRejectedValue(new Error('File not found'));
+
+    await expect(service.readCsvOpportunities()).rejects.toBeInstanceOf(
+      OpportunityCsvNotFoundError,
+    );
   });
 });

@@ -41,6 +41,8 @@ setup_and_migrate_db() {
 
     yarn command:prod cache:flush
     yarn command:prod upgrade
+    # Backfill workspaces created before InternalEntity auto-provisioning.
+    yarn command:prod init-internal-entities
     yarn command:prod cache:flush
 
     echo "Successfully migrated DB!"

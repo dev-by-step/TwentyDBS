@@ -27,7 +27,11 @@ import {
   INTERNAL_ENTITY_SEEDS,
   type InternalEntitySeed,
 } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import {
+  type CsvOpportunityRow,
+  ImportCsvOpportunitiesParserService,
+  OpportunityCsvNotFoundError,
+} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import {
   buildWorkspaceSqlTableName,
   INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
@@ -855,8 +859,22 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const unresolvedEntityNames = new Set<string>();
     const opportunityInternalEntityMappings: OpportunityInternalEntityMapping[] =
       [];
-    const csvRows =
-      await this.importCsvOpportunitiesParserService.readCsvOpportunities();
+    let csvRows: CsvOpportunityRow[];
+
+    try {
+      csvRows =
+        await this.importCsvOpportunitiesParserService.readCsvOpportunities();
+    } catch (error) {
+      if (error instanceof OpportunityCsvNotFoundError) {
+        this.logger.warn(
+          'docs/opportunity.csv introuvable, backfill CSV ignoré',
+        );
+
+        return;
+      }
+
+      throw error;
+    }
 
     for (const row of csvRows) {
       const entityId = resolveInternalEntitySeedId(row.entityName);

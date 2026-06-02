@@ -14,7 +14,10 @@ import {
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import {
+  type ImportCsvOpportunitiesParserService,
+  OpportunityCsvNotFoundError,
+} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import { INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 type MockLogger = {
@@ -222,6 +225,32 @@ describe('InitInternalEntitiesCommand', () => {
     expect(dataSourceMock.query).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
       'InternalEntity inconnue(s) dans le CSV: UNKNOWN. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.',
+    );
+  });
+
+  it('should skip the optional CSV backfill when the local migration file is absent', async () => {
+    const {
+      commandInternals,
+      dataSource,
+      dataSourceMock,
+      importCsvOpportunitiesParserService,
+      logger,
+    } = buildCommandContext();
+
+    importCsvOpportunitiesParserService.readCsvOpportunities.mockRejectedValue(
+      new OpportunityCsvNotFoundError(),
+    );
+
+    await expect(
+      commandInternals.backfillOpportunities(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(dataSourceMock.query).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'docs/opportunity.csv introuvable, backfill CSV ignoré',
     );
   });
 
