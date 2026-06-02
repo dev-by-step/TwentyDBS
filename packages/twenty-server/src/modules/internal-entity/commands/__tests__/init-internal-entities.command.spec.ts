@@ -36,7 +36,7 @@ type InitInternalEntitiesCommandInternals = {
   backfillOpportunities: (
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   backfillOpportunitiesFromWorkspaceMembers: (
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
@@ -64,6 +64,13 @@ type InitInternalEntitiesCommandInternals = {
     workspaceMemberSqlTable: string;
     workspaceMemberEntityMembershipSqlTable: string;
   }) => Promise<void>;
+  verifyMigration: (
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    options?: {
+      shouldThrowOnUnresolvedOpportunities?: boolean;
+    },
+  ) => Promise<void>;
 };
 
 const setCommandLogger = (command: unknown): MockLogger => {
@@ -183,10 +190,12 @@ describe('InitInternalEntitiesCommand', () => {
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext([opportunityRow, unknownEntityRow]);
 
-    await commandInternals.backfillOpportunities(
-      dataSource,
-      '"workspace_abc"."opportunity"',
-    );
+    await expect(
+      commandInternals.backfillOpportunities(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+      ),
+    ).resolves.toBe(true);
 
     expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
 
@@ -217,10 +226,12 @@ describe('InitInternalEntitiesCommand', () => {
     const { commandInternals, dataSource, dataSourceMock, logger } =
       buildCommandContext([unknownEntityRow]);
 
-    await commandInternals.backfillOpportunities(
-      dataSource,
-      '"workspace_abc"."opportunity"',
-    );
+    await expect(
+      commandInternals.backfillOpportunities(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+      ),
+    ).resolves.toBe(true);
 
     expect(dataSourceMock.query).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
@@ -246,7 +257,7 @@ describe('InitInternalEntitiesCommand', () => {
         dataSource,
         '"workspace_abc"."opportunity"',
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
 
     expect(dataSourceMock.query).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
@@ -284,6 +295,43 @@ describe('InitInternalEntitiesCommand', () => {
     expect(options).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
     expect(logger.log).toHaveBeenCalledWith(
       '1 opportunité(s) rattachée(s) via les membres du workspace',
+    );
+  });
+
+  it('should warn instead of failing when opportunities remain without the optional CSV', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+
+    dataSourceMock.query.mockResolvedValueOnce([{ count: '6' }]);
+
+    await expect(
+      commandInternals.verifyMigration(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+        {
+          shouldThrowOnUnresolvedOpportunities: false,
+        },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '6 opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.',
+    );
+  });
+
+  it('should fail when opportunities remain despite an available CSV', async () => {
+    const { commandInternals, dataSource, dataSourceMock } =
+      buildCommandContext();
+
+    dataSourceMock.query.mockResolvedValueOnce([{ count: '6' }]);
+
+    await expect(
+      commandInternals.verifyMigration(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+      ),
+    ).rejects.toThrow(
+      '6 opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.',
     );
   });
 

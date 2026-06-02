@@ -190,7 +190,10 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceMemberEntityMembershipSqlTable,
       validatedWorkspaceId,
     );
-    await this.backfillOpportunities(dataSource, opportunitySqlTable);
+    const isCsvBackfillAvailable = await this.backfillOpportunities(
+      dataSource,
+      opportunitySqlTable,
+    );
     await this.backfillOpportunitiesFromWorkspaceMembers(
       dataSource,
       opportunitySqlTable,
@@ -234,7 +237,9 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceMemberSqlTable,
       workspaceMemberEntityMembershipSqlTable,
     });
-    await this.verifyMigration(dataSource, opportunitySqlTable);
+    await this.verifyMigration(dataSource, opportunitySqlTable, {
+      shouldThrowOnUnresolvedOpportunities: isCsvBackfillAvailable,
+    });
   }
 
   private async ensureMetadataSchema(workspaceId: string): Promise<void> {
@@ -852,7 +857,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   private async backfillOpportunities(
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.logger.log('Backfill Opportunity → InternalEntity...');
 
     let skippedCount = 0;
@@ -870,7 +875,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           'docs/opportunity.csv introuvable, backfill CSV ignoré',
         );
 
-        return;
+        return false;
       }
 
       throw error;
@@ -914,6 +919,8 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
         )}. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.`,
       );
     }
+
+    return true;
   }
 
   private async updateOpportunitiesInternalEntity(
@@ -1361,6 +1368,11 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   private async verifyMigration(
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
+    {
+      shouldThrowOnUnresolvedOpportunities = true,
+    }: {
+      shouldThrowOnUnresolvedOpportunities?: boolean;
+    } = {},
   ): Promise<void> {
     const result = await this.runAdminQuery<Array<{ count: string }>>(
       dataSource,
@@ -1373,9 +1385,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const nullCount = parseInt(result?.[0]?.count ?? '0', 10);
 
     if (nullCount > 0) {
-      throw new Error(
-        `${nullCount} opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.`,
-      );
+      const message = `${nullCount} opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.`;
+
+      if (!shouldThrowOnUnresolvedOpportunities) {
+        this.logger.warn(message);
+
+        return;
+      }
+
+      throw new Error(message);
     }
 
     this.logger.log(
