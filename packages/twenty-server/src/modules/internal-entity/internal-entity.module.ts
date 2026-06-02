@@ -29,6 +29,10 @@ import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity
     ImportCsvOpportunitiesParserService,
     InternalEntitySchemaService,
   ],
-  exports: [InternalEntitySchemaService, WorkspaceMemberInternalEntityModule],
+  exports: [
+    InitInternalEntitiesCommand,
+    InternalEntitySchemaService,
+    WorkspaceMemberInternalEntityModule,
+  ],
 })
 export class InternalEntityModule {}

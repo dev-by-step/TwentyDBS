@@ -68,6 +68,9 @@ import { prefillWorkflows } from 'src/engine/workspace-manager/standard-objects-
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
 import { DEFAULT_FEATURE_FLAGS } from 'src/engine/workspace-manager/workspace-migration/constant/default-feature-flags';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 
 @Injectable()
 // oxlint-disable-next-line twenty/inject-workspace-repository
@@ -133,6 +136,8 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     private readonly coreEntityCacheService: CoreEntityCacheService,
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeSequenceReaderService: UpgradeSequenceReaderService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly initInternalEntitiesCommand: InitInternalEntitiesCommand,
   ) {
     super(workspaceRepository);
   }
@@ -372,9 +377,40 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
       workspace.id,
     );
 
+    await this.seedInternalEntitiesForWorkspace(workspace.id);
+
     return await this.workspaceRepository.findOneBy({
       id: workspace.id,
     });
+  }
+
+  private async seedInternalEntitiesForWorkspace(
+    workspaceId: string,
+  ): Promise<void> {
+    try {
+      const authContext = buildSystemAuthContext(workspaceId);
+
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const dataSource =
+            await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+          await this.initInternalEntitiesCommand.runSeedForWorkspace(
+            workspaceId,
+            dataSource,
+          );
+        },
+        authContext,
+      );
+    } catch (error) {
+      // Seeding is idempotent and non-critical for the immediate activation:
+      // log the failure and let the operator re-run init-internal-entities.
+      this.logger.error(
+        `Failed to auto-seed InternalEntities for workspace ${workspaceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private async activateAndInitializeUpgradeState({

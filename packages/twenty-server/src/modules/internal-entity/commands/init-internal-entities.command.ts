@@ -81,6 +81,18 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
+    await this.runSeedForWorkspace(workspaceId, dataSource);
+  }
+
+  /**
+   * Public entry point so the workspace activation flow can trigger the seed
+   * without going through the CLI command runner.
+   * Safe to re-run: all steps are idempotent.
+   */
+  async runSeedForWorkspace(
+    workspaceId: string,
+    dataSource: GlobalWorkspaceDataSource,
+  ): Promise<void> {
     const validatedWorkspaceId = validateUuidOrThrow(
       workspaceId,
       'workspaceId',
