@@ -431,5 +431,15 @@ export class OnboardingService {
       workspaceId: workspace.id,
       value: false,
     });
+
+    // Once the superadmin has personalised the workspace, arm the invite-team
+    // step so they immediately land on the team-invitation screen (or its
+    // simplified Continue button for non-admin teammates who join later).
+    // The flag is workspace-level and is cleared the first time anyone sends
+    // invitations or skips, so this is a one-shot prompt.
+    await this.setOnboardingInviteTeamPending({
+      workspaceId: workspace.id,
+      value: true,
+    });
   }
 }
