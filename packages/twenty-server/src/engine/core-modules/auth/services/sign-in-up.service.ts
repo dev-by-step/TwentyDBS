@@ -734,7 +734,7 @@ export class SignInUpService {
     return user;
   }
 
-  private async assertEmailDomainAllowedForAutoSignUp(email: string) {
+  async assertEmailDomainAllowedForAutoSignUp(email: string) {
     const candidateDomain = getEmailDomain(email);
 
     const superAdmin = await this.userRepository.findOne({
