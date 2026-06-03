@@ -380,7 +380,7 @@ describe('UserWorkspaceService', () => {
     it('should assign admin role to bootstrap admin email when joining a workspace', async () => {
       const user = {
         id: 'user-id',
-        email: 'issa.kane@efrei.net',
+        email: 'aline@devbystep.fr',
         createdAt: new Date('2024-01-01'),
         updatedAt: new Date('2024-01-01'),
         deletedAt: null,
@@ -456,7 +456,7 @@ describe('UserWorkspaceService', () => {
     it('should promote bootstrap admin email on existing workspace membership', async () => {
       const user = {
         id: 'user-id',
-        email: 'issa.kane@efrei.net',
+        email: 'aline@devbystep.fr',
         createdAt: new Date('2024-01-01'),
         updatedAt: new Date('2024-01-01'),
         deletedAt: null,

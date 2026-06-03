@@ -596,7 +596,7 @@ describe('AuthService', () => {
         userData: {
           type: 'newUser',
           newUserPayload: {
-            email: 'issa.kane@efrei.net',
+            email: 'aline@devbystep.fr',
           },
         } as ExistingUserOrNewUser['userData'],
         invitation: undefined,
@@ -609,7 +609,7 @@ describe('AuthService', () => {
 
       expect(
         signInUpServiceMock.assertEmailDomainAllowedForAutoSignUp,
-      ).toHaveBeenCalledWith('issa.kane@efrei.net');
+      ).toHaveBeenCalledWith('aline@devbystep.fr');
     });
 
     it('checkAccessForSignIn - reject direct signup in an existing workspace when multi-workspace mode is enabled', async () => {
@@ -622,7 +622,7 @@ describe('AuthService', () => {
           userData: {
             type: 'newUser',
             newUserPayload: {
-              email: 'issa.kane@efrei.net',
+              email: 'aline@devbystep.fr',
             },
           } as ExistingUserOrNewUser['userData'],
           invitation: undefined,
