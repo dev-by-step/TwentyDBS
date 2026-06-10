@@ -18,6 +18,7 @@ import {
 } from '~/generated-metadata/graphql';
 import type { FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import type { PageLayout } from '@/page-layout/types/PageLayout';
+import { buildRelationFieldMetadataItem } from '~/testing/utils/buildRelationFieldMetadataItem';
 
 jest.mock('@/ui/layout/contexts/LayoutRenderingContext');
 jest.mock('@/internal-entity/utils/getInternalEntityRelationFieldBehavior');
@@ -137,89 +138,35 @@ describe('usePageLayoutWithRelationWidgets', () => {
   };
 
   const mockRelationFields: FieldMetadataItem[] = [
-    {
+    buildRelationFieldMetadataItem({
       id: 'field-1',
-      universalIdentifier: 'field-1',
-      label: 'Related Companies',
       name: 'relatedCompanies',
-      type: 'RELATION',
-      isNullable: true,
-      isActive: true,
-      isSystem: false,
-      isCustom: false,
-      defaultValue: null,
-      options: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      fromRelationMetadata: null,
-      toRelationMetadata: null,
-      relationDefinition: null,
-      settings: null,
-    } as FieldMetadataItem,
-    {
+      label: 'Related Companies',
+    }),
+    buildRelationFieldMetadataItem({
       id: 'field-2',
-      universalIdentifier: 'field-2',
-      label: 'Related People',
       name: 'relatedPeople',
-      type: 'RELATION',
-      isNullable: true,
-      isActive: true,
-      isSystem: false,
-      isCustom: false,
-      defaultValue: null,
-      options: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      fromRelationMetadata: null,
-      toRelationMetadata: null,
-      relationDefinition: null,
-      settings: null,
-    } as FieldMetadataItem,
+      label: 'Related People',
+    }),
   ];
 
   const mockJunctionRelationFields: FieldMetadataItem[] = [
-    {
+    buildRelationFieldMetadataItem({
       id: 'field-3',
-      universalIdentifier: 'field-3',
-      label: 'Internal Entities',
       name: 'internalEntities',
-      type: 'RELATION',
-      isNullable: true,
-      isActive: true,
-      isSystem: false,
-      isCustom: false,
-      defaultValue: null,
-      options: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      fromRelationMetadata: null,
-      toRelationMetadata: null,
-      relationDefinition: null,
+      label: 'Internal Entities',
       settings: {
         junctionTargetFieldId: 'junction-target-field-id',
       },
-    } as FieldMetadataItem,
-    {
+    }),
+    buildRelationFieldMetadataItem({
       id: 'field-4',
-      universalIdentifier: 'field-4',
-      label: 'Other Junction Relation',
       name: 'otherJunctionRelation',
-      type: 'RELATION',
-      isNullable: true,
-      isActive: true,
-      isSystem: false,
-      isCustom: false,
-      defaultValue: null,
-      options: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      fromRelationMetadata: null,
-      toRelationMetadata: null,
-      relationDefinition: null,
+      label: 'Other Junction Relation',
       settings: {
         junctionTargetFieldId: 'other-junction-target-field-id',
       },
-    } as FieldMetadataItem,
+    }),
   ];
 
   beforeEach(() => {
