@@ -45,13 +45,13 @@ export class TimelineCalendarEventDTO {
   @Field()
   endsAt: Date;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   description: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   location: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   conferenceSolution: string | null;
 
   @Field(() => LinksMetadataDTO, { nullable: true })
