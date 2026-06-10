@@ -37,15 +37,17 @@ describe('CalendarPrivacyService', () => {
   };
 
   const mockGlobalWorkspaceOrmManager = {
-    getRepository: jest.fn().mockImplementation((_workspaceId, repositoryName) => {
-      if (repositoryName === 'calendarChannelEventAssociation') {
-        return mockCalendarEventAssociationRepository;
-      }
+    getRepository: jest
+      .fn()
+      .mockImplementation((_workspaceId, repositoryName) => {
+        if (repositoryName === 'calendarChannelEventAssociation') {
+          return mockCalendarEventAssociationRepository;
+        }
 
-      if (repositoryName === 'workspaceMember') {
-        return mockWorkspaceMemberRepository;
-      }
-    }),
+        if (repositoryName === 'workspaceMember') {
+          return mockWorkspaceMemberRepository;
+        }
+      }),
     executeInWorkspaceContext: jest
       .fn()
       .mockImplementation((fn: () => any, _authContext?: any) => fn()),
@@ -149,8 +151,12 @@ describe('CalendarPrivacyService', () => {
       { id: 'user-workspace-1', userId: 'owner-user-1' },
     ]);
     mockUserRepository.find
-      .mockResolvedValueOnce([{ id: 'owner-user-1', entityId: 'same-entity-id' }])
-      .mockResolvedValueOnce([{ id: 'owner-user-1', entityId: 'same-entity-id' }]);
+      .mockResolvedValueOnce([
+        { id: 'owner-user-1', entityId: 'same-entity-id' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'owner-user-1', entityId: 'same-entity-id' },
+      ]);
     mockUserRepository.findOne.mockResolvedValue({
       entityId: 'same-entity-id',
     });

@@ -17,15 +17,14 @@ export class CalendarPrivacyInterceptor implements NestInterceptor {
     private readonly calendarPrivacyService: CalendarPrivacyService,
   ) {}
 
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<unknown> {
-    return next.handle().pipe(
-      mergeMap((response) =>
-        from(this.applyCalendarPrivacy(context, response)),
-      ),
-    );
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    return next
+      .handle()
+      .pipe(
+        mergeMap((response) =>
+          from(this.applyCalendarPrivacy(context, response)),
+        ),
+      );
   }
 
   private async applyCalendarPrivacy(
@@ -42,10 +41,7 @@ export class CalendarPrivacyInterceptor implements NestInterceptor {
     const currentUserId = request?.user?.id;
     const currentWorkspaceMemberId = request?.workspaceMemberId;
 
-    if (
-      !workspaceId ||
-      response.timelineCalendarEvents.length === 0
-    ) {
+    if (!workspaceId || response.timelineCalendarEvents.length === 0) {
       return response;
     }
 

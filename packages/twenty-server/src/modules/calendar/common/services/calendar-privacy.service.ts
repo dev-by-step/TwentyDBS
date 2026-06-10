@@ -198,7 +198,7 @@ export class CalendarPrivacyService {
 
             return [
               calendarChannel.id,
-              isDefined(userId) ? entityIdByUserId.get(userId) ?? null : null,
+              isDefined(userId) ? (entityIdByUserId.get(userId) ?? null) : null,
             ];
           }),
         );
@@ -245,8 +245,7 @@ export class CalendarPrivacyService {
           defaultMaskMap.set(
             calendarEventId,
             [...ownerEntityIds].some(
-              (ownerEntityId) =>
-                ownerEntityId !== resolvedCurrentUserEntityId,
+              (ownerEntityId) => ownerEntityId !== resolvedCurrentUserEntityId,
             ),
           );
         }
@@ -338,16 +337,17 @@ export class CalendarPrivacyService {
 
     let resolvedCurrentUserId = currentUserId;
 
-    if (!isDefined(resolvedCurrentUserId) && isDefined(currentWorkspaceMemberId)) {
+    if (
+      !isDefined(resolvedCurrentUserId) &&
+      isDefined(currentWorkspaceMemberId)
+    ) {
       const workspaceMemberRepository =
         await this.globalWorkspaceOrmManager.getRepository<{
           id: string;
           userId: string;
-        }>(
-          workspaceId,
-          'workspaceMember',
-          { shouldBypassPermissionChecks: true },
-        );
+        }>(workspaceId, 'workspaceMember', {
+          shouldBypassPermissionChecks: true,
+        });
 
       const workspaceMember = await workspaceMemberRepository.findOne({
         where: { id: currentWorkspaceMemberId },
