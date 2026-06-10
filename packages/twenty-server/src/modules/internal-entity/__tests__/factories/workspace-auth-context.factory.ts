@@ -27,5 +27,5 @@ export const buildWorkspaceAuthContext = ({
     userWorkspaceId: workspaceMember.id,
     workspaceMemberId: workspaceMember.id,
     workspaceMember,
-  } as WorkspaceAuthContext;
+  } as unknown as WorkspaceAuthContext;
 };
