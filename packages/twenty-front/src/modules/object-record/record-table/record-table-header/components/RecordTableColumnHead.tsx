@@ -1,6 +1,7 @@
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
 
+import { getInternalEntityDisplayLabel } from '@/internal-entity/utils/getInternalEntityDisplayLabel';
 import { fieldMetadataItemByIdSelector } from '@/object-metadata/states/fieldMetadataItemByIdSelector';
 import { isFieldMetadataItemLabelIdentifierSelector } from '@/object-metadata/states/isFieldMetadataItemLabelIdentifierSelector';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
@@ -82,7 +83,9 @@ export const RecordTableColumnHead = ({
         <Icon size={theme.icon.size.md} />
       </StyledIcon>
       <StyledText>
-        {correspondingFieldMetadataItem.foundFieldMetadataItem?.label}
+        {getInternalEntityDisplayLabel(
+          correspondingFieldMetadataItem.foundFieldMetadataItem?.label ?? '',
+        )}
       </StyledText>
     </StyledTitle>
   );

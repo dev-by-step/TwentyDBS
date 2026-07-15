@@ -37,7 +37,7 @@ export const useCreateDefaultViewForObject = () => {
           {
             input: {
               id: newViewId,
-              name: `All ${objectMetadataItem.labelPlural}`,
+              name: `Toutes les ${objectMetadataItem.labelPlural}`,
               icon: objectMetadataItem.icon ?? 'IconList',
               objectMetadataId: objectMetadataItem.id,
               type: ViewType.TABLE,

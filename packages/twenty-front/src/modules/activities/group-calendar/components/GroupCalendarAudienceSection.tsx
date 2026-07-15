@@ -2,25 +2,16 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useMemo } from 'react';
 
-import {
-  type AudienceMode,
-  INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
-} from '@/activities/group-calendar/constants/CalendarEventAudience';
+import { type AudienceMode } from '@/activities/group-calendar/constants/CalendarEventAudience';
 import { StyledGroupCalendarSelectableChip } from '@/activities/group-calendar/components/GroupCalendarSelectableChip';
 import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { useEntityMembersCoverage } from '@/activities/group-calendar/hooks/useEntityMembersCoverage';
+import { type ManageableEventEntity } from '@/activities/group-calendar/hooks/useManageableEventEntities';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { IconCheck } from 'twenty-ui/display';
 import { Radio } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-
-type InternalEntityRecord = {
-  __typename: string;
-  id: string;
-  name: string;
-  color?: string | null;
-};
 
 type WorkspaceMemberAudienceRecord = {
   __typename: string;
@@ -107,6 +98,7 @@ type GroupCalendarAudienceSectionProps = {
   audienceMode: AudienceMode;
   selectedAudienceEntityIds: string[];
   selectedAudienceMemberIds: string[];
+  audienceEntities: readonly ManageableEventEntity[];
   isPersonAudienceFeatureAvailable: boolean;
   eventEntityIds?: string[];
   onAudienceModeChange: (mode: AudienceMode) => void;
@@ -118,19 +110,13 @@ export const GroupCalendarAudienceSection = ({
   audienceMode,
   selectedAudienceEntityIds,
   selectedAudienceMemberIds,
+  audienceEntities,
   isPersonAudienceFeatureAvailable,
   eventEntityIds = [],
   onAudienceModeChange,
   onToggleAudienceEntity,
   onToggleAudienceMember,
 }: GroupCalendarAudienceSectionProps) => {
-  const { records: internalEntities = [] } =
-    useFindManyRecords<InternalEntityRecord>({
-      objectNameSingular: INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
-      recordGqlFields: { id: true, name: true, color: true },
-      limit: GROUP_CALENDAR_CONFIG.limits.entityPicker,
-    });
-
   const { records: workspaceMembers = [] } =
     useFindManyRecords<WorkspaceMemberAudienceRecord>({
       objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
@@ -208,12 +194,12 @@ export const GroupCalendarAudienceSection = ({
           </StyledHelperText>
           <StyledSubLabel>{t`Also visible to — other entities`}</StyledSubLabel>
           <StyledChipsContainer>
-            {internalEntities.length === 0 ? (
+            {audienceEntities.length === 0 ? (
               <StyledHelperText>
                 {t`No other internal entity available.`}
               </StyledHelperText>
             ) : (
-              internalEntities.map((entity) => {
+              audienceEntities.map((entity) => {
                 const isEventEntity = eventEntityIds.includes(entity.id);
                 const selected =
                   selectedAudienceEntityIds.includes(entity.id) ||

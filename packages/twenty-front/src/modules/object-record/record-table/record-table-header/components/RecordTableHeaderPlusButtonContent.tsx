@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { getInternalEntityDisplayLabel } from '@/internal-entity/utils/getInternalEntityDisplayLabel';
 import { useActiveFieldMetadataItems } from '@/object-metadata/hooks/useActiveFieldMetadataItems';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { useChangeRecordFieldVisibility } from '@/object-record/record-field/hooks/useChangeRecordFieldVisibility';
@@ -62,7 +63,7 @@ export const RecordTableHeaderPlusButtonContent = () => {
 
   const filteredFieldMetadataItems = availableFieldMetadataItemsToShow.filter(
     (fieldMetadataItem) => {
-      return fieldMetadataItem.label
+      return getInternalEntityDisplayLabel(fieldMetadataItem.label)
         .toLowerCase()
         .includes(searchInput.toLowerCase());
     },
@@ -100,7 +101,7 @@ export const RecordTableHeaderPlusButtonContent = () => {
                 handleFieldMetadataItemMenuItemClick(fieldMetadataItem)
               }
               LeftIcon={getIcon(fieldMetadataItem.icon)}
-              text={fieldMetadataItem.label}
+              text={getInternalEntityDisplayLabel(fieldMetadataItem.label)}
             />
           ))
         ) : (

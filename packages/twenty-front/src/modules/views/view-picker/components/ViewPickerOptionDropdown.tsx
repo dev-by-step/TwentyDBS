@@ -7,6 +7,7 @@ import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { MenuItemWithOptionDropdown } from '@/ui/navigation/menu-item/components/MenuItemWithOptionDropdown';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { type View } from '@/views/types/View';
+import { getViewDisplayName } from '@/views/utils/getViewDisplayName';
 import { useDestroyViewFromCurrentState } from '@/views/view-picker/hooks/useDestroyViewFromCurrentState';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { useLingui } from '@lingui/react/macro';
@@ -113,7 +114,7 @@ export const ViewPickerOptionDropdown = ({
   return (
     <>
       <MenuItemWithOptionDropdown
-        text={view.name}
+        text={getViewDisplayName(view.name)}
         LeftIcon={getIcon(view.icon)}
         onClick={() => handleViewSelect(view.id)}
         isIconDisplayedOnHoverOnly={!shouldShowIconAlways}

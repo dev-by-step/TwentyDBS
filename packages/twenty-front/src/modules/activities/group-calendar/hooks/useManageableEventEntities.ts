@@ -31,9 +31,9 @@ type WorkspaceMemberEntityMembershipRecord = {
 };
 
 // Returns the entities the current user is allowed to designate as
-// "responsible" for a calendar event:
-//   - Platform admins → every internal entity.
-//   - Everyone else → entities they belong to via workspaceMemberEntityMembership.
+// "responsible" for a calendar event. We merge the readable internal entities
+// with the user's explicit memberships so the picker stays correct even when a
+// long-lived session has a stale admin flag in frontend state.
 //
 // `primaryEventEntityId` is the entity to pre-select by default (smart default
 // for the create modal). Defaults to `user.entityId` when it is part of the
@@ -48,14 +48,13 @@ export const useManageableEventEntities = (): {
 } => {
   const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
-  const isPlatformAdmin = currentUser?.canAccessFullAdminPanel === true;
 
   const { records: allInternalEntities = [], loading: entitiesLoading } =
     useFindManyRecords<InternalEntityRecord>({
       objectNameSingular: INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
       recordGqlFields: { id: true, name: true, color: true },
       limit: GROUP_CALENDAR_CONFIG.limits.entityPicker,
-      skip: !isPlatformAdmin,
+      skip: !isDefined(currentUser),
     });
 
   const { records: memberships = [], loading: membershipsLoading } =
@@ -75,37 +74,35 @@ export const useManageableEventEntities = (): {
         workspaceMemberId: { eq: currentWorkspaceMember?.id ?? '' },
       },
       limit: GROUP_CALENDAR_CONFIG.limits.entityMembership,
-      skip: isPlatformAdmin || !isDefined(currentWorkspaceMember),
+      skip: !isDefined(currentWorkspaceMember),
     });
 
   const manageableEventEntities = useMemo<ManageableEventEntity[]>(() => {
     const entitiesById = new Map<string, ManageableEventEntity>();
 
-    if (isPlatformAdmin) {
-      for (const entity of allInternalEntities) {
-        entitiesById.set(entity.id, {
-          id: entity.id,
-          name: entity.name,
-          color: entity.color ?? null,
-        });
-      }
-    } else {
-      for (const membership of memberships) {
-        const entityId =
-          membership.internalEntity?.id ?? membership.internalEntityId;
+    for (const entity of allInternalEntities) {
+      entitiesById.set(entity.id, {
+        id: entity.id,
+        name: entity.name,
+        color: entity.color ?? null,
+      });
+    }
 
-        entitiesById.set(entityId, {
-          id: entityId,
-          name: membership.internalEntity?.name ?? entityId,
-          color: membership.internalEntity?.color ?? null,
-        });
-      }
+    for (const membership of memberships) {
+      const entityId =
+        membership.internalEntity?.id ?? membership.internalEntityId;
+
+      entitiesById.set(entityId, {
+        id: entityId,
+        name: membership.internalEntity?.name ?? entityId,
+        color: membership.internalEntity?.color ?? null,
+      });
     }
 
     return [...entitiesById.values()].sort((firstEntity, secondEntity) =>
       firstEntity.name.localeCompare(secondEntity.name),
     );
-  }, [isPlatformAdmin, allInternalEntities, memberships]);
+  }, [allInternalEntities, memberships]);
 
   const manageableEventEntityIds = useMemo(
     () => new Set(manageableEventEntities.map((entity) => entity.id)),
@@ -132,7 +129,7 @@ export const useManageableEventEntities = (): {
     return manageableEventEntities[0].id;
   }, [manageableEventEntities, manageableEventEntityIds, currentUser]);
 
-  const isReady = isPlatformAdmin ? !entitiesLoading : !membershipsLoading;
+  const isReady = !entitiesLoading && !membershipsLoading;
 
   return {
     manageableEventEntities,

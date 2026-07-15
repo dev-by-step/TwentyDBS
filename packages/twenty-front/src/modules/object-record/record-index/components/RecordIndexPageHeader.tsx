@@ -5,6 +5,7 @@ import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/
 import { contextStoreNumberOfSelectedRecordsComponentState } from '@/context-store/states/contextStoreNumberOfSelectedRecordsComponentState';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { RecordIndexPageHeaderCreateButton } from '@/object-record/record-index/components/RecordIndexPageHeaderCreateButton';
 import { RecordIndexPageHeaderIcon } from '@/object-record/record-index/components/RecordIndexPageHeaderIcon';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { PageHeader } from '@/ui/layout/page/components/PageHeader';
@@ -76,6 +77,7 @@ export const RecordIndexPageHeader = () => {
     >
       {isDefined(contextStoreCurrentViewId) && (
         <>
+          <RecordIndexPageHeaderCreateButton />
           <RecordIndexCommandMenu />
           {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
         </>

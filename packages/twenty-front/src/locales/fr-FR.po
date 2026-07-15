@@ -956,7 +956,7 @@ msgstr "Ajouter Domaine Email"
 #. js-lingui-id: Q5wyPc
 #: src/modules/internal-entity/components/InternalEntityRelationFieldDisplay.tsx
 msgid "Add entity"
-msgstr ""
+msgstr "Ajouter une entité"
 
 #. js-lingui-id: DpV70M
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
@@ -1053,7 +1053,7 @@ msgstr "Ajouter nouveau"
 #: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
 #: src/modules/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker.tsx
 msgid "Add New"
-msgstr "Ajouter Nouveau"
+msgstr "Ajouter"
 
 #. js-lingui-id: erHjaG
 #: src/modules/workflow/workflow-diagram/components/WorkflowDiagramRightClickCommandMenu.tsx
@@ -6503,6 +6503,10 @@ msgstr "Entité de l'événement — voit déjà cet événement."
 msgid "Event for {0}."
 msgstr "Événement pour {0}."
 
+#: src/modules/activities/group-calendar/components/GroupCalendarEventFormFields.tsx
+msgid "Event title"
+msgstr "Titre de l'événement"
+
 #. js-lingui-id: ailPEn
 #: src/pages/settings/security/event-logs/components/EventLogFilters.tsx
 msgid "Event Type"
@@ -10058,7 +10062,7 @@ msgstr "Nouveau"
 #. js-lingui-id: LfvvW4
 #: src/modules/side-panel/hooks/useOpenRecordInSidePanel.ts
 msgid "New {objectLabelSingular}"
-msgstr "Nouveau {objectLabelSingular}"
+msgstr "Créer {objectLabelSingular}"
 
 #. js-lingui-id: Kcr9Fr
 #: src/modules/settings/accounts/components/SettingsNewAccountSection.tsx
@@ -13686,7 +13690,7 @@ msgstr "Envoyer un email d'invitation à votre équipe"
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 #: src/modules/activities/emails/components/EmptyInboxPlaceholder.tsx
 msgid "Send Email"
-msgstr "Envoyer l'email"
+msgstr "Envoyer un e-mail"
 
 #. js-lingui-id: CqsED8
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
@@ -15259,7 +15263,7 @@ msgstr "Cela modifiera {contextStoreNumberOfSelectedRecords} enregistrements. Ce
 #. placeholder {0}: entityLabel ? <strong>{entityLabel}</strong> : 'this entity'
 #: src/modules/internal-entity/components/InternalEntityDetachConfirmationModal.tsx
 msgid "This will only remove the link with {0}.<0/>The Internal Entity record will be kept."
-msgstr ""
+msgstr "Cela supprimera uniquement le lien avec {0}.<0/>L'enregistrement d'entité interne sera conservé."
 
 #. js-lingui-id: XGDxrH
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx

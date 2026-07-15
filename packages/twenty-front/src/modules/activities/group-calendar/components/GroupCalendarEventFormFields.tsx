@@ -67,6 +67,8 @@ export const GroupCalendarEventFormFields = ({
     <>
       <TextInput
         label={t`Title`}
+        placeholder={t`Event title`}
+        dataTestId="group-calendar-event-title-input"
         autoFocus={autoFocus}
         value={state.title}
         onChange={(value) => onPatchState({ title: value })}
@@ -101,6 +103,7 @@ export const GroupCalendarEventFormFields = ({
           audienceMode={state.audienceMode}
           selectedAudienceEntityIds={state.selectedAudienceEntityIds}
           selectedAudienceMemberIds={state.selectedAudienceMemberIds}
+          audienceEntities={manageableEventEntities}
           isPersonAudienceFeatureAvailable={isPersonAudienceFeatureAvailable}
           eventEntityIds={state.eventEntityIds}
           onAudienceModeChange={(audienceMode) =>

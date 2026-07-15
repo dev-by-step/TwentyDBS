@@ -1,12 +1,13 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { format, getYear } from 'date-fns';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { CalendarDayCardContent } from '@/activities/calendar/components/CalendarDayCardContent';
 import { GroupCalendarBoard } from '@/activities/group-calendar/components/GroupCalendarBoard';
 import { GroupCalendarEditEventModal } from '@/activities/group-calendar/components/GroupCalendarEditEventModal';
 import { GroupCalendarTopBar } from '@/activities/group-calendar/components/GroupCalendarTopBar';
+import { WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME } from '@/activities/group-calendar/constants/CalendarEventAudience';
 import { useCurrentUserEntityIds } from '@/activities/group-calendar/hooks/useCurrentUserEntityIds';
 import { useGroupCalendarEvents } from '@/activities/group-calendar/hooks/useGroupCalendarEvents';
 import { groupCalendarDisplayModeState } from '@/activities/group-calendar/states/groupCalendarDisplayModeState';
@@ -15,6 +16,7 @@ import { useCalendarEvents } from '@/activities/calendar/hooks/useCalendarEvents
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -65,6 +67,56 @@ const StyledTitleContainer = styled.div`
 `;
 
 export const GroupCalendarEventsCard = () => {
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const isWorkspaceMemberEntityMembershipAvailable = objectMetadataItems.some(
+    (objectMetadataItem) =>
+      objectMetadataItem.nameSingular ===
+      WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME,
+  );
+
+  return isWorkspaceMemberEntityMembershipAvailable ? (
+    <GroupCalendarEventsCardWithEntityMemberships />
+  ) : (
+    <GroupCalendarEventsCardWithUserEntityFallback />
+  );
+};
+
+const GroupCalendarEventsCardWithEntityMemberships = () => {
+  const currentUserEntityIds = useCurrentUserEntityIds();
+
+  return (
+    <GroupCalendarEventsCardContent
+      currentUserEntityIds={currentUserEntityIds}
+    />
+  );
+};
+
+const GroupCalendarEventsCardWithUserEntityFallback = () => {
+  const currentUser = useAtomStateValue(currentUserState);
+  const currentUserEntityIds = useMemo(() => {
+    const entityIds = new Set<string>();
+
+    if (isDefined(currentUser?.entityId) && currentUser.entityId.length > 0) {
+      entityIds.add(currentUser.entityId);
+    }
+
+    return entityIds;
+  }, [currentUser?.entityId]);
+
+  return (
+    <GroupCalendarEventsCardContent
+      currentUserEntityIds={currentUserEntityIds}
+    />
+  );
+};
+
+type GroupCalendarEventsCardContentProps = {
+  currentUserEntityIds: Set<string>;
+};
+
+const GroupCalendarEventsCardContent = ({
+  currentUserEntityIds,
+}: GroupCalendarEventsCardContentProps) => {
   const {
     viewMode,
     setViewMode,
@@ -87,7 +139,6 @@ export const GroupCalendarEventsCard = () => {
     calendarEventPermissions.canUpdateObjectRecords ||
     calendarEventPermissions.canSoftDeleteObjectRecords;
   const currentUser = useAtomStateValue(currentUserState);
-  const currentUserEntityIds = useCurrentUserEntityIds();
   const isPlatformAdmin = currentUser?.canAccessFullAdminPanel === true;
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [groupCalendarDisplayMode, setGroupCalendarDisplayMode] = useAtomState(

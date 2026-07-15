@@ -4,6 +4,7 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { useObjectNameSingularFromPlural } from '@/object-metadata/hooks/useObjectNameSingularFromPlural';
 import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
+import { getViewDisplayName } from '@/views/utils/getViewDisplayName';
 
 export const ViewBarPageTitle = () => {
   const { objectNamePlural } = useParams();
@@ -16,7 +17,7 @@ export const ViewBarPageTitle = () => {
   const { objectMetadataItem } = useObjectMetadataItem({ objectNameSingular });
 
   const pageTitle = currentView?.name
-    ? `${currentView?.name} - ${objectMetadataItem.labelPlural}`
+    ? `${getViewDisplayName(currentView.name)} - ${objectMetadataItem.labelPlural}`
     : objectMetadataItem.labelPlural;
 
   return <PageTitle title={pageTitle} />;

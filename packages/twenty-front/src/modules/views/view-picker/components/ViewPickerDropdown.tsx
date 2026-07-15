@@ -6,6 +6,7 @@ import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDrop
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useGetRecordIndexTotalCount } from '@/views/hooks/internal/useGetRecordIndexTotalCount';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
+import { getViewDisplayName } from '@/views/utils/getViewDisplayName';
 import { ViewPickerContentCreateMode } from '@/views/view-picker/components/ViewPickerContentCreateMode';
 import { ViewPickerContentEditMode } from '@/views/view-picker/components/ViewPickerContentEditMode';
 import { ViewPickerContentEffect } from '@/views/view-picker/components/ViewPickerContentEffect';
@@ -71,6 +72,9 @@ export const ViewPickerDropdown = () => {
 
   const { getIcon } = useIcons();
   const CurrentViewIcon = getIcon(currentView?.icon);
+  const currentViewDisplayName = isDefined(currentView?.name)
+    ? getViewDisplayName(currentView.name)
+    : t`All`;
 
   const handleClickOutside = async () => {
     if (isDropdownOpen && viewPickerMode === 'edit') {
@@ -95,7 +99,7 @@ export const ViewPickerDropdown = () => {
             )}
           </StyledIconContainer>
           <StyledViewName>
-            <OverflowingTextWithTooltip text={currentView?.name ?? t`All`} />
+            <OverflowingTextWithTooltip text={currentViewDisplayName} />
           </StyledViewName>
           <StyledDropdownLabelAdornments>
             {isDefined(totalCount) && <>· {totalCount} </>}
