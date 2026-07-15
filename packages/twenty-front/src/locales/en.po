@@ -627,6 +627,11 @@ msgstr "A shared environment where you will be able to manage your customer rela
 msgid "A verification email has been sent to"
 msgstr "A verification email has been sent to"
 
+#. js-lingui-id: 95FJjB
+#: src/pages/onboarding/InviteTeam.tsx
+msgid "A workspace admin will invite new teammates. You can continue and start using the app."
+msgstr "A workspace admin will invite new teammates. You can continue and start using the app."
+
 #. js-lingui-id: DqlQy+
 #: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldMaxValuesForm.tsx
 msgid "Ability to add more than one email address"
@@ -2880,6 +2885,12 @@ msgstr "Calendar Event"
 msgid "Calendar event not found"
 msgstr "Calendar event not found"
 
+#. js-lingui-id: X9A2xC
+#: src/pages/onboarding/SyncEmails.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Calendar events"
+msgstr "Calendar events"
+
 #. js-lingui-id: wLtx+m
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Calendar settings"
@@ -3248,10 +3259,10 @@ msgstr "Choose what happens when you click a phone number"
 msgid "Choose what happens when you click an email"
 msgstr "Choose what happens when you click an email"
 
-#. js-lingui-id: dPfKX/
+#. js-lingui-id: d36+kh
 #: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
-msgid "Choose which internal entities can see full details from this imported calendar."
-msgstr "Choose which internal entities can see full details from this imported calendar."
+msgid "Choose which internal entities can see full details from this imported calendar. This does not grant permission to manage or disconnect the connected account."
+msgstr "Choose which internal entities can see full details from this imported calendar. This does not grant permission to manage or disconnect the connected account."
 
 #. js-lingui-id: iuKdZU
 #: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
@@ -3717,6 +3728,16 @@ msgstr "Connect with Microsoft"
 msgid "Connected accounts"
 msgstr "Connected accounts"
 
+#. js-lingui-id: g0faWK
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Connecting the account synchronises the following data into your workspace."
+msgstr "Connecting the account synchronises the following data into your workspace."
+
+#. js-lingui-id: wYgUKM
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Connection metadata"
+msgstr "Connection metadata"
+
 #. js-lingui-id: W4Kgwq
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Connection settings"
@@ -3752,6 +3773,12 @@ msgstr "Contact auto-creation"
 #: src/modules/information-banner/components/billing/InformationBannerEndTrialPeriod.tsx
 msgid "Contact your admin to continue using Workflow or AI features."
 msgstr "Contact your admin to continue using Workflow or AI features."
+
+#. js-lingui-id: gVfVfe
+#: src/pages/onboarding/SyncEmails.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Contacts"
+msgstr "Contacts"
 
 #. js-lingui-id: /5mghO
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
@@ -3802,6 +3829,7 @@ msgstr "Context window"
 #: src/pages/onboarding/SyncEmails.tsx
 #: src/pages/onboarding/SyncEmails.tsx
 #: src/pages/onboarding/SyncEmails.tsx
+#: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/CreateWorkspace.tsx
 #: src/pages/onboarding/CreateProfile.tsx
@@ -5812,8 +5840,10 @@ msgstr "Emailing Domains"
 #. js-lingui-id: BXEcos
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
+#: src/pages/onboarding/SyncEmails.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
 msgid "Emails"
 msgstr "Emails"
 
@@ -5905,6 +5935,11 @@ msgstr "Enable bypass options"
 #: src/modules/ai/components/SettingsAgentModelCapabilities.tsx
 msgid "Enable model-specific features"
 msgstr "Enable model-specific features"
+
+#. js-lingui-id: 5h+VAk
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Encrypted OAuth tokens kept securely so we can keep your data in sync. You can disconnect at any time."
+msgstr "Encrypted OAuth tokens kept securely so we can keep your data in sync. You can disconnect at any time."
 
 #. js-lingui-id: IrI9pg
 #: src/modules/settings/admin-panel/health-status/maintenance-mode/components/SettingsAdminMaintenanceMode.tsx
@@ -7280,6 +7315,7 @@ msgstr "Filters"
 
 #. js-lingui-id: JmZ/+d
 #: src/pages/onboarding/InviteTeam.tsx
+#: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/BookCallDecision.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectForm.tsx
 msgid "Finish"
@@ -8186,6 +8222,8 @@ msgstr "Import all emails"
 
 #. js-lingui-id: 2CeOI3
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownDefaultView.tsx
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 msgid "Import CSV"
 msgstr "Import CSV"
 
@@ -10519,6 +10557,11 @@ msgstr "No email exchange has occurred with this record yet."
 msgid "No entity linked"
 msgstr "No entity linked"
 
+#. js-lingui-id: SZoWOE
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "No entity selected: only you will see full details until you change this in Settings."
+msgstr "No entity selected: only you will see full details until you change this in Settings."
+
 #. js-lingui-id: p3Hivn
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
 msgid "No evaluation inputs yet. Add your first test input above."
@@ -10980,6 +11023,11 @@ msgstr "Not started"
 msgid "Not synced"
 msgstr "Not synced"
 
+#. js-lingui-id: 1lDrmM
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Note: email content visibility follows the workspace-wide privacy setting above; the entity selection below applies to calendar events."
+msgstr "Note: email content visibility follows the workspace-wide privacy setting above; the entity selection below applies to calendar events."
+
 #. js-lingui-id: DYCPYF
 #: src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx
 msgid "Nothing to see"
@@ -11284,6 +11332,11 @@ msgstr "only on {firstDay} and {secondDay}"
 #: src/modules/workflow/workflow-trigger/utils/cron-to-human/descriptors/getDayOfWeekDescription.ts
 msgid "only on {remainingDays} and {lastDay}"
 msgstr "only on {remainingDays} and {lastDay}"
+
+#. js-lingui-id: 7o2DVh
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Only the connected account owner can change account-level settings."
+msgstr "Only the connected account owner can change account-level settings."
 
 #. js-lingui-id: laL/0u
 #: src/modules/activities/group-calendar/components/GroupCalendarAudienceSection.tsx
@@ -11659,6 +11712,16 @@ msgstr "People I’ve sent emails to and received emails from."
 msgid "People I’ve sent emails to."
 msgstr "People I’ve sent emails to."
 
+#. js-lingui-id: A67mH8
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "People you exchange emails with or share calendar events with — added as Persons in your workspace."
+msgstr "People you exchange emails with or share calendar events with — added as Persons in your workspace."
+
+#. js-lingui-id: ncOTY7
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "People you exchange emails with or share calendar events with — automatically added as Persons if auto-creation is enabled below."
+msgstr "People you exchange emails with or share calendar events with — automatically added as Persons if auto-creation is enabled below."
+
 #. js-lingui-id: qMTN0w
 #: src/pages/settings/ai/SettingsAiUsageUserDetail.tsx
 msgid "Per-day AI consumption."
@@ -11770,6 +11833,11 @@ msgstr "Pick a view"
 #: src/modules/side-panel/utils/getSidePanelSubPageTitle.ts
 msgid "Pick an object"
 msgstr "Pick an object"
+
+#. js-lingui-id: Rd3K3e
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Pick the internal entities allowed to see the full content of your imported calendar. Unselected entities will only see \"Busy\" slots on your calendar (no title, location or attendees) — they will keep seeing your availability and your entity badge. You can change this later in Settings."
+msgstr "Pick the internal entities allowed to see the full content of your imported calendar. Unselected entities will only see \"Busy\" slots on your calendar (no title, location or attendees) — they will keep seeing your availability and your entity badge. You can change this later in Settings."
 
 #. js-lingui-id: m+4RCd
 #: src/modules/onboarding/components/SuperadminWorkspaceSetup.tsx
@@ -13687,6 +13755,12 @@ msgstr "Select which models appear as recommended in the workspace model picker"
 msgid "Select your preferred language"
 msgstr "Select your preferred language"
 
+#. js-lingui-id: mmxYLE
+#. placeholder {0}: sortedSelectedEntityNames.join(', ')
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Selected: {0}."
+msgstr "Selected: {0}."
+
 #. js-lingui-id: JlFcis
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
@@ -14478,6 +14552,16 @@ msgstr "Subject not shared"
 msgid "Subject, body and attachments will be shared with your team."
 msgstr "Subject, body and attachments will be shared with your team."
 
+#. js-lingui-id: 2wm/+7
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Subject, body, sender and recipients of received and sent emails (attachments stay on the provider's servers)."
+msgstr "Subject, body, sender and recipients of received and sent emails (attachments stay on the provider's servers)."
+
+#. js-lingui-id: tlWlgg
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Subject, body, sender and recipients of sent and received messages."
+msgstr "Subject, body, sender and recipients of sent and received messages."
+
 #. js-lingui-id: hQRttt
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormFiller.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
@@ -14983,6 +15067,11 @@ msgstr "The name of your organization"
 msgid "The page you're seeking is either gone or never was. Let's get you back on track"
 msgstr "The page you're seeking is either gone or never was. Let's get you back on track"
 
+#. js-lingui-id: v+ZNAT
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "The selected provider will sync the following data into your workspace."
+msgstr "The selected provider will sync the following data into your workspace."
+
 #. js-lingui-id: jrCR2X
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
 msgid "The selected record will be passed to your workflow"
@@ -15204,6 +15293,11 @@ msgstr "This key should be set through body input"
 msgid "This model will be removed from the provider. You can re-add it later."
 msgstr "This model will be removed from the provider. You can re-add it later."
 
+#. js-lingui-id: UD/dgc
+#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+msgid "This only controls visibility of imported event details. Managing or disconnecting the Outlook account remains limited to the account owner."
+msgstr "This only controls visibility of imported event details. Managing or disconnecting the Outlook account remains limited to the account owner."
+
 #. js-lingui-id: NCA55L
 #: src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx
 msgid "This page has no content"
@@ -15397,6 +15491,16 @@ msgstr "title"
 #: src/modules/activities/group-calendar/components/GroupCalendarEventFormFields.tsx
 msgid "Title"
 msgstr "Title"
+
+#. js-lingui-id: NcIzg9
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Title, description, location, attendees, dates and recurrence — masked to \"Busy\" for entities that aren't granted access below."
+msgstr "Title, description, location, attendees, dates and recurrence — masked to \"Busy\" for entities that aren't granted access below."
+
+#. js-lingui-id: Admb5Q
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Title, description, location, attendees, dates and recurrence."
+msgstr "Title, description, location, attendees, dates and recurrence."
 
 #. js-lingui-id: /jQctM
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
@@ -15964,6 +16068,11 @@ msgstr "unordered"
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 msgid "Unordered list with bullets"
 msgstr "Unordered list with bullets"
+
+#. js-lingui-id: ZIdT8z
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Unselected entities will only see \"Busy\" on your calendar slots — they won't see the event title, description, attendees, or location, only that you're unavailable in that time range, along with your entity badge."
+msgstr "Unselected entities will only see \"Busy\" on your calendar slots — they won't see the event title, description, attendees, or location, only that you're unavailable in that time range, along with your entity badge."
 
 #. js-lingui-id: wja8aL
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
@@ -16854,6 +16963,16 @@ msgstr "What can I help you with?"
 msgid "What this API can do: Select a user role to define its permissions."
 msgstr "What this API can do: Select a user role to define its permissions."
 
+#. js-lingui-id: rPrVeZ
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "What will be imported"
+msgstr "What will be imported"
+
+#. js-lingui-id: KWLbSw
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "What's imported from this account"
+msgstr "What's imported from this account"
+
 #. js-lingui-id: m7GziZ
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "When a deal's stage changes to Closed Won, create a task assigned to the deal owner, due 7 days after the close date, with title \"Post-sale check-in\" and the company name in the description."
@@ -16896,6 +17015,11 @@ msgstr "Where"
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
 msgid "Whether this model supports chain-of-thought reasoning"
 msgstr "Whether this model supports chain-of-thought reasoning"
+
+#. js-lingui-id: 1ODxih
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Who can see the details"
+msgstr "Who can see the details"
 
 #. js-lingui-id: le3xb6
 #: src/modules/activities/group-calendar/components/GroupCalendarAudienceSection.tsx
@@ -17304,6 +17428,11 @@ msgstr "You will lose all your mappings."
 #: src/modules/settings/domains/components/SettingsSubdomain.tsx
 msgid "You're about to change your workspace subdomain. This action will log out all users."
 msgstr "You're about to change your workspace subdomain. This action will log out all users."
+
+#. js-lingui-id: FJe7r9
+#: src/pages/onboarding/InviteTeam.tsx
+msgid "You're all set"
+msgstr "You're all set"
 
 #. js-lingui-id: Z5uTAF
 #: src/modules/ai/components/AIChatNoMoreBillingCreditsBanner.tsx

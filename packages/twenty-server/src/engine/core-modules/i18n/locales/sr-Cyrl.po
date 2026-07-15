@@ -918,10 +918,35 @@ msgstr "Садржај мора бити објекат"
 msgid "Body must be an object for widget \"{widgetTitle}\""
 msgstr "Садржај мора бити објекат за виџет \"{widgetTitle}\""
 
+#. js-lingui-id: uxMNTg
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Bulk calendar mutations are disabled for scoped calendar records."
+msgstr ""
+
 #. js-lingui-id: HOWEGX
 #: src/modules/blocklist/query-hooks/blocklist-update-many.pre-query.hook.ts
 msgid "Bulk update of blocklist entries is not allowed."
 msgstr "Масовно ажурирање уноса листе блокирања није дозвољено."
+
+#. js-lingui-id: JfjRvy
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Bulk updates are not allowed on personal work records."
+msgstr ""
+
+#. js-lingui-id: GqpyDd
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Bulk updates are not allowed on scoped timeline records."
+msgstr ""
+
+#. js-lingui-id: fzpICa
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Bulk updates are reserved to entity managers and platform administrators."
+msgstr ""
+
+#. js-lingui-id: UM7wq6
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Bulk updates on entity assignments are reserved to entity managers and platform administrators."
+msgstr ""
 
 #. js-lingui-id: 9N+p+g
 #: src/engine/metadata-modules/view-field-group/constants/standard-view-field-group-names.ts
@@ -1074,6 +1099,11 @@ msgstr "Грешка синхронизације календара."
 #: src/engine/twenty-orm/field-operations/relation-nested-queries/utils/formatConnectRecordNotFoundErrorMessage.util.ts
 msgid "Can't connect to {connectFieldName}. No unique record found with condition: {formattedConnectCondition}"
 msgstr "Не могу да се повежем са {connectFieldName}. Нема јединственог записа са условом: {formattedConnectCondition}"
+
+#. js-lingui-id: OfjqBb
+#: src/engine/twenty-orm/field-operations/relation-nested-queries/__tests__/relation-nested-queries.spec.ts
+msgid "Can't connect to company. No unique record found with condition: id = company-id"
+msgstr ""
 
 #. js-lingui-id: 2oVE+z
 #: src/engine/guards/impersonate-permission.guard.ts
@@ -1554,6 +1584,11 @@ msgstr ""
 msgid "Contradicting field permissions have been detected on a relation field."
 msgstr ""
 
+#. js-lingui-id: 5jGrMi
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-standard-flat-field-metadata.util.ts
+msgid "Controls whether event details stay inside the entity or are visible to the workspace"
+msgstr ""
+
 #. js-lingui-id: xuYXJX
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-view-sort-validator.service.ts
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-view-sort-validator.service.ts
@@ -1626,6 +1661,11 @@ msgstr "Креирао/ла"
 #: src/engine/metadata-modules/flat-field-metadata/utils/from-create-field-input-to-flat-field-metadatas-to-create.util.ts
 msgid "Created field metadata, parent object metadata not found"
 msgstr "Креиран метаподатак поља, метаподатак родитељског објекта није пронађен"
+
+#. js-lingui-id: F7TB5m
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "Created record is missing a valid id."
+msgstr ""
 
 #. js-lingui-id: wPvFAD
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
@@ -1984,6 +2024,16 @@ msgstr ""
 msgid "Due Date"
 msgstr "Рок за испуњење"
 
+#. js-lingui-id: G3S7mB
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Duplicate detection on entity-scoped records is reserved to entity managers and platform administrators."
+msgstr ""
+
+#. js-lingui-id: 3AFGLE
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Duplicate detection on internal entities is reserved to superadmins."
+msgstr ""
+
 #. js-lingui-id: UrzTjS
 #: src/engine/core-modules/graphql/hooks/use-validate-graphql-query-complexity.hook.ts
 msgid "Duplicate root resolver found. Each root resolver can only be called once per document."
@@ -2128,6 +2178,11 @@ msgstr "Токен валидности ентерпрајза није важе
 #: src/engine/core-modules/application/application.exception.ts
 msgid "Entity not found."
 msgstr "Ентитет није пронађен."
+
+#. js-lingui-id: NjIrml
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-standard-flat-field-metadata.util.ts
+msgid "Entity only"
+msgstr ""
 
 #. js-lingui-id: jxgcg/
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-action-execution.exception.ts
@@ -3093,6 +3148,26 @@ msgstr "Недовољне дозволе за приступ календару
 msgid "Insufficient permissions."
 msgstr "Недовољне дозволе."
 
+#. js-lingui-id: Ho3XI4
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Internal entities can only be created in the current workspace."
+msgstr ""
+
+#. js-lingui-id: ZuhqgG
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "Internal entity configuration is missing. Ask an administrator to initialize it."
+msgstr ""
+
+#. js-lingui-id: D1AgJ/
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Internal entity name is required."
+msgstr ""
+
+#. js-lingui-id: HIpb+N
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Internal entity name must be a string."
+msgstr ""
+
 #. js-lingui-id: pSjWxS
 #: src/modules/workflow/workflow-trigger/exceptions/workflow-trigger.exception.ts
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-action-execution.exception.ts
@@ -3300,6 +3375,7 @@ msgid "Invalid filter parameter."
 msgstr "Неважећи параметар филтера."
 
 #. js-lingui-id: /GCbsS
+#: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
 #: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
 #: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
 msgid "Invalid filter value: \"{value}\""
@@ -5131,10 +5207,74 @@ msgstr "Један или више захтеваних опсега су нев
 msgid "Ongoing"
 msgstr ""
 
+#. js-lingui-id: ew9V1Q
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only entity managers and platform administrators can manage entity assignments."
+msgstr ""
+
+#. js-lingui-id: J5hnFD
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only entity managers and platform administrators can merge entity records."
+msgstr ""
+
+#. js-lingui-id: /ZvTzK
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only entity-scoped CRM records can be merged."
+msgstr ""
+
 #. js-lingui-id: eYgzEd
 #: src/engine/metadata-modules/permissions/permissions.exception.ts
 msgid "Only field restrictions are allowed."
 msgstr "Дозвољена су само ограничења поља."
+
+#. js-lingui-id: rrTO2D
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only platform administrators can manage entity assignments."
+msgstr ""
+
+#. js-lingui-id: gneKJ8
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only superadmins can create internal entities."
+msgstr ""
+
+#. js-lingui-id: AYbgfb
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only superadmins can create, update, restore, delete, or destroy internal entities."
+msgstr ""
+
+#. js-lingui-id: E2m3K6
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Only superadmins can modify internal entity settings."
+msgstr ""
+
+#. js-lingui-id: NzJfMo
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Only the entity manager or the platform administrator can create this calendar link."
+msgstr ""
+
+#. js-lingui-id: qersPG
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Only the entity manager or the platform administrator can create this event."
+msgstr ""
+
+#. js-lingui-id: yTqiDJ
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Only the entity manager or the platform administrator can modify this calendar link."
+msgstr ""
+
+#. js-lingui-id: GgSgE5
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Only the entity manager or the platform administrator can modify this event participant."
+msgstr ""
+
+#. js-lingui-id: oQO9eq
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Only the entity manager or the platform administrator can modify this event."
+msgstr ""
 
 #. js-lingui-id: 4MyDFl
 #: src/engine/workspace-manager/twenty-standard-application/utils/object-metadata/create-standard-flat-object-metadata.util.ts
@@ -5433,6 +5573,13 @@ msgstr "Токен за ресетовање лозинке је већ гене
 #: src/engine/core-modules/auth/services/sign-in-up.service.ts
 msgid "Password too weak"
 msgstr "Лозинка је превише слаба"
+
+#. js-lingui-id: 6DTfDa
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Payload data is required."
+msgstr ""
 
 #. js-lingui-id: DpnDl6
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-command-menu-item-validator.service.ts
@@ -6112,6 +6259,16 @@ msgstr ""
 msgid "Saturday"
 msgstr "Субота"
 
+#. js-lingui-id: /2xAZf
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Scoped timeline records cannot be created manually."
+msgstr ""
+
+#. js-lingui-id: 4Vk68o
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Scoped timeline records cannot be modified manually."
+msgstr ""
+
 #. js-lingui-id: N/rFzD
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-connected-account-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-connected-account-standard-flat-field-metadata.util.ts
@@ -6192,10 +6349,25 @@ msgstr ""
 msgid "Share Everything"
 msgstr ""
 
+#. js-lingui-id: T8ab9e
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-standard-flat-field-metadata.util.ts
+msgid "Sharing Scope"
+msgstr ""
+
 #. js-lingui-id: e1k+No
 #: src/engine/core-modules/auth/auth.exception.ts
 msgid "Sign up is disabled."
 msgstr "Регистрација је онемогућена."
+
+#. js-lingui-id: iwWDOW
+#: src/engine/core-modules/auth/services/sign-in-up.service.ts
+msgid "Sign-up is restricted. Please request an invitation from a workspace admin."
+msgstr ""
+
+#. js-lingui-id: FaUvbl
+#: src/engine/core-modules/auth/services/sign-in-up.service.ts
+msgid "Sign-up is restricted. The first account must use an authorized admin email."
+msgstr ""
 
 #. js-lingui-id: 4AomZC
 #: src/engine/core-modules/auth/auth.exception.ts
@@ -6827,6 +6999,16 @@ msgstr "Екстензија датотеке се не поклапа са са
 #: src/modules/workflow/common/workspace-services/workflow-version-validation.workspace-service.ts
 msgid "The initial version of a workflow can not be deleted"
 msgstr "Почетна верзија тока рада не може се избрисати"
+
+#. js-lingui-id: TiTtKn
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "The internal entity assigned to your profile does not exist in this workspace."
+msgstr ""
+
+#. js-lingui-id: 2fR+sG
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "The internal entity assigned to your profile is invalid."
+msgstr ""
 
 #. js-lingui-id: hx2IZ4
 #: src/engine/metadata-modules/object-permission/object-permission.service.ts
@@ -8433,6 +8615,11 @@ msgstr "Радни простор није пронађен."
 msgid "Workspace not found. Please check the ID."
 msgstr ""
 
+#. js-lingui-id: gnOis8
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-standard-flat-field-metadata.util.ts
+msgid "Workspace public"
+msgstr ""
+
 #. js-lingui-id: osscRx
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-runner.exception.ts
 #: src/engine/workspace-datasource/exceptions/workspace-datasource.exception.ts
@@ -8520,6 +8707,51 @@ msgstr "Нисте овлашћени да извршите ову радњу."
 #: src/engine/api/common/common-query-runners/common-merge-many-query-runner.service.ts
 msgid "You can merge up to {MUTATION_MAX_MERGE_RECORDS} records at once."
 msgstr "Можете спојити до {MUTATION_MAX_MERGE_RECORDS} записа одједном."
+
+#. js-lingui-id: C9xmP5
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only attach your own notes to targets."
+msgstr ""
+
+#. js-lingui-id: vg9o1H
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only attach your own tasks to targets."
+msgstr ""
+
+#. js-lingui-id: OHrTFT
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only detect duplicates on records attached to your entity."
+msgstr ""
+
+#. js-lingui-id: yo5w9n
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only manage assignments for records already visible in your entity or not yet assigned."
+msgstr ""
+
+#. js-lingui-id: 2M9QYi
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only manage assignments for your current entity."
+msgstr ""
+
+#. js-lingui-id: 2OHOtv
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only merge records attached to your entity."
+msgstr ""
+
+#. js-lingui-id: OOIJWg
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only modify records that you created, unless you are an entity manager or a platform administrator."
+msgstr ""
+
+#. js-lingui-id: v4LIya
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only modify your own personal work records."
+msgstr ""
+
+#. js-lingui-id: u8xCgy
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "You can only mutate records attached to your entity."
+msgstr ""
 
 #. js-lingui-id: 5r5YRW
 #: src/engine/twenty-orm/field-operations/files-field-sync/files-field-sync.ts
@@ -8660,6 +8892,11 @@ msgstr "Немате дозволу за измену овог прегледа.
 msgid "You have exhausted your credits. Please upgrade your plan to continue."
 msgstr "Потрошили сте све своје кредите. Молимо вас, надоградите свој план да бисте наставили."
 
+#. js-lingui-id: J1U2MB
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "You must be authenticated as a user to create records tagged with an internal entity."
+msgstr ""
+
 #. js-lingui-id: nq15cs
 #: src/modules/blocklist/query-hooks/blocklist-create-one.pre-query.hook.ts
 msgid "You must be authenticated to manage blocklist."
@@ -8691,12 +8928,34 @@ msgstr "Ваш CalDAV сервер не подржава инкрементал�
 msgid "Your Password Has Been Successfully Changed"
 msgstr "Ваша лозинка је успешно промењена"
 
+#. js-lingui-id: ML1SHs
+#: src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service.ts
+msgid "Your profile is missing an active internal entity. Ask an administrator to assign one before creating records."
+msgstr ""
+
+#. js-lingui-id: W1tbSo
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Your profile is not attached to an active internal entity."
+msgstr ""
+
+#. js-lingui-id: R2jh/T
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+#: src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts
+msgid "Your profile is not attached to an internal entity."
+msgstr ""
+
 #. js-lingui-id: XxkUFT
 #: src/engine/metadata-modules/user-role/user-role.service.ts
 #: src/engine/metadata-modules/permissions/permissions.service.ts
 #: src/engine/metadata-modules/permissions/permissions.service.ts
 msgid "Your role in this workspace could not be found. Please contact your workspace administrator."
 msgstr "Ваша улога у овој радној околини није пронађена. Молимо контактирајте администратора ваше радне површине."
+
+#. js-lingui-id: 9/Fepi
+#: src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service.ts
+msgid "Your session is not attached to a workspace member."
+msgstr ""
 
 #. js-lingui-id: vPccnr
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-company-standard-flat-field-metadata.util.ts

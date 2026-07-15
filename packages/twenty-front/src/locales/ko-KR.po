@@ -632,6 +632,11 @@ msgstr "팀과 함께 고객 관계를 관리할 수 있는 공유 환경입니�
 msgid "A verification email has been sent to"
 msgstr "확인 이메일이 전송되었습니다"
 
+#. js-lingui-id: 95FJjB
+#: src/pages/onboarding/InviteTeam.tsx
+msgid "A workspace admin will invite new teammates. You can continue and start using the app."
+msgstr ""
+
 #. js-lingui-id: DqlQy+
 #: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldMaxValuesForm.tsx
 msgid "Ability to add more than one email address"
@@ -2885,6 +2890,12 @@ msgstr "캘린더 이벤트"
 msgid "Calendar event not found"
 msgstr "캘린더 이벤트를 찾을 수 없음"
 
+#. js-lingui-id: X9A2xC
+#: src/pages/onboarding/SyncEmails.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Calendar events"
+msgstr ""
+
 #. js-lingui-id: wLtx+m
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Calendar settings"
@@ -3253,9 +3264,9 @@ msgstr "전화번호를 클릭할 때 수행할 작업을 선택하세요"
 msgid "Choose what happens when you click an email"
 msgstr "이메일 주소를 클릭할 때 수행할 작업을 선택하세요"
 
-#. js-lingui-id: dPfKX/
+#. js-lingui-id: d36+kh
 #: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
-msgid "Choose which internal entities can see full details from this imported calendar."
+msgid "Choose which internal entities can see full details from this imported calendar. This does not grant permission to manage or disconnect the connected account."
 msgstr ""
 
 #. js-lingui-id: iuKdZU
@@ -3722,6 +3733,16 @@ msgstr "Microsoft와 연결"
 msgid "Connected accounts"
 msgstr "연결된 계정"
 
+#. js-lingui-id: g0faWK
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Connecting the account synchronises the following data into your workspace."
+msgstr ""
+
+#. js-lingui-id: wYgUKM
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Connection metadata"
+msgstr ""
+
 #. js-lingui-id: W4Kgwq
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Connection settings"
@@ -3757,6 +3778,12 @@ msgstr "연락처 자동 생성"
 #: src/modules/information-banner/components/billing/InformationBannerEndTrialPeriod.tsx
 msgid "Contact your admin to continue using Workflow or AI features."
 msgstr "워크플로 또는 AI 기능을 계속 사용하려면 관리자에게 문의하세요."
+
+#. js-lingui-id: gVfVfe
+#: src/pages/onboarding/SyncEmails.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Contacts"
+msgstr ""
 
 #. js-lingui-id: /5mghO
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
@@ -3807,6 +3834,7 @@ msgstr "컨텍스트 윈도우"
 #: src/pages/onboarding/SyncEmails.tsx
 #: src/pages/onboarding/SyncEmails.tsx
 #: src/pages/onboarding/SyncEmails.tsx
+#: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/CreateWorkspace.tsx
 #: src/pages/onboarding/CreateProfile.tsx
@@ -5817,8 +5845,10 @@ msgstr "이메일 도메인"
 #. js-lingui-id: BXEcos
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
+#: src/pages/onboarding/SyncEmails.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
 msgid "Emails"
 msgstr "이메일"
 
@@ -5910,6 +5940,11 @@ msgstr "우회 옵션 활성화"
 #: src/modules/ai/components/SettingsAgentModelCapabilities.tsx
 msgid "Enable model-specific features"
 msgstr "모델별 기능 활성화"
+
+#. js-lingui-id: 5h+VAk
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Encrypted OAuth tokens kept securely so we can keep your data in sync. You can disconnect at any time."
+msgstr ""
 
 #. js-lingui-id: IrI9pg
 #: src/modules/settings/admin-panel/health-status/maintenance-mode/components/SettingsAdminMaintenanceMode.tsx
@@ -7285,6 +7320,7 @@ msgstr "필터"
 
 #. js-lingui-id: JmZ/+d
 #: src/pages/onboarding/InviteTeam.tsx
+#: src/pages/onboarding/InviteTeam.tsx
 #: src/pages/onboarding/BookCallDecision.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectForm.tsx
 msgid "Finish"
@@ -8168,6 +8204,8 @@ msgstr "모든 이메일 가져오기"
 
 #. js-lingui-id: 2CeOI3
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownDefaultView.tsx
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 msgid "Import CSV"
 msgstr "CSV 가져오기"
 
@@ -10501,6 +10539,11 @@ msgstr "이 기록과의 이메일 교환이 아직 발생하지 않았습니다
 msgid "No entity linked"
 msgstr ""
 
+#. js-lingui-id: SZoWOE
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "No entity selected: only you will see full details until you change this in Settings."
+msgstr ""
+
 #. js-lingui-id: p3Hivn
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
 msgid "No evaluation inputs yet. Add your first test input above."
@@ -10962,6 +11005,11 @@ msgstr ""
 msgid "Not synced"
 msgstr "동기화되지 않음"
 
+#. js-lingui-id: 1lDrmM
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Note: email content visibility follows the workspace-wide privacy setting above; the entity selection below applies to calendar events."
+msgstr ""
+
 #. js-lingui-id: DYCPYF
 #: src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx
 msgid "Nothing to see"
@@ -11266,6 +11314,11 @@ msgstr "{firstDay}일과 {secondDay}일에만"
 #: src/modules/workflow/workflow-trigger/utils/cron-to-human/descriptors/getDayOfWeekDescription.ts
 msgid "only on {remainingDays} and {lastDay}"
 msgstr "{remainingDays}일과 {lastDay}일에만"
+
+#. js-lingui-id: 7o2DVh
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Only the connected account owner can change account-level settings."
+msgstr ""
 
 #. js-lingui-id: laL/0u
 #: src/modules/activities/group-calendar/components/GroupCalendarAudienceSection.tsx
@@ -11641,6 +11694,16 @@ msgstr "내가 이메일을 보낸 사람과 받은 사람."
 msgid "People I’ve sent emails to."
 msgstr "내가 이메일을 보낸 사람."
 
+#. js-lingui-id: A67mH8
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "People you exchange emails with or share calendar events with — added as Persons in your workspace."
+msgstr ""
+
+#. js-lingui-id: ncOTY7
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "People you exchange emails with or share calendar events with — automatically added as Persons if auto-creation is enabled below."
+msgstr ""
+
 #. js-lingui-id: qMTN0w
 #: src/pages/settings/ai/SettingsAiUsageUserDetail.tsx
 msgid "Per-day AI consumption."
@@ -11752,6 +11815,11 @@ msgstr "보기 선택"
 #: src/modules/side-panel/utils/getSidePanelSubPageTitle.ts
 msgid "Pick an object"
 msgstr "개체 선택"
+
+#. js-lingui-id: Rd3K3e
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Pick the internal entities allowed to see the full content of your imported calendar. Unselected entities will only see \"Busy\" slots on your calendar (no title, location or attendees) — they will keep seeing your availability and your entity badge. You can change this later in Settings."
+msgstr ""
 
 #. js-lingui-id: m+4RCd
 #: src/modules/onboarding/components/SuperadminWorkspaceSetup.tsx
@@ -13669,6 +13737,12 @@ msgstr "워크스페이스 모델 선택기에서 권장으로 표시할 모델�
 msgid "Select your preferred language"
 msgstr "선호하는 언어 선택"
 
+#. js-lingui-id: mmxYLE
+#. placeholder {0}: sortedSelectedEntityNames.join(', ')
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Selected: {0}."
+msgstr ""
+
 #. js-lingui-id: JlFcis
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
@@ -14460,6 +14534,16 @@ msgstr "주제 공유되지 않음"
 msgid "Subject, body and attachments will be shared with your team."
 msgstr "주제, 본문, 첨부 파일이 팀과 공유됩니다."
 
+#. js-lingui-id: 2wm/+7
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Subject, body, sender and recipients of received and sent emails (attachments stay on the provider's servers)."
+msgstr ""
+
+#. js-lingui-id: tlWlgg
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Subject, body, sender and recipients of sent and received messages."
+msgstr ""
+
 #. js-lingui-id: hQRttt
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormFiller.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
@@ -14935,6 +15019,11 @@ msgstr "조직의 이름"
 msgid "The page you're seeking is either gone or never was. Let's get you back on track"
 msgstr "찾고 계신 페이지는 이미 사라졌거나 존재하지 않습니다. 다시 정상화해 드리겠습니다"
 
+#. js-lingui-id: v+ZNAT
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "The selected provider will sync the following data into your workspace."
+msgstr ""
+
 #. js-lingui-id: jrCR2X
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
 msgid "The selected record will be passed to your workflow"
@@ -15154,6 +15243,11 @@ msgstr "이 키는 본문 입력을 통해 설정해야 합니다"
 msgid "This model will be removed from the provider. You can re-add it later."
 msgstr "이 모델은 공급자에서 제거됩니다. 나중에 다시 추가할 수 있습니다."
 
+#. js-lingui-id: UD/dgc
+#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+msgid "This only controls visibility of imported event details. Managing or disconnecting the Outlook account remains limited to the account owner."
+msgstr ""
+
 #. js-lingui-id: NCA55L
 #: src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx
 msgid "This page has no content"
@@ -15346,6 +15440,16 @@ msgstr "제목"
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
 #: src/modules/activities/group-calendar/components/GroupCalendarEventFormFields.tsx
 msgid "Title"
+msgstr ""
+
+#. js-lingui-id: NcIzg9
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Title, description, location, attendees, dates and recurrence — masked to \"Busy\" for entities that aren't granted access below."
+msgstr ""
+
+#. js-lingui-id: Admb5Q
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Title, description, location, attendees, dates and recurrence."
 msgstr ""
 
 #. js-lingui-id: /jQctM
@@ -15913,6 +16017,11 @@ msgstr ""
 #. js-lingui-id: 9dX/SD
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 msgid "Unordered list with bullets"
+msgstr ""
+
+#. js-lingui-id: ZIdT8z
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "Unselected entities will only see \"Busy\" on your calendar slots — they won't see the event title, description, attendees, or location, only that you're unavailable in that time range, along with your entity badge."
 msgstr ""
 
 #. js-lingui-id: wja8aL
@@ -16804,6 +16913,16 @@ msgstr "무엇을 도와드릴까요?"
 msgid "What this API can do: Select a user role to define its permissions."
 msgstr "이 API가 할 수 있는 것: 사용자의 권한을 정의하기 위해 역할을 선택하세요."
 
+#. js-lingui-id: rPrVeZ
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "What will be imported"
+msgstr ""
+
+#. js-lingui-id: KWLbSw
+#: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
+msgid "What's imported from this account"
+msgstr ""
+
 #. js-lingui-id: m7GziZ
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "When a deal's stage changes to Closed Won, create a task assigned to the deal owner, due 7 days after the close date, with title \"Post-sale check-in\" and the company name in the description."
@@ -16846,6 +16965,11 @@ msgstr "조건"
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
 msgid "Whether this model supports chain-of-thought reasoning"
 msgstr "이 모델이 Chain-of-Thought 추론을 지원하는지 여부"
+
+#. js-lingui-id: 1ODxih
+#: src/pages/onboarding/SyncEmails.tsx
+msgid "Who can see the details"
+msgstr ""
 
 #. js-lingui-id: le3xb6
 #: src/modules/activities/group-calendar/components/GroupCalendarAudienceSection.tsx
@@ -17254,6 +17378,11 @@ msgstr "모든 매핑이 삭제됩니다."
 #: src/modules/settings/domains/components/SettingsSubdomain.tsx
 msgid "You're about to change your workspace subdomain. This action will log out all users."
 msgstr "워크스페이스 서브도메인을 변경하려고 합니다. 이 작업은 모든 사용자의 로그아웃을 유도할 것입니다."
+
+#. js-lingui-id: FJe7r9
+#: src/pages/onboarding/InviteTeam.tsx
+msgid "You're all set"
+msgstr ""
 
 #. js-lingui-id: Z5uTAF
 #: src/modules/ai/components/AIChatNoMoreBillingCreditsBanner.tsx
