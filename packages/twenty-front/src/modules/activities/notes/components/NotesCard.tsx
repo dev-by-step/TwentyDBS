@@ -1,11 +1,10 @@
 import { CustomResolverFetchMoreLoader } from '@/activities/components/CustomResolverFetchMoreLoader';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
+import { useCanCreateActivity } from '@/activities/hooks/useCanCreateActivity';
 import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
 import { NoteList } from '@/activities/notes/components/NoteList';
 import { useNotes } from '@/activities/notes/hooks/useNotes';
-import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
@@ -45,15 +44,9 @@ export const NotesCard = () => {
 
   const isNotesEmpty = notes.length === 0;
 
-  const { objectMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: targetRecord.targetObjectNameSingular,
+  const canCreateNote = useCanCreateActivity({
+    activityObjectNameSingular: CoreObjectNameSingular.Note,
   });
-
-  const objectPermissions = useObjectPermissionsForObject(
-    objectMetadataItem.id,
-  );
-
-  const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
 
   if (loading && isNotesEmpty) {
     return <SkeletonLoader />;
@@ -74,7 +67,7 @@ export const NotesCard = () => {
             {t`There are no associated notes with this record.`}
           </AnimatedPlaceholderEmptySubTitle>
         </AnimatedPlaceholderEmptyTextContainer>
-        {hasObjectUpdatePermissions && (
+        {canCreateNote && (
           <Button
             Icon={IconPlus}
             title={t`New note`}
@@ -97,7 +90,7 @@ export const NotesCard = () => {
         notes={notes}
         totalCount={totalCountNotes}
         button={
-          hasObjectUpdatePermissions && (
+          canCreateNote && (
             <Button
               Icon={IconPlus}
               size="small"
