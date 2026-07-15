@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { msg } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { In } from 'typeorm';
 
 import {
   CommonQueryRunnerException,
@@ -105,13 +106,17 @@ export class InternalEntityAccessPolicyService {
       objectName,
       payload,
     );
-    const scopedFilter = await this.buildScopedFilter(
-      authContext,
-      objectName,
-      'read',
-      sanitizedPayload.filter,
-    );
-
+    const scopedFilter =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          this.buildScopedFilter(
+            authContext,
+            objectName,
+            'read',
+            sanitizedPayload.filter,
+          ),
+        authContext,
+      );
     if (!isDefined(scopedFilter)) {
       return sanitizedPayload;
     }
@@ -132,13 +137,17 @@ export class InternalEntityAccessPolicyService {
       objectName,
       payload,
     );
-    const scopedFilter = await this.buildScopedFilter(
-      authContext,
-      objectName,
-      'read',
-      sanitizedPayload.filter,
-    );
-
+    const scopedFilter =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          this.buildScopedFilter(
+            authContext,
+            objectName,
+            'read',
+            sanitizedPayload.filter,
+          ),
+        authContext,
+      );
     if (!isDefined(scopedFilter)) {
       return sanitizedPayload;
     }
@@ -159,13 +168,17 @@ export class InternalEntityAccessPolicyService {
       objectName,
       payload,
     );
-    const scopedFilter = await this.buildScopedFilter(
-      authContext,
-      objectName,
-      'read',
-      sanitizedPayload.filter,
-    );
-
+    const scopedFilter =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          this.buildScopedFilter(
+            authContext,
+            objectName,
+            'read',
+            sanitizedPayload.filter,
+          ),
+        authContext,
+      );
     if (!isDefined(scopedFilter)) {
       return sanitizedPayload;
     }
@@ -267,7 +280,10 @@ export class InternalEntityAccessPolicyService {
     objectName: string,
     payload: CreateOneResolverArgs<Record<string, unknown>>,
   ): Promise<CreateOneResolverArgs<Record<string, unknown>>> {
-    await this.assertCanCreate(authContext, objectName, payload.data);
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      () => this.assertCanCreate(authContext, objectName, payload.data),
+      authContext,
+    );
 
     if (isUserAuthContext(authContext) && objectName === 'internalEntity') {
       return {
@@ -288,9 +304,11 @@ export class InternalEntityAccessPolicyService {
     objectName: string,
     payload: CreateManyResolverArgs<Record<string, unknown>>,
   ): Promise<CreateManyResolverArgs<Record<string, unknown>>> {
-    for (const data of payload.data) {
-      await this.assertCanCreate(authContext, objectName, data);
-    }
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      for (const data of payload.data) {
+        await this.assertCanCreate(authContext, objectName, data);
+      }
+    }, authContext);
 
     if (isUserAuthContext(authContext) && objectName === 'internalEntity') {
       return {
@@ -927,12 +945,9 @@ export class InternalEntityAccessPolicyService {
           ],
         };
       case 'attachment':
-        return {
-          or: [
-            { authorId: { eq: currentWorkspaceMemberId } },
-            this.buildCreatedByWorkspaceMemberFilter(currentWorkspaceMemberId),
-          ],
-        };
+        return this.buildCreatedByWorkspaceMemberFilter(
+          currentWorkspaceMemberId,
+        );
       case 'noteTarget': {
         const noteIds = await this.listAccessibleNoteIds(
           authContext.workspace.id,
@@ -1439,7 +1454,9 @@ export class InternalEntityAccessPolicyService {
         find: (args: unknown) => Promise<Record<string, unknown>[]>;
       }
     ).find({
-      where: this.buildCreatedByWorkspaceMemberFilter(workspaceMemberId),
+      where: {
+        createdByWorkspaceMemberId: workspaceMemberId,
+      },
     });
 
     return records
@@ -1459,12 +1476,10 @@ export class InternalEntityAccessPolicyService {
         find: (args: unknown) => Promise<Record<string, unknown>[]>;
       }
     ).find({
-      where: {
-        or: [
-          this.buildCreatedByWorkspaceMemberFilter(workspaceMemberId),
-          { assigneeId: { eq: workspaceMemberId } },
-        ],
-      },
+      where: [
+        { createdByWorkspaceMemberId: workspaceMemberId },
+        { assigneeId: workspaceMemberId },
+      ],
     });
 
     return records
@@ -1492,9 +1507,7 @@ export class InternalEntityAccessPolicyService {
       }
     ).find({
       where: {
-        [entityFieldName]: {
-          in: entityIds,
-        },
+        [entityFieldName]: In(entityIds),
       },
     });
 
