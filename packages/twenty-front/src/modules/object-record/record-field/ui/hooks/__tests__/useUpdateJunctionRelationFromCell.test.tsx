@@ -71,54 +71,6 @@ const getWrapper = (store: ReturnType<typeof createStore>) =>
     return <JotaiProvider store={store}>{children}</JotaiProvider>;
   };
 
-const buildPersonSourceRecord = () => ({
-  id: recordId,
-  __typename: 'Person',
-  [fieldName]: [],
-});
-
-const buildInternalEntityTargetRecord = () => ({
-  id: targetRecordId,
-  __typename: 'InternalEntity',
-  name: 'WEKNOW',
-});
-
-const buildInternalEntitySearchRecord = () => ({
-  recordId: targetRecordId,
-  label: 'WEKNOW',
-  objectLabelSingular: 'Internal Entity',
-  objectNameSingular: 'internalEntity',
-  tsRank: 1,
-  tsRankCD: 1,
-  record: buildInternalEntityTargetRecord(),
-});
-
-const buildSelectedMorphItem = () => ({
-  recordId: targetRecordId,
-  objectMetadataId: 'internal-entity-metadata-id',
-  isSelected: true,
-});
-
-const renderUpdateJunctionRelationFromCell = (
-  store: ReturnType<typeof createStore>,
-) =>
-  renderHook(
-    () =>
-      useUpdateJunctionRelationFromCell({
-        fieldMetadataItem: { settings: {} } as any,
-        fieldDefinition: {
-          metadata: {
-            fieldName,
-            objectMetadataNameSingular: 'person',
-            relationObjectMetadataId: 'junction-metadata-id',
-            relationObjectMetadataNameSingular: 'personInternalEntity',
-          },
-        } as any,
-        recordId,
-      }),
-    { wrapper: getWrapper(store) },
-  );
-
 describe('useUpdateJunctionRelationFromCell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -158,23 +110,52 @@ describe('useUpdateJunctionRelationFromCell', () => {
 
     mockCreateJunctionRecord.mockReturnValueOnce(deferredCreate.promise);
 
-    store.set(
-      recordStoreFamilyState.atomFamily(recordId),
-      buildPersonSourceRecord(),
-    );
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
 
-    store.set(
-      searchRecordStoreFamilyState.atomFamily(targetRecordId),
-      buildInternalEntitySearchRecord(),
-    );
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
 
-    const { result } = renderUpdateJunctionRelationFromCell(store);
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
 
     let updatePromise: Promise<void> | undefined;
 
     act(() => {
       updatePromise = result.current.updateJunctionRelationFromCell({
-        morphItem: buildSelectedMorphItem() as any,
+        morphItem: {
+          recordId: targetRecordId,
+          objectMetadataId: 'internal-entity-metadata-id',
+          isSelected: true,
+        } as any,
       });
     });
 
@@ -184,9 +165,11 @@ describe('useUpdateJunctionRelationFromCell', () => {
       internalEntityId: targetRecordId,
     });
 
-    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual(
-      buildPersonSourceRecord(),
-    );
+    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
 
     await act(async () => {
       deferredCreate.resolve(undefined);
@@ -204,7 +187,11 @@ describe('useUpdateJunctionRelationFromCell', () => {
           __typename: 'PersonInternalEntity',
           personId: recordId,
           internalEntityId: targetRecordId,
-          internalEntity: buildInternalEntityTargetRecord(),
+          internalEntity: {
+            id: targetRecordId,
+            __typename: 'InternalEntity',
+            name: 'WEKNOW',
+          },
         },
       ],
     });
@@ -216,28 +203,181 @@ describe('useUpdateJunctionRelationFromCell', () => {
 
     mockCreateJunctionRecord.mockRejectedValueOnce(mutationError);
 
-    store.set(
-      recordStoreFamilyState.atomFamily(recordId),
-      buildPersonSourceRecord(),
-    );
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
 
-    store.set(
-      searchRecordStoreFamilyState.atomFamily(targetRecordId),
-      buildInternalEntitySearchRecord(),
-    );
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
 
-    const { result } = renderUpdateJunctionRelationFromCell(store);
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
 
     await act(async () => {
       await expect(
         result.current.updateJunctionRelationFromCell({
-          morphItem: buildSelectedMorphItem() as any,
+          morphItem: {
+            recordId: targetRecordId,
+            objectMetadataId: 'internal-entity-metadata-id',
+            isSelected: true,
+          } as any,
         }),
       ).rejects.toThrow('create junction failed');
     });
 
-    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual(
-      buildPersonSourceRecord(),
+    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
+  });
+
+  it('should not create a duplicate junction record when already linked', async () => {
+    const store = createStore();
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [
+        {
+          id: 'existing-junction-id',
+          __typename: 'PersonInternalEntity',
+          personId: recordId,
+          internalEntityId: targetRecordId,
+          internalEntity: {
+            id: targetRecordId,
+            __typename: 'InternalEntity',
+            name: 'WEKNOW',
+          },
+        },
+      ],
+    });
+
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
     );
+
+    await act(async () => {
+      await result.current.updateJunctionRelationFromCell({
+        morphItem: {
+          recordId: targetRecordId,
+          objectMetadataId: 'internal-entity-metadata-id',
+          isSelected: true,
+        } as any,
+      });
+    });
+
+    expect(mockCreateJunctionRecord).not.toHaveBeenCalled();
+  });
+
+  it('should handle duplicate relation backend error without throwing', async () => {
+    const store = createStore();
+
+    mockCreateJunctionRecord.mockRejectedValueOnce(
+      new Error('A record with this relationship already exists.'),
+    );
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
+
+    store.set(searchRecordStoreFamilyState.atomFamily(targetRecordId), {
+      recordId: targetRecordId,
+      label: 'WEKNOW',
+      objectLabelSingular: 'Internal Entity',
+      objectNameSingular: 'internalEntity',
+      tsRank: 1,
+      tsRankCD: 1,
+      record: {
+        id: targetRecordId,
+        __typename: 'InternalEntity',
+        name: 'WEKNOW',
+      },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.updateJunctionRelationFromCell({
+          morphItem: {
+            recordId: targetRecordId,
+            objectMetadataId: 'internal-entity-metadata-id',
+            isSelected: true,
+          } as any,
+        }),
+      ).resolves.toBeUndefined();
+    });
   });
 });

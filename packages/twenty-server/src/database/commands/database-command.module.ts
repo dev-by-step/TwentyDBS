@@ -7,6 +7,7 @@ import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-i
 import { InstanceCommandGenerationService } from 'src/database/commands/instance-command-generation.service';
 import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list-and-delete-orphaned-workspace-entities.command';
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
+import { ResetSharedCalendarDemoCommand } from 'src/database/commands/reset-shared-calendar-demo.command';
 import { RunInstanceCommandsCommand } from 'src/database/commands/run-instance-commands.command';
 import { UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/upgrade-version-command.module';
 import { WorkspaceExportModule } from 'src/database/commands/workspace-export/workspace-export.module';
@@ -30,7 +31,10 @@ import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
 import { UpgradeStatusCommand } from 'src/engine/core-modules/upgrade/commands/upgrade-status.command';
 import { UpgradeModule } from 'src/engine/core-modules/upgrade/upgrade.module';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { SharedCalendarDemoService } from 'src/engine/core-modules/calendar/shared-calendar-demo.service';
+import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
@@ -50,7 +54,11 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([WorkspaceEntity]),
+    TypeOrmModule.forFeature([
+      WorkspaceEntity,
+      UserEntity,
+      CalendarChannelEntity,
+    ]),
     WorkspaceExportModule,
     // Cron command dependencies
     MessagingImportManagerModule,
@@ -98,6 +106,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     EnforceUsageCapCronCommand,
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
+    ResetSharedCalendarDemoCommand,
+    SharedCalendarDemoService,
   ],
 })
 export class DatabaseCommandModule {}

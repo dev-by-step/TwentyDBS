@@ -52,6 +52,18 @@ export const sanitizeRecordInput = ({
           return undefined;
         }
 
+        if (
+          isDefined(potentialJoinColumnNameFieldMetadataItem) &&
+          potentialJoinColumnNameFieldMetadataItem.relation?.type ===
+            RelationType.MANY_TO_ONE &&
+          isDefined(
+            recordInput[potentialJoinColumnNameFieldMetadataItem.name]?.connect
+              ?.where,
+          )
+        ) {
+          return undefined;
+        }
+
         if (fieldMetadataItem?.isNullable === false && fieldValue == null) {
           return undefined;
         }
@@ -59,10 +71,19 @@ export const sanitizeRecordInput = ({
         if (
           isDefined(fieldMetadataItem) &&
           fieldMetadataItem.type === FieldMetadataType.RELATION &&
-          fieldMetadataItem.relation?.type === RelationType.MANY_TO_ONE &&
-          !isDefined(recordInput[fieldMetadataItem.name]?.connect?.where)
+          fieldMetadataItem.relation?.type === RelationType.MANY_TO_ONE
         ) {
-          return undefined;
+          if (fieldValue === null) {
+            return [fieldName, null];
+          }
+
+          if (recordInput[fieldMetadataItem.name]?.disconnect === true) {
+            return [fieldName, { disconnect: true }];
+          }
+
+          if (!isDefined(recordInput[fieldMetadataItem.name]?.connect?.where)) {
+            return undefined;
+          }
         }
 
         if (

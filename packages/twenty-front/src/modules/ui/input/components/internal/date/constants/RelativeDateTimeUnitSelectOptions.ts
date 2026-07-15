@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import { RELATIVE_DATE_UNITS_SELECT_OPTIONS } from '@/ui/input/components/internal/date/constants/RelativeDateUnitSelectOptions';
 import { type RelativeDateFilterUnit } from 'twenty-shared/utils';
 
@@ -9,7 +10,7 @@ type RelativeDateUnitOption = {
 export const RELATIVE_DATETIME_UNITS_SELECT_OPTIONS: RelativeDateUnitOption[] =
   [
     ...RELATIVE_DATE_UNITS_SELECT_OPTIONS,
-    { value: 'HOUR', label: 'Hour' },
-    { value: 'MINUTE', label: 'Minute' },
-    { value: 'SECOND', label: 'Second' },
+    { value: 'HOUR', label: msg`Hour`.id },
+    { value: 'MINUTE', label: msg`Minute`.id },
+    { value: 'SECOND', label: msg`Second`.id },
   ];

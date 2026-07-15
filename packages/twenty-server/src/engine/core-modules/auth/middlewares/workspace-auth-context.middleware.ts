@@ -14,6 +14,9 @@ import { buildApplicationAuthContext } from 'src/engine/core-modules/auth/utils/
 import { buildPendingActivationUserAuthContext } from 'src/engine/core-modules/auth/utils/build-pending-activation-user-auth-context.util';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 
+const SPREADSHEET_IMPORT_BYPASS_SOURCE_TAGGING_HEADER_NAME =
+  'x-spreadsheet-import-bypass-source-tagging';
+
 @Injectable()
 export class WorkspaceAuthContextMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction) {
@@ -32,10 +35,14 @@ export class WorkspaceAuthContextMiddleware implements NestMiddleware {
 
   private buildAuthContext(req: Request): WorkspaceAuthContext {
     if (isDefined(req.apiKey)) {
-      return buildApiKeyAuthContext({
-        workspace: req.workspace!,
-        apiKey: req.apiKey,
-      });
+      return {
+        ...buildApiKeyAuthContext({
+          workspace: req.workspace!,
+          apiKey: req.apiKey,
+        }),
+        shouldBypassInternalEntitySourceTagging:
+          this.shouldBypassInternalEntitySourceTagging(req),
+      };
     }
 
     if (
@@ -44,33 +51,59 @@ export class WorkspaceAuthContextMiddleware implements NestMiddleware {
       isDefined(req.workspaceMember) &&
       isDefined(req.user)
     ) {
-      return buildUserAuthContext({
-        workspace: req.workspace!,
-        userWorkspaceId: req.userWorkspaceId,
-        user: req.user,
-        workspaceMemberId: req.workspaceMemberId,
-        workspaceMember: req.workspaceMember,
-      });
+      return {
+        ...buildUserAuthContext({
+          workspace: req.workspace!,
+          userWorkspaceId: req.userWorkspaceId,
+          user: req.user,
+          activeInternalEntityId: req.activeInternalEntityId,
+          workspaceMemberId: req.workspaceMemberId,
+          workspaceMember: req.workspaceMember,
+        }),
+        shouldBypassInternalEntitySourceTagging:
+          this.shouldBypassInternalEntitySourceTagging(req),
+      };
     }
 
     if (isDefined(req.application)) {
-      return buildApplicationAuthContext({
-        workspace: req.workspace!,
-        application: req.application,
-      });
+      return {
+        ...buildApplicationAuthContext({
+          workspace: req.workspace!,
+          application: req.application,
+        }),
+        shouldBypassInternalEntitySourceTagging:
+          this.shouldBypassInternalEntitySourceTagging(req),
+      };
     }
 
     if (isDefined(req.userWorkspaceId) && isDefined(req.user)) {
-      return buildPendingActivationUserAuthContext({
-        workspace: req.workspace!,
-        userWorkspaceId: req.userWorkspaceId,
-        user: req.user,
-      });
+      return {
+        ...buildPendingActivationUserAuthContext({
+          workspace: req.workspace!,
+          userWorkspaceId: req.userWorkspaceId,
+          user: req.user,
+        }),
+        shouldBypassInternalEntitySourceTagging:
+          this.shouldBypassInternalEntitySourceTagging(req),
+      };
     }
 
     throw new AuthException(
       'No authentication context found',
       AuthExceptionCode.UNAUTHENTICATED,
     );
+  }
+
+  private shouldBypassInternalEntitySourceTagging(
+    req: Pick<Request, 'headers'>,
+  ) {
+    const rawHeader =
+      req.headers?.[SPREADSHEET_IMPORT_BYPASS_SOURCE_TAGGING_HEADER_NAME];
+
+    if (Array.isArray(rawHeader)) {
+      return rawHeader.includes('true');
+    }
+
+    return rawHeader === 'true';
   }
 }

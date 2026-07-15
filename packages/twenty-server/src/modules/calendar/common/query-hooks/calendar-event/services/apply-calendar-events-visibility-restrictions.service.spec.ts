@@ -1,13 +1,13 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
-
 import { CalendarChannelVisibility } from 'twenty-shared/types';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
+import { CALENDAR_PRIVACY_OCCUPIED_TITLE } from 'src/modules/calendar/common/constants/calendar-privacy.constants';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
 import { CalendarPrivacyService } from 'src/modules/calendar/common/services/calendar-privacy.service';
 
@@ -38,6 +38,7 @@ const createMockCalendarEvent = (
   updatedAt: '2024-03-20T09:00:00Z',
   iCalUid: '',
   conferenceSolution: '',
+  sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
   calendarChannelEventAssociations: [],
   calendarEventParticipants: [],
 });
@@ -67,7 +68,25 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
 
   const mockCalendarPrivacyService = {
     getCalendarEventMaskMap: jest.fn().mockResolvedValue(new Map()),
-    applyInternalEntityPrivacyToWorkspaceCalendarEvents: jest.fn(),
+    applyInternalEntityPrivacyToWorkspaceCalendarEvents: jest.fn(
+      (
+        calendarEvents: CalendarEventWorkspaceEntity[],
+        calendarEventMaskMap: Map<string, boolean>,
+      ) => {
+        for (const calendarEvent of calendarEvents) {
+          if (!calendarEventMaskMap.get(calendarEvent.id)) {
+            continue;
+          }
+
+          calendarEvent.title = CALENDAR_PRIVACY_OCCUPIED_TITLE;
+          calendarEvent.description = null;
+          calendarEvent.location = null;
+          calendarEvent.conferenceSolution = null;
+          calendarEvent.calendarEventParticipants = [];
+          calendarEvent.conferenceLink = null as never;
+        }
+      },
+    ),
   };
 
   const mockGlobalWorkspaceOrmManager = {
@@ -117,6 +136,9 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
 
     // Clear all mocks before each test
     jest.clearAllMocks();
+    mockCalendarPrivacyService.getCalendarEventMaskMap.mockResolvedValue(
+      new Map(),
+    );
   });
 
   it('should return calendar event without obfuscated title and description if the visibility is SHARE_EVERYTHING', async () => {
@@ -149,8 +171,8 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     expect(
       result.every(
         (item) =>
-          item.title !== FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED &&
-          item.description !== FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+          item.title === 'Test Event' &&
+          item.description === 'Test Description',
       ),
     ).toBe(true);
     expect(mockConnectedAccountRepository.find).not.toHaveBeenCalled();
@@ -181,6 +203,9 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     });
 
     mockConnectedAccountRepository.find.mockResolvedValue([]);
+    mockCalendarPrivacyService.getCalendarEventMaskMap.mockResolvedValue(
+      new Map([['1', true]]),
+    );
 
     const result = await service.applyCalendarEventsVisibilityRestrictions(
       calendarEvents,
@@ -191,8 +216,12 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     expect(result).toEqual([
       {
         ...calendarEvents[0],
-        title: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
-        description: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceLink: null,
+        conferenceSolution: null,
+        calendarEventParticipants: [],
       },
     ]);
   });
@@ -235,8 +264,8 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     expect(
       result.every(
         (item) =>
-          item.title !== FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED &&
-          item.description !== FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+          item.title === 'Test Event' &&
+          item.description === 'Test Description',
       ),
     ).toBe(true);
   });
@@ -322,6 +351,13 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
     mockConnectedAccountRepository.find.mockResolvedValue([
       { id: 'connected-account-2' },
     ]);
+    mockCalendarPrivacyService.getCalendarEventMaskMap.mockResolvedValue(
+      new Map([
+        ['1', false],
+        ['2', false],
+        ['3', true],
+      ]),
+    );
 
     const result = await service.applyCalendarEventsVisibilityRestrictions(
       calendarEvents,
@@ -334,8 +370,12 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       calendarEvents[1],
       {
         ...calendarEvents[2],
-        title: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
-        description: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceLink: null,
+        conferenceSolution: null,
+        calendarEventParticipants: [],
       },
     ]);
   });
@@ -379,6 +419,13 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
         connectedAccountId: 'connected-account-3',
       },
     ]);
+    mockCalendarPrivacyService.getCalendarEventMaskMap.mockResolvedValue(
+      new Map([
+        ['1', false],
+        ['2', true],
+        ['3', true],
+      ]),
+    );
 
     // userId is undefined (api key request), so connected account check is skipped
     // METADATA events should be obfuscated
@@ -393,16 +440,59 @@ describe('ApplyCalendarEventsVisibilityRestrictionsService', () => {
       calendarEvents[0],
       {
         ...calendarEvents[1],
-        title: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
-        description: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceLink: null,
+        conferenceSolution: null,
+        calendarEventParticipants: [],
       },
       {
         ...calendarEvents[2],
-        title: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
-        description: FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+        title: CALENDAR_PRIVACY_OCCUPIED_TITLE,
+        description: null,
+        location: null,
+        conferenceLink: null,
+        conferenceSolution: null,
+        calendarEventParticipants: [],
       },
     ]);
     expect(mockConnectedAccountRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('should keep full details for a metadata event when internal entity privacy does not require masking', async () => {
+    const calendarEvents = [
+      createMockCalendarEvent('1', 'Test Event', 'Test Description'),
+    ];
+
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      {
+        calendarEventId: '1',
+        calendarChannelId: '1',
+      },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      {
+        id: '1',
+        visibility: CalendarChannelVisibility.METADATA,
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    mockUserWorkspaceRepository.findOne.mockResolvedValue({
+      id: 'user-workspace-id',
+    });
+    mockConnectedAccountRepository.find.mockResolvedValue([]);
+    mockCalendarPrivacyService.getCalendarEventMaskMap.mockResolvedValue(
+      new Map([['1', false]]),
+    );
+
+    const result = await service.applyCalendarEventsVisibilityRestrictions(
+      calendarEvents,
+      'test-workspace-id',
+      'user-id',
+    );
+
+    expect(result).toEqual(calendarEvents);
   });
 
   it('should return early when there are no calendar events to process', async () => {

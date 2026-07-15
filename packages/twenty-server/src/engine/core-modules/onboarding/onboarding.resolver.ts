@@ -1,9 +1,10 @@
 import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
-import { Mutation } from '@nestjs/graphql';
+import { Args, Mutation } from '@nestjs/graphql';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { CompleteSuperadminWorkspaceSetupInput } from 'src/engine/core-modules/onboarding/dtos/complete-superadmin-workspace-setup.input';
 import { OnboardingStepSuccessDTO } from 'src/engine/core-modules/onboarding/dtos/onboarding-step-success.dto';
 import { OnboardingService } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -44,6 +45,34 @@ export class OnboardingResolver {
     await this.onboardingService.setOnboardingBookOnboardingPending({
       workspaceId: workspace.id,
       value: false,
+    });
+
+    return { success: true };
+  }
+
+  @Mutation(() => OnboardingStepSuccessDTO)
+  @UseGuards(NoPermissionGuard)
+  async skipInviteTeamOnboardingStep(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<OnboardingStepSuccessDTO> {
+    await this.onboardingService.advanceFromInviteTeamStep({
+      workspaceId: workspace.id,
+    });
+
+    return { success: true };
+  }
+
+  @Mutation(() => OnboardingStepSuccessDTO)
+  @UseGuards(NoPermissionGuard)
+  async completeSuperadminWorkspaceSetup(
+    @Args('input') input: CompleteSuperadminWorkspaceSetupInput,
+    @AuthUser() user: AuthContextUser,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<OnboardingStepSuccessDTO> {
+    await this.onboardingService.completeSuperadminWorkspaceSetup({
+      user,
+      workspace,
+      input,
     });
 
     return { success: true };

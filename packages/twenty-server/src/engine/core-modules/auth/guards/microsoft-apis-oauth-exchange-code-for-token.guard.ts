@@ -45,6 +45,7 @@ export class MicrosoftAPIsOauthExchangeCodeForTokenGuard extends AuthGuard(
         redirectLocation: state.redirectLocation,
         calendarVisibility: state.calendarVisibility,
         messageVisibility: state.messageVisibility,
+        visibleInternalEntityIds: state.visibleInternalEntityIds,
         skipMessageChannelConfiguration: state.skipMessageChannelConfiguration,
       });
 

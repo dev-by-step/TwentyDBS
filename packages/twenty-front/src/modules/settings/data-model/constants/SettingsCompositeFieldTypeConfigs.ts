@@ -1,3 +1,4 @@
+import { type MessageDescriptor } from '@lingui/core';
 import {
   type FieldActorValue,
   type FieldAddressValue,
@@ -32,7 +33,7 @@ import { FieldMetadataType } from '~/generated-metadata/graphql';
 
 export type CompositeSubFieldConfig<T> = {
   subFieldName: keyof T;
-  subFieldLabel: string;
+  subFieldLabel: string | MessageDescriptor;
   isImportable: boolean;
   isFilterable: boolean;
   isIncludedInUniqueConstraint: boolean;

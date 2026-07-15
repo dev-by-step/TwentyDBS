@@ -12,6 +12,13 @@ export const timelineCalendarEventFragment = gql`
     isFullDay
     visibility
     entityColor
+    entityName
+    ownerEntityId
+    responsibleEntities {
+      id
+      name
+      color
+    }
     participants {
       ...TimelineCalendarEventParticipantFragment
     }

@@ -23,7 +23,7 @@ export const getMatchedColumnsWithFuse = ({
   const matchedColumns: SpreadsheetColumn[] = [];
 
   const fieldsToSearch = new Fuse(fields, {
-    keys: ['label'],
+    keys: ['label', 'key', 'searchAliases'],
     includeScore: true,
     ignoreLocation: true,
     threshold: 0.3,

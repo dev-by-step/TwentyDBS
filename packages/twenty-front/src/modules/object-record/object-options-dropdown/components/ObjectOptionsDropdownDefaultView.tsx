@@ -1,6 +1,7 @@
 import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
+import { useOpenObjectRecordsSpreadsheetImportDialog } from '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
@@ -15,6 +16,7 @@ import { useOpenCreateViewDropdown } from '@/views/hooks/useOpenCreateViewDropow
 import { useLingui } from '@lingui/react/macro';
 import {
   IconCopy,
+  IconFileImport,
   IconLayout,
   IconListDetails,
   IconLock,
@@ -25,7 +27,13 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const ObjectOptionsDropdownDefaultView = () => {
   const { t } = useLingui();
-  const { recordIndexId, onContentChange } = useObjectOptionsDropdown();
+  const { recordIndexId, onContentChange, objectMetadataItem } =
+    useObjectOptionsDropdown();
+
+  const { openObjectRecordsSpreadsheetImportDialog } =
+    useOpenObjectRecordsSpreadsheetImportDialog(
+      objectMetadataItem.nameSingular,
+    );
 
   const { currentView } = useGetCurrentViewOnly();
 
@@ -124,6 +132,14 @@ export const ObjectOptionsDropdownDefaultView = () => {
               contextualTextPosition="right"
             />
           </SelectableListItem>
+        </DropdownMenuItemsContainer>
+        <DropdownMenuSeparator />
+        <DropdownMenuItemsContainer scrollable={false}>
+          <MenuItem
+            onClick={() => openObjectRecordsSpreadsheetImportDialog()}
+            LeftIcon={IconFileImport}
+            text={t`Import CSV`}
+          />
         </DropdownMenuItemsContainer>
       </SelectableList>
     </DropdownContent>

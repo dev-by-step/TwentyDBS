@@ -1,6 +1,7 @@
 import { isDefined } from 'twenty-shared/utils';
 
 import { COMPANY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { INTERNAL_ENTITY_DEMO_RECORDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/internal-entity-demo-records.constant';
 import {
   WORKSPACE_MEMBER_DATA_SEED_IDS,
   WORKSPACE_MEMBER_DATA_SEEDS,
@@ -1253,6 +1254,43 @@ export const PERSON_DATA_SEED_IDS = {
   ID_1199: '20202020-be66-4d1f-b8aa-1c7f18e71f07',
   ID_1200: '20202020-b2b8-40da-a9aa-ca338a841af5',
 };
+
+const PERSON_DATA_SEED_DEMO_OVERRIDES_BY_ID = new Map(
+  INTERNAL_ENTITY_DEMO_RECORDS.flatMap((record) =>
+    record.contacts.map((contact) => [
+      PERSON_DATA_SEED_IDS[contact.seedKey],
+      {
+        nameFirstName: contact.firstName,
+        nameLastName: contact.lastName,
+        city: contact.city,
+        emailsPrimaryEmail: contact.email,
+        avatarUrl: contact.avatarUrl,
+        linkedinLinkPrimaryLinkUrl: contact.linkedinUrl,
+        jobTitle: contact.jobTitle,
+        companyId: COMPANY_DATA_SEED_IDS[record.companySeedKey],
+        phonesPrimaryPhoneNumber: contact.phoneNumber,
+        phonesPrimaryPhoneCountryCode: contact.phoneCountryCode,
+        phonesPrimaryPhoneCallingCode: contact.phoneCallingCode,
+        createdBySource: 'MANUAL',
+      } satisfies Partial<PersonDataSeed>,
+    ]),
+  ),
+);
+
+const PERSON_DATA_SEED_DEMO_WORKSPACE_MEMBER_IDS_BY_ID = new Map(
+  INTERNAL_ENTITY_DEMO_RECORDS.flatMap((record) =>
+    record.contacts.map((contact) => [
+      PERSON_DATA_SEED_IDS[contact.seedKey],
+      record.workspaceMemberId,
+    ]),
+  ),
+);
+
+const PERSON_DATA_SEED_DEMO_IDS = new Set(
+  INTERNAL_ENTITY_DEMO_RECORDS.flatMap((record) =>
+    record.contacts.map((contact) => PERSON_DATA_SEED_IDS[contact.seedKey]),
+  ),
+);
 
 // prettier-ignore
 const PERSON_DATA_SEEDS_RAW = [
@@ -21658,39 +21696,46 @@ const PERSON_DATA_SEEDS_RAW = [
   }
 ];
 
-export const PERSON_DATA_SEEDS: PersonDataSeed[] = PERSON_DATA_SEEDS_RAW.map(
-  (person, index) => {
-    const workspaceMemberId = Object.values(WORKSPACE_MEMBER_DATA_SEED_IDS)[
-      index % 4
-    ];
-    const workspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
-      (workspaceMember) => workspaceMember.id === workspaceMemberId,
-    );
-    const workspaceMemberName = isDefined(workspaceMember)
-      ? `${workspaceMember?.nameFirstName} ${workspaceMember?.nameLastName}`
-      : 'Unkonwn';
+export const PERSON_DATA_SEEDS: PersonDataSeed[] = PERSON_DATA_SEEDS_RAW.filter(
+  (person) => PERSON_DATA_SEED_DEMO_IDS.has(person.id),
+).map((person, index) => {
+  const demoPersonOverride = PERSON_DATA_SEED_DEMO_OVERRIDES_BY_ID.get(
+    person.id,
+  );
+  const workspaceMemberId =
+    PERSON_DATA_SEED_DEMO_WORKSPACE_MEMBER_IDS_BY_ID.get(person.id) ??
+    Object.values(WORKSPACE_MEMBER_DATA_SEED_IDS)[index % 4];
+  const workspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
+    (workspaceMember) => workspaceMember.id === workspaceMemberId,
+  );
+  const workspaceMemberName = isDefined(workspaceMember)
+    ? `${workspaceMember?.nameFirstName} ${workspaceMember?.nameLastName}`
+    : 'Unknown';
 
-    const dataSeed: PersonDataSeed = {
-      ...person,
-      createdBySource: person.createdBySource,
-      createdByWorkspaceMemberId: workspaceMemberId,
-      createdByName: workspaceMemberName,
-      updatedBySource: person.createdBySource,
-      updatedByWorkspaceMemberId: workspaceMemberId,
-      updatedByName: workspaceMemberName,
-      position: index + 1,
-    };
+  const personSeed = demoPersonOverride
+    ? { ...person, ...demoPersonOverride }
+    : person;
 
-    const personDataSeedWithSQLColumnOrder: PersonDataSeed = Object.fromEntries(
-      PERSON_DATA_SEED_COLUMNS.map((column) => [
-        column,
-        dataSeed[column as keyof PersonDataSeed],
-      ]),
-    ) as PersonDataSeed;
+  const dataSeed: PersonDataSeed = {
+    ...personSeed,
+    createdBySource: personSeed.createdBySource,
+    createdByWorkspaceMemberId: workspaceMemberId,
+    createdByName: workspaceMemberName,
+    updatedBySource: personSeed.createdBySource,
+    updatedByWorkspaceMemberId: workspaceMemberId,
+    updatedByName: workspaceMemberName,
+    position: index + 1,
+  };
 
-    return personDataSeedWithSQLColumnOrder;
-  },
-);
+  const personDataSeedWithSQLColumnOrder: PersonDataSeed = Object.fromEntries(
+    PERSON_DATA_SEED_COLUMNS.map((column) => [
+      column,
+      dataSeed[column as keyof PersonDataSeed],
+    ]),
+  ) as PersonDataSeed;
+
+  return personDataSeedWithSQLColumnOrder;
+});
 
 // Map for O(1) lookups by person ID
 export const PERSON_DATA_SEEDS_MAP = new Map<string, PersonDataSeed>(

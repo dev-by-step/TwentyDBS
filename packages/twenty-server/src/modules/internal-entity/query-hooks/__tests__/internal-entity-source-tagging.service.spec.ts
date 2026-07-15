@@ -3,8 +3,8 @@ import { type ObjectRecord } from 'twenty-shared/types';
 import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSourceService } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.service';
-import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/factories/internal-entity-seed.factory';
 import { buildWorkspaceAuthContext } from 'src/modules/internal-entity/__tests__/factories/workspace-auth-context.factory';
+import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/factories/internal-entity-test.factory';
 import {
   buildCompanyRecord,
   buildOpportunityRecord,
@@ -12,6 +12,7 @@ import {
   buildWorkspaceRecord,
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InternalEntitySourceTaggingService } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service';
+import { type WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 type MockDataSource = {
   query: jest.Mock;
@@ -44,12 +45,32 @@ const buildServiceContext = () => {
   const service = new InternalEntitySourceTaggingService(
     globalWorkspaceDataSourceService as unknown as GlobalWorkspaceDataSourceService,
     objectMetadataService as unknown as ObjectMetadataService,
+    {
+      resolveContext: jest.fn(
+        async ({
+          fallbackEntityId,
+          requestedActiveEntityId,
+        }: {
+          fallbackEntityId?: string | null;
+          requestedActiveEntityId?: string | null;
+        }) => ({
+          currentEntityId: fallbackEntityId ?? null,
+          activeEntityId: requestedActiveEntityId ?? fallbackEntityId ?? null,
+          entityIds: fallbackEntityId ? [fallbackEntityId] : [],
+        }),
+      ),
+    } as unknown as WorkspaceMemberInternalEntityService,
   );
 
   const makeAuthContext = ({
+    activeInternalEntityId,
     entityId = internalEntity.id,
-  }: { entityId?: string | null } = {}) =>
+  }: {
+    activeInternalEntityId?: string | null;
+    entityId?: string | null;
+  } = {}) =>
     buildWorkspaceAuthContext({
+      activeInternalEntityId,
       entityId,
       workspaceId: workspace.id,
     });
@@ -110,6 +131,142 @@ describe('InternalEntitySourceTaggingService', () => {
     ]);
   });
 
+  it('should use the active internal entity for opportunity create payloads', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const activeEntityId = buildInternalEntitySeed().id;
+    const authContext = makeAuthContext({
+      activeInternalEntityId: activeEntityId,
+    });
+
+    const payload = await service.tagCreateOnePayload(
+      authContext,
+      'opportunity',
+      {
+        data: {
+          name: 'Opportunity A',
+        },
+      },
+    );
+
+    expect(payload.data).toMatchObject({
+      name: 'Opportunity A',
+      internalEntityId: activeEntityId,
+    });
+    expect(dataSource.query).toHaveBeenCalledWith(
+      expect.stringContaining('"internalEntity"'),
+      [activeEntityId],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+  });
+
+  it('should preserve an explicit internalEntity relation on opportunity createOne payloads', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateOnePayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: {
+          name: 'Opportunity A',
+          internalEntity: {
+            connect: {
+              where: {
+                id: explicitInternalEntityId,
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(payload.data).toEqual({
+      name: 'Opportunity A',
+      internalEntity: {
+        connect: {
+          where: {
+            id: explicitInternalEntityId,
+          },
+        },
+      },
+    });
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should preserve explicit internalEntity assignments on opportunity createMany payloads', async () => {
+    const { service, makeAuthContext } = buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateManyPayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: [
+          {
+            name: 'Opportunity A',
+            internalEntityId: explicitInternalEntityId,
+          },
+          {
+            name: 'Opportunity B',
+            internalEntity: {
+              connect: {
+                where: {
+                  id: explicitInternalEntityId,
+                },
+              },
+            },
+          },
+        ],
+      },
+    );
+
+    expect(payload.data).toEqual([
+      {
+        name: 'Opportunity A',
+        internalEntityId: explicitInternalEntityId,
+      },
+      {
+        name: 'Opportunity B',
+        internalEntity: {
+          connect: {
+            where: {
+              id: explicitInternalEntityId,
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('should only inject the active internal entity on opportunity createMany records that are missing one', async () => {
+    const { service, internalEntityId, makeAuthContext } =
+      buildServiceContext();
+    const explicitInternalEntityId = buildInternalEntitySeed().id;
+
+    const payload = await service.tagCreateManyPayload(
+      makeAuthContext(),
+      'opportunity',
+      {
+        data: [
+          { name: 'Opportunity A' },
+          {
+            name: 'Opportunity B',
+            internalEntityId: explicitInternalEntityId,
+          },
+        ],
+      },
+    );
+
+    expect(payload.data).toEqual([
+      { name: 'Opportunity A', internalEntityId },
+      {
+        name: 'Opportunity B',
+        internalEntityId: explicitInternalEntityId,
+      },
+    ]);
+  });
+
   it('should validate person create payloads and fail when the user has no internal entity', async () => {
     const { dataSource, service, makeAuthContext } = buildServiceContext();
 
@@ -127,6 +284,30 @@ describe('InternalEntitySourceTaggingService', () => {
       code: CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
     });
 
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should bypass source tagging validation for technical import company creations', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+
+    const payload = await service.tagCreateOnePayload(
+      {
+        ...makeAuthContext({ entityId: null }),
+        shouldBypassInternalEntitySourceTagging: true,
+      },
+      'company',
+      {
+        data: {
+          id: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+          name: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+        },
+      },
+    );
+
+    expect(payload.data).toEqual({
+      id: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+      name: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+    });
     expect(dataSource.query).not.toHaveBeenCalled();
   });
 
@@ -194,6 +375,22 @@ describe('InternalEntitySourceTaggingService', () => {
       authContext: makeAuthContext(),
       objectName: 'opportunity',
       records: [{ id: opportunity.id }] as ObjectRecord[],
+    });
+
+    expect(dataSource.query).not.toHaveBeenCalled();
+  });
+
+  it('should skip auto-membership creation when technical import bypass is enabled', async () => {
+    const { dataSource, service, makeAuthContext } = buildServiceContext();
+    const company = buildCompanyRecord();
+
+    await service.createMembershipsForRecords({
+      authContext: {
+        ...makeAuthContext(),
+        shouldBypassInternalEntitySourceTagging: true,
+      },
+      objectName: 'company',
+      records: [{ id: company.id }] as ObjectRecord[],
     });
 
     expect(dataSource.query).not.toHaveBeenCalled();

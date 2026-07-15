@@ -29,6 +29,11 @@ import { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-meta
 
 @Injectable()
 export class FilterArgProcessorService {
+  private readonly ignoredMissingInternalEntityScopeFilterKeys = new Set([
+    'internalEntityId',
+    'internalEntitiesId',
+  ]);
+
   process<T extends ObjectRecordFilter | undefined>({
     filter,
     flatObjectMetadata,
@@ -101,7 +106,7 @@ export class FilterArgProcessorService {
         continue;
       }
 
-      transformedFilter[key] = this.validateAndTransformFieldFilter(
+      const transformedFieldFilter = this.validateAndTransformFieldFilter(
         key,
         value,
         flatObjectMetadata,
@@ -110,6 +115,12 @@ export class FilterArgProcessorService {
         fieldIdByJoinColumnName,
         oneToManyRelationFieldIdByFilterKey,
       );
+
+      if (!isDefined(transformedFieldFilter)) {
+        continue;
+      }
+
+      transformedFilter[key] = transformedFieldFilter;
     }
 
     return transformedFilter;
@@ -123,7 +134,7 @@ export class FilterArgProcessorService {
     fieldIdByName: Record<string, string>,
     fieldIdByJoinColumnName: Record<string, string>,
     oneToManyRelationFieldIdByFilterKey: Record<string, string>,
-  ): Record<string, unknown> {
+  ): Record<string, unknown> | undefined {
     const resolvedByName = fieldIdByName[key];
     const resolvedByJoinColumn = fieldIdByJoinColumnName[key];
     const resolvedByOneToManyRelationFilterKey =
@@ -134,6 +145,10 @@ export class FilterArgProcessorService {
       resolvedByOneToManyRelationFilterKey;
 
     if (!isDefined(fieldMetadataId)) {
+      if (this.ignoredMissingInternalEntityScopeFilterKeys.has(key)) {
+        return undefined;
+      }
+
       const nameSingular = flatObjectMetadata.nameSingular;
 
       throw new CommonQueryRunnerException(

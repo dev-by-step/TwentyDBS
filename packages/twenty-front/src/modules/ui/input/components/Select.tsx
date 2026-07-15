@@ -17,6 +17,7 @@ import { SelectableListItem } from '@/ui/layout/selectable-list/components/Selec
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { type MessageDescriptor } from '@lingui/core';
 import { isNonEmptyArray, isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 import { type IconComponent } from 'twenty-ui/display';
@@ -27,7 +28,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 export type SelectSizeVariant = 'small' | 'default';
 
 type CallToActionButton = {
-  text: string;
+  text: string | MessageDescriptor;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
   Icon?: IconComponent;
 };
@@ -289,7 +290,7 @@ export const Select = <Value extends SelectValue>({
                   <MenuItem
                     onClick={callToActionButton.onClick}
                     LeftIcon={callToActionButton.Icon}
-                    text={callToActionButton.text}
+                    text={typeof callToActionButton.text === 'string' ? callToActionButton.text : callToActionButton.text.id}
                   />
                 </DropdownMenuItemsContainer>
               )}

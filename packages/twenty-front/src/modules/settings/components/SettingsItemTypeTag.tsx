@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { AppChip } from '@/applications/components/AppChip';
 import { Avatar } from 'twenty-ui/display';
 import { Chip, ChipAccent, ChipVariant } from 'twenty-ui/components';
@@ -22,14 +23,14 @@ export const SettingsItemTypeTag = ({
     return (
       <Chip
         className={className}
-        label="Remote"
+        label={t`Remote`}
         variant={ChipVariant.Transparent}
         accent={ChipAccent.TextPrimary}
         leftComponent={
           <Avatar
             type="app"
             size="sm"
-            placeholder="Remote"
+            placeholder={t`Remote`}
             placeholderColorSeed="Remote"
           />
         }

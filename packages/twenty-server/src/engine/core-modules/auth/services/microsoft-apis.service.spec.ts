@@ -17,7 +17,9 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { CalendarChannelEntityAccessService } from 'src/engine/metadata-modules/calendar-channel/services/calendar-channel-entity-access.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
@@ -41,8 +43,18 @@ describe('MicrosoftAPIsService', () => {
     findOne: jest.fn(),
   };
 
+  const mockTransactionCalendarChannelRepository = {
+    update: jest.fn(),
+  };
+
   const mockTransactionManager = {
-    getRepository: jest.fn().mockReturnValue({ save: jest.fn() }),
+    getRepository: jest.fn().mockImplementation((entity) => {
+      if (entity === CalendarChannelEntity) {
+        return mockTransactionCalendarChannelRepository;
+      }
+
+      return { save: jest.fn() };
+    }),
   };
 
   const mockMessageChannelRepository = {
@@ -57,8 +69,20 @@ describe('MicrosoftAPIsService', () => {
     find: jest.fn(),
   };
 
+  const mockCalendarChannelEntityAccessService = {
+    resolveVisibleInternalEntityIds: jest.fn().mockResolvedValue([]),
+  };
+
   const mockUserWorkspaceRepository = {
     findOne: jest.fn().mockResolvedValue({ id: 'user-workspace-id' }),
+  };
+
+  const mockUserRepository = {
+    findOne: jest.fn().mockResolvedValue({
+      id: 'user-id',
+      entityId: 'entity-id',
+      canAccessFullAdminPanel: false,
+    }),
   };
 
   const mockWorkspaceMemberRepository = {
@@ -82,6 +106,8 @@ describe('MicrosoftAPIsService', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MicrosoftAPIsService,
@@ -144,6 +170,10 @@ describe('MicrosoftAPIsService', () => {
           },
         },
         {
+          provide: CalendarChannelEntityAccessService,
+          useValue: mockCalendarChannelEntityAccessService,
+        },
+        {
           provide: UpdateConnectedAccountOnReconnectService,
           useValue: {
             updateConnectedAccountOnReconnect: jest.fn(),
@@ -170,6 +200,10 @@ describe('MicrosoftAPIsService', () => {
         {
           provide: getRepositoryToken(UserWorkspaceEntity),
           useValue: mockUserWorkspaceRepository,
+        },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: mockUserRepository,
         },
         {
           provide: getRepositoryToken(MessageChannelEntity),
@@ -267,6 +301,70 @@ describe('MicrosoftAPIsService', () => {
       expect(
         createMessageChannelService.createMessageChannel,
       ).not.toHaveBeenCalled();
+    });
+
+    it('should apply selected calendar entity visibility when reconnecting an existing account', async () => {
+      mockTwentyConfigService.get.mockImplementation((key) => {
+        if (key === 'CALENDAR_PROVIDER_MICROSOFT_ENABLED') return true;
+        if (key === 'MESSAGING_PROVIDER_MICROSOFT_ENABLED') return false;
+
+        return false;
+      });
+
+      mockConnectedAccountRepository.findOne.mockResolvedValue({
+        id: 'existing-account-id',
+        handle: 'test@example.com',
+        userWorkspaceId: 'user-workspace-id',
+        provider: ConnectedAccountProvider.MICROSOFT,
+      } as ConnectedAccountEntity);
+
+      mockMessageChannelRepository.find.mockResolvedValue([]);
+      mockCalendarChannelRepository.find.mockResolvedValue([
+        {
+          id: 'calendar-channel-id',
+          connectedAccountId: 'existing-account-id',
+          workspaceId: 'workspace-id',
+          visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+          visibleInternalEntityIds: [],
+          syncStage: CalendarChannelSyncStage.CALENDAR_EVENT_LIST_FETCH_ONGOING,
+        } as Partial<CalendarChannelEntity> as CalendarChannelEntity,
+      ]);
+      mockCalendarChannelEntityAccessService.resolveVisibleInternalEntityIds.mockResolvedValue(
+        ['entity-a'],
+      );
+
+      await service.refreshMicrosoftRefreshToken({
+        handle: 'test@example.com',
+        userId: 'user-id',
+        workspaceMemberId: 'workspace-member-id',
+        workspaceId: 'workspace-id',
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        calendarVisibility: CalendarChannelVisibility.METADATA,
+        messageVisibility: undefined,
+        visibleInternalEntityIds: ['entity-a'],
+        skipMessageChannelConfiguration: true,
+      });
+
+      expect(
+        mockCalendarChannelEntityAccessService.resolveVisibleInternalEntityIds,
+      ).toHaveBeenCalledWith({
+        workspaceId: 'workspace-id',
+        workspaceMemberId: 'workspace-member-id',
+        fallbackEntityId: 'entity-id',
+        canAccessFullAdminPanel: false,
+        requestedVisibleInternalEntityIds: ['entity-a'],
+        shouldDefaultToPrimaryEntity: true,
+      });
+      expect(
+        mockTransactionCalendarChannelRepository.update,
+      ).toHaveBeenCalledWith(
+        { id: 'calendar-channel-id', workspaceId: 'workspace-id' },
+        {
+          visibility: CalendarChannelVisibility.METADATA,
+          visibleInternalEntityIds: ['entity-a'],
+        },
+      );
     });
   });
 });

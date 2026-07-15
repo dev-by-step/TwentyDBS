@@ -92,6 +92,7 @@ describe('WorkspaceInvitationService', () => {
           useValue: {
             setOnboardingInviteTeamPending: jest.fn(),
             setOnboardingBookOnboardingPending: jest.fn(),
+            advanceFromInviteTeamStep: jest.fn(),
           },
         },
         {
@@ -208,8 +209,8 @@ describe('WorkspaceInvitationService', () => {
         .mockReturnValue('http://localhost:3000');
       jest.spyOn(emailService, 'send').mockResolvedValue({} as any);
       jest
-        .spyOn(onboardingService, 'setOnboardingInviteTeamPending')
-        .mockResolvedValue({} as any);
+        .spyOn(onboardingService, 'advanceFromInviteTeamStep')
+        .mockResolvedValue();
 
       const result = await service.sendInvitations(
         emails,
@@ -221,16 +222,9 @@ describe('WorkspaceInvitationService', () => {
       expect(result.result.length).toBe(2);
       expect(emailService.send).toHaveBeenCalledTimes(2);
       expect(
-        onboardingService.setOnboardingInviteTeamPending,
+        onboardingService.advanceFromInviteTeamStep,
       ).toHaveBeenCalledWith({
         workspaceId: workspace.id,
-        value: false,
-      });
-      expect(
-        onboardingService.setOnboardingBookOnboardingPending,
-      ).toHaveBeenCalledWith({
-        workspaceId: workspace.id,
-        value: true,
       });
     });
   });

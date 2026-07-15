@@ -12,9 +12,13 @@ import {
   CalendarChannelException,
   CalendarChannelExceptionCode,
 } from 'src/engine/metadata-modules/calendar-channel/calendar-channel.exception';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { CalendarChannelDTO } from 'src/engine/metadata-modules/calendar-channel/dtos/calendar-channel.dto';
+import { type UpdateCalendarChannelInputUpdates } from 'src/engine/metadata-modules/calendar-channel/dtos/update-calendar-channel.input';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { CalendarChannelEntityAccessService } from 'src/engine/metadata-modules/calendar-channel/services/calendar-channel-entity-access.service';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
+import { isDefined } from 'twenty-shared/utils';
 
 @Injectable()
 export class CalendarChannelMetadataService {
@@ -22,6 +26,7 @@ export class CalendarChannelMetadataService {
     @InjectRepository(CalendarChannelEntity)
     private readonly repository: Repository<CalendarChannelEntity>,
     private readonly connectedAccountMetadataService: ConnectedAccountMetadataService,
+    private readonly calendarChannelEntityAccessService: CalendarChannelEntityAccessService,
   ) {}
 
   async findAll(workspaceId: string): Promise<CalendarChannelDTO[]> {
@@ -168,6 +173,54 @@ export class CalendarChannelMetadataService {
     );
 
     return this.repository.findOneOrFail({ where: { id, workspaceId } });
+  }
+
+  async buildValidatedUpdate({
+    calendarChannel,
+    workspaceId,
+    workspaceMemberId,
+    user,
+    update,
+  }: {
+    calendarChannel: Pick<
+      CalendarChannelEntity,
+      'visibility' | 'visibleInternalEntityIds'
+    >;
+    workspaceId: string;
+    workspaceMemberId: string;
+    user: Pick<AuthContextUser, 'entityId' | 'canAccessFullAdminPanel'>;
+    update: UpdateCalendarChannelInputUpdates;
+  }): Promise<UpdateCalendarChannelInputUpdates> {
+    const nextVisibility = update.visibility ?? calendarChannel.visibility;
+    const shouldValidateVisibleInternalEntityIds =
+      isDefined(update.visibleInternalEntityIds) ||
+      nextVisibility === CalendarChannelVisibility.METADATA;
+
+    if (!shouldValidateVisibleInternalEntityIds) {
+      return update;
+    }
+
+    const requestedVisibleInternalEntityIds =
+      update.visibleInternalEntityIds ??
+      calendarChannel.visibleInternalEntityIds ??
+      [];
+    const validatedVisibleInternalEntityIds =
+      await this.calendarChannelEntityAccessService.resolveVisibleInternalEntityIds(
+        {
+          workspaceId,
+          workspaceMemberId,
+          fallbackEntityId: user.entityId,
+          canAccessFullAdminPanel: user.canAccessFullAdminPanel,
+          requestedVisibleInternalEntityIds,
+          shouldDefaultToPrimaryEntity:
+            nextVisibility === CalendarChannelVisibility.METADATA,
+        },
+      );
+
+    return {
+      ...update,
+      visibleInternalEntityIds: validatedVisibleInternalEntityIds,
+    };
   }
 
   async delete({

@@ -185,6 +185,24 @@ IMPORTANT: Use Context7 for code generation, setup or configuration steps, or li
 4. Check that GraphQL schema changes are backward compatible
 5. Run `graphql:generate` after any GraphQL schema changes
 
+### Frequent Review Feedback To Prevent Upfront
+
+- Do not hardcode business values that may change per workspace or environment when a central config, service, env var, or admin setting is a better fit
+- If a value only exists for tests, generate it dynamically instead of pretending it belongs to a stable real workspace
+- Prefer shared test factories in `__tests__/factories/` over inline object construction when data is reused or non-trivial
+- Test factories should usually build complete entities or records, not just standalone IDs
+- Do not scatter `faker` calls through test files when a factory or context builder can own that randomness
+- Reuse implementation constants for repeated error messages and domain strings instead of duplicating string literals in tests
+- For CSV test fixtures, use a library/helper such as `papaparse.unparse()` instead of manual string concatenation and quoting
+- Extract complex boolean expressions into clearly named variables before using them in conditions
+- Extract repeated literals into named constants for readability and future changes
+- Avoid unnecessary template literals when direct property access or plain expressions are sufficient
+- For SQL:
+  - escape allowed identifiers manually
+  - pass runtime data through placeholders and `values`
+  - do not interpolate user/runtime values directly into SQL strings
+- For i18n, when explicit message IDs are used, keep them English-only, stable, and free of spaces or special characters
+
 ### Code Style Notes
 - Use **Linaria** for styling with zero-runtime CSS-in-JS (styled-components pattern)
 - Follow **Nx** workspace conventions for imports

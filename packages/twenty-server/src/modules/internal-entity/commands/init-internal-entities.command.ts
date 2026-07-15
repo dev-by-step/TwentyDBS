@@ -1,5 +1,9 @@
 import { Command } from 'nest-commander';
-import { FieldMetadataType, RelationType } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  RelationOnDeleteAction,
+  RelationType,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
@@ -13,19 +17,25 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { RoleService } from 'src/engine/metadata-modules/role/role.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { PRIMARY_DEV_WORKSPACE_USERS } from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
 import {
-  buildMissingInternalEntityAfterMigrationError,
-  buildUnknownInternalEntitiesCsvWarning,
-} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
-import { type InternalEntitySeed } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import { InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
-import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+  INTERNAL_ENTITY_SEEDS,
+  type InternalEntitySeed,
+} from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import {
+  type CsvOpportunityRow,
+  ImportCsvOpportunitiesParserService,
+  OpportunityCsvNotFoundError,
+} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import {
   buildWorkspaceSqlTableName,
   INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS,
+  resolveInternalEntitySeedId,
   resolveObjectTableNameOrThrow,
   validateUuidOrThrow,
 } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
@@ -57,8 +67,8 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
-    private readonly internalEntityConfigurationService: InternalEntityConfigurationService,
     private readonly importCsvOpportunitiesParserService: ImportCsvOpportunitiesParserService,
+    private readonly roleService: RoleService,
   ) {
     super(workspaceIteratorService);
   }
@@ -75,12 +85,27 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
+    await this.runSeedForWorkspace(workspaceId, dataSource);
+  }
+
+  /**
+   * Public entry point so the workspace activation flow can trigger the seed
+   * without going through the CLI command runner.
+   * Safe to re-run: all steps are idempotent.
+   */
+  async runSeedForWorkspace(
+    workspaceId: string,
+    dataSource: GlobalWorkspaceDataSource,
+  ): Promise<void> {
     const validatedWorkspaceId = validateUuidOrThrow(
       workspaceId,
       'workspaceId',
     );
     const schemaName = getWorkspaceSchemaName(validatedWorkspaceId);
 
+    await this.roleService.createEntityManagerRole({
+      workspaceId: validatedWorkspaceId,
+    });
     await this.ensureMetadataSchema(validatedWorkspaceId);
     const internalEntityTableName = await resolveObjectTableNameOrThrow({
       objectMetadataService: this.objectMetadataService,
@@ -97,6 +122,16 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId: validatedWorkspaceId,
       nameSingular: 'person',
     });
+    const companyTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'company',
+    });
+    const workspaceMemberTableName = await resolveObjectTableNameOrThrow({
+      objectMetadataService: this.objectMetadataService,
+      workspaceId: validatedWorkspaceId,
+      nameSingular: 'workspaceMember',
+    });
     const personEntityMembershipTableName = await resolveObjectTableNameOrThrow(
       {
         objectMetadataService: this.objectMetadataService,
@@ -110,6 +145,12 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
         workspaceId: validatedWorkspaceId,
         nameSingular: 'companyEntityMembership',
       });
+    const workspaceMemberEntityMembershipTableName =
+      await resolveObjectTableNameOrThrow({
+        objectMetadataService: this.objectMetadataService,
+        workspaceId: validatedWorkspaceId,
+        nameSingular: 'workspaceMemberEntityMembership',
+      });
     const internalEntitySqlTable = buildWorkspaceSqlTableName(
       schemaName,
       internalEntityTableName,
@@ -122,6 +163,14 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       schemaName,
       personTableName,
     );
+    const companySqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      companyTableName,
+    );
+    const workspaceMemberSqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      workspaceMemberTableName,
+    );
     const personEntityMembershipSqlTable = buildWorkspaceSqlTableName(
       schemaName,
       personEntityMembershipTableName,
@@ -130,13 +179,31 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       schemaName,
       companyEntityMembershipTableName,
     );
+    const workspaceMemberEntityMembershipSqlTable = buildWorkspaceSqlTableName(
+      schemaName,
+      workspaceMemberEntityMembershipTableName,
+    );
 
     await this.seedInternalEntities(
       dataSource,
       internalEntitySqlTable,
+      workspaceMemberEntityMembershipSqlTable,
       validatedWorkspaceId,
     );
-    await this.backfillOpportunities(dataSource, opportunitySqlTable);
+    const isCsvBackfillAvailable = await this.backfillOpportunities(
+      dataSource,
+      opportunitySqlTable,
+    );
+    await this.backfillOpportunitiesFromWorkspaceMembers(
+      dataSource,
+      opportunitySqlTable,
+      workspaceMemberSqlTable,
+    );
+    await this.backfillWorkspaceMemberMembershipsFromUsers(
+      dataSource,
+      workspaceMemberSqlTable,
+      workspaceMemberEntityMembershipSqlTable,
+    );
     await this.backfillCompanyMembershipsFromOpportunities(
       dataSource,
       opportunitySqlTable,
@@ -159,7 +226,20 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       companyEntityMembershipSqlTable,
       personEntityMembershipSqlTable,
     );
-    await this.verifyMigration(dataSource, opportunitySqlTable);
+    await this.cleanupPrimaryDevWorkspaceMemberships({
+      workspaceId: validatedWorkspaceId,
+      dataSource,
+      internalEntitySqlTable,
+      companySqlTable,
+      personSqlTable,
+      companyEntityMembershipSqlTable,
+      personEntityMembershipSqlTable,
+      workspaceMemberSqlTable,
+      workspaceMemberEntityMembershipSqlTable,
+    });
+    await this.verifyMigration(dataSource, opportunitySqlTable, {
+      shouldThrowOnUnresolvedOpportunities: isCsvBackfillAvailable,
+    });
   }
 
   private async ensureMetadataSchema(workspaceId: string): Promise<void> {
@@ -193,6 +273,40 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       icon: 'IconBuildingSkyscraper',
       skipNameField: true,
     });
+    const workspaceMemberEntityMembershipMetadata =
+      await this.ensureObjectMetadata({
+        workspaceId,
+        nameSingular: 'workspaceMemberEntityMembership',
+        namePlural: 'workspaceMemberEntityMemberships',
+        labelSingular: 'Workspace Member Entity Membership',
+        labelPlural: 'Workspace Member Entity Memberships',
+        icon: 'IconUsers',
+        skipNameField: true,
+      });
+
+    const calendarEventEntityAudienceMetadata = await this.ensureObjectMetadata(
+      {
+        workspaceId,
+        nameSingular: 'calendarEventEntityAudience',
+        namePlural: 'calendarEventEntityAudiences',
+        labelSingular: 'Calendar Event Entity Audience',
+        labelPlural: 'Calendar Event Entity Audiences',
+        icon: 'IconCalendarShare',
+        skipNameField: true,
+      },
+    );
+
+    const calendarEventPersonAudienceMetadata = await this.ensureObjectMetadata(
+      {
+        workspaceId,
+        nameSingular: 'calendarEventPersonAudience',
+        namePlural: 'calendarEventPersonAudiences',
+        labelSingular: 'Calendar Event Person Audience',
+        labelPlural: 'Calendar Event Person Audiences',
+        icon: 'IconUserShare',
+        skipNameField: true,
+      },
+    );
 
     const personMetadata = await this.findObjectMetadataOrThrow(
       workspaceId,
@@ -205,6 +319,14 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const opportunityMetadata = await this.findObjectMetadataOrThrow(
       workspaceId,
       'opportunity',
+    );
+    const workspaceMemberMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'workspaceMember',
+    );
+    const calendarEventMetadata = await this.findObjectMetadataOrThrow(
+      workspaceId,
+      'calendarEvent',
     );
 
     await this.ensureTextField({
@@ -275,6 +397,78 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       targetFieldLabel: 'Internal Entity',
       targetFieldIcon: 'IconBuilding',
       targetObjectMetadataId: companyEntityMembershipMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: workspaceMemberMetadata.id,
+      name: 'internalEntities',
+      label: 'Internal Entities',
+      icon: 'IconBuilding',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Workspace Member',
+      targetFieldIcon: 'IconUser',
+      targetObjectMetadataId: workspaceMemberEntityMembershipMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'workspaceMembers',
+      label: 'Workspace Members',
+      icon: 'IconUser',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Internal Entity',
+      targetFieldIcon: 'IconBuilding',
+      targetObjectMetadataId: workspaceMemberEntityMembershipMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: calendarEventMetadata.id,
+      name: 'audienceEntities',
+      label: 'Audience Entities',
+      icon: 'IconBuilding',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Calendar Event',
+      targetFieldIcon: 'IconCalendar',
+      targetObjectMetadataId: calendarEventEntityAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: internalEntityMetadata.id,
+      name: 'calendarEventsInAudience',
+      label: 'Calendar Events in Audience',
+      icon: 'IconCalendar',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Internal Entity',
+      targetFieldIcon: 'IconBuilding',
+      targetObjectMetadataId: calendarEventEntityAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: calendarEventMetadata.id,
+      name: 'audienceMembers',
+      label: 'Audience Members',
+      icon: 'IconUser',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Calendar Event',
+      targetFieldIcon: 'IconCalendar',
+      targetObjectMetadataId: calendarEventPersonAudienceMetadata.id,
+    });
+
+    await this.ensureRelationField({
+      workspaceId,
+      objectMetadataId: workspaceMemberMetadata.id,
+      name: 'calendarEventAudienceMemberships',
+      label: 'Calendar Events in Audience',
+      icon: 'IconCalendar',
+      relationType: RelationType.ONE_TO_MANY,
+      targetFieldLabel: 'Workspace Member',
+      targetFieldIcon: 'IconUser',
+      targetObjectMetadataId: calendarEventPersonAudienceMetadata.id,
     });
 
     const flatMaps = await this.getFreshMaps(workspaceId);
@@ -367,6 +561,50 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       workspaceId,
     });
 
+    const workspaceMemberInternalEntitiesFieldId = this.findFieldId(
+      'workspaceMember',
+      'internalEntities',
+      flatMaps,
+    );
+    const junctionWorkspaceMemberInternalEntityFieldId = this.findFieldId(
+      'workspaceMemberEntityMembership',
+      'internalEntity',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: workspaceMemberInternalEntitiesFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId: junctionWorkspaceMemberInternalEntityFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const internalEntityWorkspaceMembersFieldId = this.findFieldId(
+      'internalEntity',
+      'workspaceMembers',
+      flatMaps,
+    );
+    const junctionWorkspaceMemberFieldId = this.findFieldId(
+      'workspaceMemberEntityMembership',
+      'workspaceMember',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: internalEntityWorkspaceMembersFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId: junctionWorkspaceMemberFieldId,
+        },
+      },
+      workspaceId,
+    });
+
     await this.ensureRelationField({
       workspaceId,
       objectMetadataId: opportunityMetadata.id,
@@ -379,24 +617,179 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       targetObjectMetadataId: internalEntityMetadata.id,
     });
 
+    const calendarEventAudienceFieldId = this.findFieldId(
+      'calendarEvent',
+      'audienceEntities',
+      flatMaps,
+    );
+    const junctionCalendarEventAudienceInternalEntityFieldId = this.findFieldId(
+      'calendarEventEntityAudience',
+      'internalEntity',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: calendarEventAudienceFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventAudienceInternalEntityFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const internalEntityCalendarEventsInAudienceFieldId = this.findFieldId(
+      'internalEntity',
+      'calendarEventsInAudience',
+      flatMaps,
+    );
+    const junctionCalendarEventAudienceCalendarEventFieldId = this.findFieldId(
+      'calendarEventEntityAudience',
+      'calendarEvent',
+      flatMaps,
+    );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: internalEntityCalendarEventsInAudienceFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventAudienceCalendarEventFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const calendarEventAudienceMembersFieldId = this.findFieldId(
+      'calendarEvent',
+      'audienceMembers',
+      flatMaps,
+    );
+    const junctionCalendarEventPersonAudienceWorkspaceMemberFieldId =
+      this.findFieldId(
+        'calendarEventPersonAudience',
+        'workspaceMember',
+        flatMaps,
+      );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: calendarEventAudienceMembersFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventPersonAudienceWorkspaceMemberFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    const workspaceMemberCalendarEventAudienceMembershipsFieldId =
+      this.findFieldId(
+        'workspaceMember',
+        'calendarEventAudienceMemberships',
+        flatMaps,
+      );
+    const junctionCalendarEventPersonAudienceCalendarEventFieldId =
+      this.findFieldId(
+        'calendarEventPersonAudience',
+        'calendarEvent',
+        flatMaps,
+      );
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: workspaceMemberCalendarEventAudienceMembershipsFieldId,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          junctionTargetFieldId:
+            junctionCalendarEventPersonAudienceCalendarEventFieldId,
+        },
+      },
+      workspaceId,
+    });
+
+    // Cascade delete junction rows when the parent calendarEvent is destroyed.
+    // updateOneField fully replaces `settings`, so we must include the
+    // pre-existing keys (joinColumnName) — losing them produces a malformed
+    // MANY_TO_ONE field and crashes the workspace cache rebuild.
+    await this.applyCalendarEventJunctionCascadeOnDelete({
+      workspaceId,
+      flatMaps,
+      junctionObjectNameSingular: 'calendarEventEntityAudience',
+    });
+    await this.applyCalendarEventJunctionCascadeOnDelete({
+      workspaceId,
+      flatMaps,
+      junctionObjectNameSingular: 'calendarEventPersonAudience',
+    });
+
     this.logger.log('Schéma InternalEntity prêt');
   }
 
   private async seedInternalEntities(
     dataSource: GlobalWorkspaceDataSource,
     internalEntitySqlTable: string,
+    workspaceMemberEntityMembershipSqlTable: string,
     workspaceId: string,
   ): Promise<void> {
     this.logger.log('Seed des InternalEntity...');
 
-    const seeds =
-      this.internalEntityConfigurationService.getInternalEntitySeeds();
+    const seeds = Object.values(INTERNAL_ENTITY_SEEDS);
 
     if (seeds.length === 0) {
-      this.logger.warn('Aucune InternalEntity configurée');
+      this.logger.warn('Aucune InternalEntity configurée dans les seeds');
 
       return;
     }
+
+    const { valuesSql: seedIdentifierValuesSql, parameters: seedParameters } =
+      this.buildInternalEntitySeedIdentifierBatch(seeds);
+    const workspaceIdParameterIndex = seedParameters.length + 1;
+
+    await this.runAdminQuery(
+      dataSource,
+      `WITH seed_values(id, name) AS (
+         VALUES ${seedIdentifierValuesSql}
+       ),
+       duplicate_entity_ids AS (
+         SELECT internal_entity."id" AS duplicate_id,
+                seed_values.id AS canonical_id
+         FROM ${internalEntitySqlTable} internal_entity
+         INNER JOIN seed_values
+           ON seed_values.name = internal_entity."name"
+         WHERE internal_entity."workspaceId" = $${workspaceIdParameterIndex}
+           AND internal_entity."id" != seed_values.id
+       )
+       UPDATE ${workspaceMemberEntityMembershipSqlTable} workspace_member_membership
+       SET "internalEntityId" = duplicate_entity_ids.canonical_id,
+           "updatedAt" = NOW()
+       FROM duplicate_entity_ids
+       WHERE workspace_member_membership."internalEntityId" = duplicate_entity_ids.duplicate_id`,
+      [...seedParameters, workspaceId],
+    );
+
+    await this.runAdminQuery(
+      dataSource,
+      `WITH seed_values(id, name) AS (
+         VALUES ${seedIdentifierValuesSql}
+       ),
+       duplicate_entity_ids AS (
+         SELECT internal_entity."id" AS duplicate_id
+         FROM ${internalEntitySqlTable} internal_entity
+         INNER JOIN seed_values
+           ON seed_values.name = internal_entity."name"
+         WHERE internal_entity."workspaceId" = $${workspaceIdParameterIndex}
+           AND internal_entity."id" != seed_values.id
+       )
+       DELETE FROM ${internalEntitySqlTable} internal_entity
+       USING duplicate_entity_ids
+       WHERE internal_entity."id" = duplicate_entity_ids.duplicate_id`,
+      [...seedParameters, workspaceId],
+    );
 
     const { valuesSql, parameters } = this.buildInternalEntitySeedBatch(
       seeds,
@@ -442,24 +835,54 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     return { valuesSql, parameters };
   }
 
+  private buildInternalEntitySeedIdentifierBatch(seeds: InternalEntitySeed[]): {
+    valuesSql: string;
+    parameters: string[];
+  } {
+    const parameters: string[] = [];
+
+    const valuesSql = seeds
+      .map((seed, index) => {
+        const offset = index * 2;
+
+        parameters.push(seed.id, seed.name);
+
+        return `($${offset + 1}::uuid, $${offset + 2})`;
+      })
+      .join(', ');
+
+    return { valuesSql, parameters };
+  }
+
   private async backfillOpportunities(
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.logger.log('Backfill Opportunity → InternalEntity...');
 
     let skippedCount = 0;
     const unresolvedEntityNames = new Set<string>();
     const opportunityInternalEntityMappings: OpportunityInternalEntityMapping[] =
       [];
-    const csvRows =
-      await this.importCsvOpportunitiesParserService.readCsvOpportunities();
+    let csvRows: CsvOpportunityRow[];
+
+    try {
+      csvRows =
+        await this.importCsvOpportunitiesParserService.readCsvOpportunities();
+    } catch (error) {
+      if (error instanceof OpportunityCsvNotFoundError) {
+        this.logger.warn(
+          'docs/opportunity.csv introuvable, backfill CSV ignoré',
+        );
+
+        return false;
+      }
+
+      throw error;
+    }
 
     for (const row of csvRows) {
-      const entityId =
-        this.internalEntityConfigurationService.resolveInternalEntityId(
-          row.entityName,
-        );
+      const entityId = resolveInternalEntitySeedId(row.entityName);
 
       if (!isDefined(entityId)) {
         skippedCount += 1;
@@ -489,9 +912,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
 
     if (unresolvedEntityNames.size > 0) {
       this.logger.warn(
-        buildUnknownInternalEntitiesCsvWarning([...unresolvedEntityNames]),
+        `InternalEntity inconnue(s) dans le CSV: ${[
+          ...unresolvedEntityNames,
+        ].join(
+          ', ',
+        )}. Ajoutez-les à INTERNAL_ENTITY_SEEDS ou corrigez le CSV avant de relancer.`,
       );
     }
+
+    return true;
   }
 
   private async updateOpportunitiesInternalEntity(
@@ -518,6 +947,50 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     return updatedRows.length;
   }
 
+  private async backfillOpportunitiesFromWorkspaceMembers(
+    dataSource: GlobalWorkspaceDataSource,
+    opportunitySqlTable: string,
+    workspaceMemberSqlTable: string,
+  ): Promise<void> {
+    const updatedRows = await this.runAdminQuery<Array<{ id: string }>>(
+      dataSource,
+      `UPDATE ${opportunitySqlTable} AS opportunity
+       SET "internalEntityId" = inferred."internalEntityId",
+           "updatedAt" = NOW()
+       FROM (
+         SELECT opportunity."id" AS "id",
+                COALESCE(created_by_user."entityId", owner_user."entityId") AS "internalEntityId"
+         FROM ${opportunitySqlTable} opportunity
+         LEFT JOIN ${workspaceMemberSqlTable} created_by_member
+           ON created_by_member."id" = opportunity."createdByWorkspaceMemberId"
+         LEFT JOIN core."user" created_by_user
+           ON created_by_user."id" = created_by_member."userId"
+         LEFT JOIN ${workspaceMemberSqlTable} owner_member
+           ON owner_member."id" = opportunity."ownerId"
+         LEFT JOIN core."user" owner_user
+           ON owner_user."id" = owner_member."userId"
+         WHERE opportunity."internalEntityId" IS NULL
+           AND opportunity."deletedAt" IS NULL
+           AND COALESCE(created_by_user."entityId", owner_user."entityId") IS NOT NULL
+       ) AS inferred
+       WHERE opportunity."id" = inferred."id"
+         AND opportunity."internalEntityId" IS NULL
+       RETURNING opportunity."id"`,
+    );
+
+    if (updatedRows.length === 0) {
+      this.logger.log(
+        'Aucune opportunité à backfill via les membres du workspace',
+      );
+
+      return;
+    }
+
+    this.logger.log(
+      `${updatedRows.length} opportunité(s) rattachée(s) via les membres du workspace`,
+    );
+  }
+
   private async backfillCompanyMembershipsFromOpportunities(
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
@@ -539,6 +1012,32 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       sourceJoinColumnName: 'companyId',
       mappings,
       logLabel: 'Company <- Opportunity',
+    });
+  }
+
+  private async backfillWorkspaceMemberMembershipsFromUsers(
+    dataSource: GlobalWorkspaceDataSource,
+    workspaceMemberSqlTable: string,
+    workspaceMemberEntityMembershipSqlTable: string,
+  ): Promise<void> {
+    const mappings = await this.selectDistinctRecordInternalEntityMappings(
+      dataSource,
+      `SELECT DISTINCT workspace_member."id" AS "recordId",
+                core_user."entityId" AS "internalEntityId"
+         FROM ${workspaceMemberSqlTable} workspace_member
+         INNER JOIN core."user" core_user
+           ON core_user."id" = workspace_member."userId"
+         WHERE workspace_member."deletedAt" IS NULL
+           AND core_user."deletedAt" IS NULL
+           AND core_user."entityId" IS NOT NULL`,
+    );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: workspaceMemberEntityMembershipSqlTable,
+      sourceJoinColumnName: 'workspaceMemberId',
+      mappings,
+      logLabel: 'Workspace Member <- User',
     });
   }
 
@@ -639,7 +1138,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   }: {
     dataSource: GlobalWorkspaceDataSource;
     membershipSqlTable: string;
-    sourceJoinColumnName: 'companyId' | 'personId';
+    sourceJoinColumnName: 'companyId' | 'personId' | 'workspaceMemberId';
     mappings: InternalEntityMembershipInsertMapping[];
     logLabel: string;
   }): Promise<void> {
@@ -670,6 +1169,181 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     );
   }
 
+  private async cleanupPrimaryDevWorkspaceMemberships({
+    workspaceId,
+    dataSource,
+    internalEntitySqlTable,
+    companySqlTable,
+    personSqlTable,
+    companyEntityMembershipSqlTable,
+    personEntityMembershipSqlTable,
+    workspaceMemberSqlTable,
+    workspaceMemberEntityMembershipSqlTable,
+  }: {
+    workspaceId: string;
+    dataSource: GlobalWorkspaceDataSource;
+    internalEntitySqlTable: string;
+    companySqlTable: string;
+    personSqlTable: string;
+    companyEntityMembershipSqlTable: string;
+    personEntityMembershipSqlTable: string;
+    workspaceMemberSqlTable: string;
+    workspaceMemberEntityMembershipSqlTable: string;
+  }): Promise<void> {
+    if (workspaceId !== SEED_APPLE_WORKSPACE_ID) {
+      return;
+    }
+
+    this.logger.log(
+      'Nettoyage des memberships de démo pour ne garder que les correspondances entité <-> société canonique...',
+    );
+
+    const normalizeNameSql = (alias: string) =>
+      `LOWER(REPLACE(REPLACE(${alias}."name", ' ', ''), '_', ''))`;
+
+    const deletedCompanyMemberships = await this.runAdminQuery<
+      Array<{ id: string }>
+    >(
+      dataSource,
+      `DELETE FROM ${companyEntityMembershipSqlTable} membership
+       WHERE membership."deletedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${companySqlTable} company
+           INNER JOIN ${internalEntitySqlTable} internal_entity
+             ON internal_entity."id" = membership."internalEntityId"
+            AND internal_entity."deletedAt" IS NULL
+           WHERE company."id" = membership."companyId"
+             AND company."deletedAt" IS NULL
+             AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+       RETURNING membership."id"`,
+    );
+
+    const deletedPersonMemberships = await this.runAdminQuery<
+      Array<{ id: string }>
+    >(
+      dataSource,
+      `DELETE FROM ${personEntityMembershipSqlTable} membership
+       WHERE membership."deletedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${personSqlTable} person
+           INNER JOIN ${companySqlTable} company
+             ON company."id" = person."companyId"
+            AND company."deletedAt" IS NULL
+           INNER JOIN ${internalEntitySqlTable} internal_entity
+             ON internal_entity."id" = membership."internalEntityId"
+            AND internal_entity."deletedAt" IS NULL
+           WHERE person."id" = membership."personId"
+             AND person."deletedAt" IS NULL
+             AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+       RETURNING membership."id"`,
+    );
+
+    this.logger.log(
+      `${deletedCompanyMemberships.length} company entity membership(s) hors règle supprimé(s)`,
+    );
+    this.logger.log(
+      `${deletedPersonMemberships.length} person entity membership(s) hors règle supprimé(s)`,
+    );
+
+    await this.syncPrimaryDevWorkspaceMemberMemberships({
+      dataSource,
+      workspaceMemberSqlTable,
+      workspaceMemberEntityMembershipSqlTable,
+    });
+  }
+
+  private async syncPrimaryDevWorkspaceMemberMemberships({
+    dataSource,
+    workspaceMemberSqlTable,
+    workspaceMemberEntityMembershipSqlTable,
+  }: {
+    dataSource: GlobalWorkspaceDataSource;
+    workspaceMemberSqlTable: string;
+    workspaceMemberEntityMembershipSqlTable: string;
+  }) {
+    const primaryDevWorkspaceMembershipMappings = Object.values(
+      PRIMARY_DEV_WORKSPACE_USERS,
+    ).flatMap((user) =>
+      user.internalEntityIds.map((internalEntityId) => ({
+        userEmail: user.email.toLowerCase(),
+        internalEntityId,
+      })),
+    );
+
+    if (primaryDevWorkspaceMembershipMappings.length === 0) {
+      return;
+    }
+
+    const membershipValues: string[] = [];
+    const membershipValuesSql = primaryDevWorkspaceMembershipMappings
+      .map((mapping, index) => {
+        const offset = index * 2;
+
+        membershipValues.push(mapping.userEmail, mapping.internalEntityId);
+
+        return `($${offset + 1}::text, $${offset + 2}::uuid)`;
+      })
+      .join(', ');
+
+    await this.runAdminQuery(
+      dataSource,
+      `DELETE FROM ${workspaceMemberEntityMembershipSqlTable} membership
+       WHERE membership."deletedAt" IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM (VALUES ${membershipValuesSql}) AS allowed_memberships(
+             user_email,
+             internal_entity_id
+           )
+           INNER JOIN ${workspaceMemberSqlTable} workspace_member
+             ON LOWER(workspace_member."userEmail") = allowed_memberships.user_email
+            AND workspace_member."deletedAt" IS NULL
+           WHERE workspace_member."id" = membership."workspaceMemberId"
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM (VALUES ${membershipValuesSql}) AS allowed_memberships(
+             user_email,
+             internal_entity_id
+           )
+           INNER JOIN ${workspaceMemberSqlTable} workspace_member
+             ON LOWER(workspace_member."userEmail") = allowed_memberships.user_email
+            AND workspace_member."deletedAt" IS NULL
+           WHERE workspace_member."id" = membership."workspaceMemberId"
+             AND membership."internalEntityId" = allowed_memberships.internal_entity_id
+         )`,
+      membershipValues,
+    );
+
+    const workspaceMemberMappings = await this.runAdminQuery<
+      Array<{ recordId: string; internalEntityId: string }>
+    >(
+      dataSource,
+      `SELECT workspace_member."id" AS "recordId",
+              allowed_memberships.internal_entity_id AS "internalEntityId"
+       FROM (VALUES ${membershipValuesSql}) AS allowed_memberships(
+         user_email,
+         internal_entity_id
+       )
+       INNER JOIN ${workspaceMemberSqlTable} workspace_member
+         ON LOWER(workspace_member."userEmail") = allowed_memberships.user_email
+        AND workspace_member."deletedAt" IS NULL`,
+      membershipValues,
+    );
+
+    await this.insertMembershipMappings({
+      dataSource,
+      membershipSqlTable: workspaceMemberEntityMembershipSqlTable,
+      sourceJoinColumnName: 'workspaceMemberId',
+      mappings: workspaceMemberMappings,
+      logLabel: 'Workspace Member <- Primary Dev User',
+    });
+  }
+
   private buildOpportunityInternalEntityMappingsBatch(
     mappings: OpportunityInternalEntityMapping[],
   ): {
@@ -694,6 +1368,11 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
   private async verifyMigration(
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
+    {
+      shouldThrowOnUnresolvedOpportunities = true,
+    }: {
+      shouldThrowOnUnresolvedOpportunities?: boolean;
+    } = {},
   ): Promise<void> {
     const result = await this.runAdminQuery<Array<{ count: string }>>(
       dataSource,
@@ -706,7 +1385,15 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     const nullCount = parseInt(result?.[0]?.count ?? '0', 10);
 
     if (nullCount > 0) {
-      throw new Error(buildMissingInternalEntityAfterMigrationError(nullCount));
+      const message = `${nullCount} opportunité(s) sans internalEntityId après migration. Ajoutez les entreprises manquantes à INTERNAL_ENTITY_SEEDS, corrigez le CSV ou migrez explicitement ces opportunités.`;
+
+      if (!shouldThrowOnUnresolvedOpportunities) {
+        this.logger.warn(message);
+
+        return;
+      }
+
+      throw new Error(message);
     }
 
     this.logger.log(
@@ -922,6 +1609,56 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
           targetFieldLabel,
           targetFieldIcon,
           targetObjectMetadataId,
+        },
+      },
+      workspaceId,
+    });
+  }
+
+  private async applyCalendarEventJunctionCascadeOnDelete({
+    workspaceId,
+    flatMaps,
+    junctionObjectNameSingular,
+  }: {
+    workspaceId: string;
+    flatMaps: FlatMaps;
+    junctionObjectNameSingular: string;
+  }): Promise<void> {
+    const fieldId = this.findFieldId(
+      junctionObjectNameSingular,
+      'calendarEvent',
+      flatMaps,
+    );
+    const existingField = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: fieldId,
+      flatEntityMaps: flatMaps.flatFieldMetadataMaps,
+    });
+
+    if (!isDefined(existingField)) {
+      return;
+    }
+
+    const existingSettings =
+      (existingField.settings as Record<string, unknown> | null | undefined) ??
+      {};
+    const hasCascade =
+      existingSettings.onDelete === RelationOnDeleteAction.CASCADE;
+    const hasJoinColumn = typeof existingSettings.joinColumnName === 'string';
+
+    if (hasCascade && hasJoinColumn) {
+      return;
+    }
+
+    await this.fieldMetadataService.updateOneField({
+      updateFieldInput: {
+        id: fieldId,
+        settings: {
+          ...existingSettings,
+          relationType: RelationType.MANY_TO_ONE,
+          joinColumnName: hasJoinColumn
+            ? (existingSettings.joinColumnName as string)
+            : 'calendarEventId',
+          onDelete: RelationOnDeleteAction.CASCADE,
         },
       },
       workspaceId,

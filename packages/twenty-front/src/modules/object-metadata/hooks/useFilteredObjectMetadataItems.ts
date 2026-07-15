@@ -1,4 +1,5 @@
 import { objectMetadataItemsWithFieldsSelector } from '@/object-metadata/states/objectMetadataItemsWithFieldsSelector';
+import { isHiddenObjectMetadataItem } from '@/object-metadata/utils/isHiddenObjectMetadataItem';
 import { useMemo } from 'react';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
@@ -6,22 +7,29 @@ export const useFilteredObjectMetadataItems = () => {
   const objectMetadataItemsWithFields = useAtomStateValue(
     objectMetadataItemsWithFieldsSelector,
   );
-  const objectMetadataItems = objectMetadataItemsWithFields;
+
+  const visibleObjectMetadataItems = useMemo(
+    () =>
+      objectMetadataItemsWithFields.filter(
+        (objectMetadataItem) => !isHiddenObjectMetadataItem(objectMetadataItem),
+      ),
+    [objectMetadataItemsWithFields],
+  );
 
   const activeNonSystemObjectMetadataItems = useMemo(
     () =>
-      objectMetadataItems.filter(
+      visibleObjectMetadataItems.filter(
         ({ isActive, isSystem }) => isActive && !isSystem,
       ),
-    [objectMetadataItems],
+    [visibleObjectMetadataItems],
   );
 
   const activeObjectMetadataItems = useMemo(
     () =>
-      objectMetadataItems
+      visibleObjectMetadataItems
         .filter(({ isActive }) => isActive)
         .sort((a, b) => a.labelSingular.localeCompare(b.labelSingular)),
-    [objectMetadataItems],
+    [visibleObjectMetadataItems],
   );
 
   const alphaSortedActiveNonSystemObjectMetadataItems = [
@@ -36,9 +44,10 @@ export const useFilteredObjectMetadataItems = () => {
     return 0;
   });
 
-  const inactiveNonSystemObjectMetadataItems = objectMetadataItems.filter(
-    ({ isActive, isSystem }) => !isActive && !isSystem,
-  );
+  const inactiveNonSystemObjectMetadataItems =
+    visibleObjectMetadataItems.filter(
+      ({ isActive, isSystem }) => !isActive && !isSystem,
+    );
 
   const findActiveObjectMetadataItemByNamePlural = (namePlural: string) =>
     activeNonSystemObjectMetadataItems.find(
@@ -47,12 +56,12 @@ export const useFilteredObjectMetadataItems = () => {
     );
 
   const findObjectMetadataItemById = (id: string) =>
-    objectMetadataItems.find(
+    objectMetadataItemsWithFields.find(
       (objectMetadataItem) => objectMetadataItem.id === id,
     );
 
   const findObjectMetadataItemByNamePlural = (namePlural: string) =>
-    objectMetadataItems.find(
+    objectMetadataItemsWithFields.find(
       (objectMetadataItem) => objectMetadataItem.namePlural === namePlural,
     );
 
@@ -63,7 +72,7 @@ export const useFilteredObjectMetadataItems = () => {
     findObjectMetadataItemByNamePlural,
     findActiveObjectMetadataItemByNamePlural,
     inactiveNonSystemObjectMetadataItems,
-    objectMetadataItems,
+    objectMetadataItems: visibleObjectMetadataItems,
     alphaSortedActiveNonSystemObjectMetadataItems,
   };
 };

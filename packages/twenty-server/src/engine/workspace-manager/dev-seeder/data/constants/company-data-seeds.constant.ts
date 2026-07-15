@@ -1,9 +1,13 @@
-import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+import {
+  WORKSPACE_MEMBER_DATA_SEED_IDS,
+  WORKSPACE_MEMBER_DATA_SEEDS,
+} from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+import { INTERNAL_ENTITY_DEMO_RECORDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/internal-entity-demo-records.constant';
 
 type CompanyDataSeed = {
   id: string;
   name: string;
-  domainNamePrimaryLinkUrl: string;
+  domainNamePrimaryLinkUrl: string | null;
   addressAddressCity: string;
   employees: number;
   linkedinLinkPrimaryLinkUrl: string;
@@ -636,6 +640,19 @@ export const COMPANY_DATA_SEED_IDS = {
   ID_598: '20202020-ade2-432f-9ce1-fa23dbf59769',
   ID_599: '20202020-afff-49b1-99b9-26924b60bd56',
 };
+
+const COMPANY_DATA_SEED_DEMO_RECORDS_BY_ID = new Map(
+  INTERNAL_ENTITY_DEMO_RECORDS.map((record) => [
+    COMPANY_DATA_SEED_IDS[record.companySeedKey],
+    record,
+  ]),
+);
+
+const COMPANY_DATA_SEED_DEMO_IDS = new Set(
+  INTERNAL_ENTITY_DEMO_RECORDS.map(
+    (record) => COMPANY_DATA_SEED_IDS[record.companySeedKey],
+  ),
+);
 
 // prettier-ignore
 const COMPANY_DATA_SEEDS_RAW = [
@@ -8527,12 +8544,51 @@ const COMPANY_DATA_SEEDS_RAW = [
   },
 ];
 
-export const COMPANY_DATA_SEEDS: CompanyDataSeed[] = COMPANY_DATA_SEEDS_RAW.map(
-  (company, index) => ({
-    ...company,
-    updatedBySource: company.createdBySource,
-    updatedByWorkspaceMemberId: company.createdByWorkspaceMemberId,
-    updatedByName: company.createdByName,
-    position: index + 1,
-  }),
+export const COMPANY_DATA_SEEDS: CompanyDataSeed[] =
+  COMPANY_DATA_SEEDS_RAW.filter((company) =>
+    COMPANY_DATA_SEED_DEMO_IDS.has(company.id),
+  ).map((company, index) => {
+    const demoRecord = COMPANY_DATA_SEED_DEMO_RECORDS_BY_ID.get(company.id);
+    const createdByWorkspaceMemberId =
+      demoRecord?.workspaceMemberId ?? company.createdByWorkspaceMemberId;
+    const createdByWorkspaceMember = WORKSPACE_MEMBER_DATA_SEEDS.find(
+      (workspaceMember) => workspaceMember.id === createdByWorkspaceMemberId,
+    );
+    const createdByName =
+      createdByWorkspaceMember?.nameFirstName &&
+      createdByWorkspaceMember?.nameLastName
+        ? `${createdByWorkspaceMember.nameFirstName} ${createdByWorkspaceMember.nameLastName}`
+        : company.createdByName;
+
+    return {
+      ...company,
+      ...(demoRecord
+        ? {
+            name: demoRecord.companyName,
+            domainNamePrimaryLinkUrl: demoRecord.companyDomain,
+            addressAddressCity: demoRecord.companyCity,
+            employees: demoRecord.companyEmployees,
+            linkedinLinkPrimaryLinkUrl: demoRecord.companyLinkedinUrl,
+            createdBySource: 'MANUAL',
+            createdByWorkspaceMemberId,
+            createdByName,
+            accountOwnerId: demoRecord.workspaceMemberId,
+          }
+        : {}),
+      updatedBySource: 'MANUAL',
+      updatedByWorkspaceMemberId: createdByWorkspaceMemberId,
+      updatedByName: createdByName,
+      position: index + 1,
+    };
+  });
+
+const DEFAULT_COMPANY_DATA_SEED_IDS = new Set([
+  COMPANY_DATA_SEED_IDS.ID_1,
+  COMPANY_DATA_SEED_IDS.ID_6,
+  COMPANY_DATA_SEED_IDS.ID_11,
+  COMPANY_DATA_SEED_IDS.ID_16,
+]);
+
+export const DEFAULT_COMPANY_DATA_SEEDS = COMPANY_DATA_SEEDS.filter((company) =>
+  DEFAULT_COMPANY_DATA_SEED_IDS.has(company.id),
 );

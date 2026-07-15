@@ -1,3 +1,8 @@
+import {
+  PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
+  PRIMARY_DEV_WORKSPACE_DOMAIN,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
+
 export type RandomUserData = {
   id: string;
   firstName: string;
@@ -455,8 +460,7 @@ export function generateRandomUsers(): {
   const userWorkspaceIds: Record<string, string> = {};
   const workspaceMemberIds: Record<string, string> = {};
 
-  const passwordHash =
-    '$2b$10$3LwXjJRtLsfx4hLuuXhxt.3mWgismTiZFCZSG3z9kDrSfsrBl0fT6';
+  const passwordHash = PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH;
 
   for (let i = 1; i <= 1000; i++) {
     // Generate deterministic random indices for names
@@ -472,7 +476,7 @@ export function generateRandomUsers(): {
 
     const firstName = FIRST_NAMES[firstNameIndex];
     const lastName = LAST_NAMES[lastNameIndex];
-    const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@apple.dev`;
+    const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@${PRIMARY_DEV_WORKSPACE_DOMAIN}`;
 
     // Generate consistent UUIDs based on index
     const userId =
@@ -523,7 +527,7 @@ export function generateRandomUsers(): {
     userWorkspaces.push({
       id: userWorkspaceId,
       userId,
-      workspaceId: '20202020-1c25-4d02-bf25-6aeccf7ea419', // SEED_APPLE_WORKSPACE_ID
+      workspaceId: '20202020-1c25-4d02-bf25-6aeccf7ea419', // primary dev workspace
     });
 
     workspaceMembers.push({

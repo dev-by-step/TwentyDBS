@@ -1,7 +1,15 @@
 import { MessageParticipantRole } from 'twenty-shared/types';
 
+import {
+  getPrimaryDevWorkspaceUserDisplayName,
+  PRIMARY_DEV_WORKSPACE_DOMAIN,
+  PRIMARY_DEV_WORKSPACE_USERS,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { MESSAGE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/message-data-seeds.constant';
-import { PERSON_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
+import {
+  PERSON_DATA_SEEDS,
+  PERSON_DATA_SEEDS_MAP,
+} from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 import {
   WORKSPACE_MEMBER_DATA_SEED_IDS,
   getWorkspaceMemberDataSeeds,
@@ -115,13 +123,16 @@ const CREATE_PERSON_PARTICIPANT = (
   if (!PERSON_ID) return null;
 
   usedPersonIds.add(PERSON_ID);
-  const PERSON_INDEX = personIds.indexOf(PERSON_ID) + 1;
+  const person = PERSON_DATA_SEEDS_MAP.get(PERSON_ID);
 
   return {
     workspaceMemberId: defaultWorkspaceMemberId,
     personId: PERSON_ID,
-    displayName: `Person ${PERSON_INDEX}`,
-    handle: `person${PERSON_INDEX}@example.com`,
+    displayName:
+      person?.nameFirstName && person?.nameLastName
+        ? `${person.nameFirstName} ${person.nameLastName}`
+        : 'Contact',
+    handle: person?.emailsPrimaryEmail ?? `person-${PERSON_ID}@example.com`,
   };
 };
 
@@ -144,29 +155,29 @@ const CREATE_WORKSPACE_MEMBER_PARTICIPANT = (
       return {
         workspaceMemberId: WORKSPACE_MEMBER_ID,
         personId: personIds[0],
-        displayName: 'Tim Apple',
-        handle: 'tim@apple.dev',
+        displayName: getPrimaryDevWorkspaceUserDisplayName('TIM'),
+        handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
       };
     case WORKSPACE_MEMBER_DATA_SEED_IDS.JONY:
       return {
         workspaceMemberId: WORKSPACE_MEMBER_ID,
         personId: personIds[1] || personIds[0],
-        displayName: 'Jony Ive',
-        handle: 'jony@apple.dev',
+        displayName: getPrimaryDevWorkspaceUserDisplayName('JONY'),
+        handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
       };
     case WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL:
       return {
         workspaceMemberId: WORKSPACE_MEMBER_ID,
         personId: personIds[2] || personIds[0],
-        displayName: 'Phil Schiller',
-        handle: 'phil@apple.dev',
+        displayName: getPrimaryDevWorkspaceUserDisplayName('PHIL'),
+        handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
       };
     default:
       return {
         workspaceMemberId: WORKSPACE_MEMBER_ID,
         personId: personIds[0],
         displayName: 'Workspace Member',
-        handle: 'member@apple.dev',
+        handle: `member@${PRIMARY_DEV_WORKSPACE_DOMAIN}`,
       };
   }
 };
@@ -282,10 +293,8 @@ const GENERATE_MESSAGE_PARTICIPANT_SEEDS = (
     (key) => MESSAGE_DATA_SEED_IDS[key as keyof typeof MESSAGE_DATA_SEED_IDS],
   );
 
-  const PERSON_IDS = Object.keys(PERSON_DATA_SEED_IDS).map(
-    (key) => PERSON_DATA_SEED_IDS[key as keyof typeof PERSON_DATA_SEED_IDS],
-  );
-  const WORKSPACE_MEMBER_IDS = getWorkspaceMemberDataSeeds(workspaceId).map(
+  const PERSON_IDS = PERSON_DATA_SEEDS.map((person) => person.id);
+  const WORKSPACE_MEMBER_IDS = getWorkspaceMemberDataSeeds().map(
     (member) => member.id,
   );
 

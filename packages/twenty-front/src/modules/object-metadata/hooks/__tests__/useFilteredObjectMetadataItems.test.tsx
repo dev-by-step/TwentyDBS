@@ -12,6 +12,7 @@ import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { setTestObjectMetadataItemsInMetadataStore } from '~/testing/utils/setTestObjectMetadataItemsInMetadataStore';
 import { isDefined } from 'twenty-shared/utils';
 import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';
+import { MULTI_ENTITY_OBJECT_NAME } from 'twenty-shared/constants';
 
 const mocks = [
   {
@@ -28,10 +29,26 @@ const mocks = [
 ];
 
 const Wrapper = ({ children }: { children: ReactNode }) => {
-  setTestObjectMetadataItemsInMetadataStore(
-    jotaiStore,
-    getTestEnrichedObjectMetadataItemsMock(),
-  );
+  const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock();
+  const objectMetadataItemTemplate = objectMetadataItems[0];
+
+  if (!isDefined(objectMetadataItemTemplate)) {
+    throw new Error('Object metadata item template not found');
+  }
+
+  setTestObjectMetadataItemsInMetadataStore(jotaiStore, [
+    ...objectMetadataItems,
+    {
+      ...objectMetadataItemTemplate,
+      id: 'hidden-calendar-event-entity-audience',
+      nameSingular: MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience,
+      namePlural: 'calendarEventEntityAudiences',
+      labelSingular: 'Calendar Event Entity Audience',
+      labelPlural: 'Calendar Event Entity Audiences',
+      isActive: true,
+      isSystem: false,
+    },
+  ]);
 
   return (
     <JotaiProvider store={jotaiStore}>
@@ -41,6 +58,29 @@ const Wrapper = ({ children }: { children: ReactNode }) => {
 };
 
 describe('useFilteredObjectMetadataItems', () => {
+  it('should hide technical internal objects from user-facing lists', async () => {
+    const { result } = renderHook(useFilteredObjectMetadataItems, {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      expect(
+        result.current.objectMetadataItems.some(
+          (item) =>
+            item.nameSingular ===
+            MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience,
+        ),
+      ).toBe(false);
+      expect(
+        result.current.activeObjectMetadataItems.some(
+          (item) =>
+            item.nameSingular ===
+            MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience,
+        ),
+      ).toBe(false);
+    });
+  });
+
   it('should findActiveObjectMetadataItemByNamePlural', async () => {
     const { result } = renderHook(useFilteredObjectMetadataItems, {
       wrapper: Wrapper,

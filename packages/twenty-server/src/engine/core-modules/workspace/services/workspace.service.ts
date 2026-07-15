@@ -68,6 +68,9 @@ import { prefillWorkflows } from 'src/engine/workspace-manager/standard-objects-
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
 import { DEFAULT_FEATURE_FLAGS } from 'src/engine/workspace-manager/workspace-migration/constant/default-feature-flags';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 
 @Injectable()
 // oxlint-disable-next-line twenty/inject-workspace-repository
@@ -133,6 +136,8 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     private readonly coreEntityCacheService: CoreEntityCacheService,
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeSequenceReaderService: UpgradeSequenceReaderService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly initInternalEntitiesCommand: InitInternalEntitiesCommand,
   ) {
     super(workspaceRepository);
   }
@@ -347,6 +352,7 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     await this.workspaceManagerService.init({
       workspace,
       userId: user.id,
+      userEmail: user.email,
     });
 
     await this.featureFlagService.enableFeatureFlags(
@@ -371,9 +377,40 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
       workspace.id,
     );
 
+    await this.seedInternalEntitiesForWorkspace(workspace.id);
+
     return await this.workspaceRepository.findOneBy({
       id: workspace.id,
     });
+  }
+
+  private async seedInternalEntitiesForWorkspace(
+    workspaceId: string,
+  ): Promise<void> {
+    try {
+      const authContext = buildSystemAuthContext(workspaceId);
+
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const dataSource =
+            await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+          await this.initInternalEntitiesCommand.runSeedForWorkspace(
+            workspaceId,
+            dataSource,
+          );
+        },
+        authContext,
+      );
+    } catch (error) {
+      // Seeding is idempotent and non-critical for the immediate activation:
+      // log the failure and let the operator re-run init-internal-entities.
+      this.logger.error(
+        `Failed to auto-seed InternalEntities for workspace ${workspaceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private async activateAndInitializeUpgradeState({
@@ -766,6 +803,10 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         ),
     });
 
+    const isWorkspaceDemoDataPrefillEnabled = this.twentyConfigService.get(
+      'IS_WORKSPACE_DEMO_DATA_PREFILL_ENABLED',
+    );
+
     const queryRunner = this.coreDataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -773,9 +814,11 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     try {
       await queryRunner.startTransaction();
 
-      await prefillCompanies(queryRunner.manager, schemaName);
+      if (isWorkspaceDemoDataPrefillEnabled) {
+        await prefillCompanies(queryRunner.manager, schemaName);
 
-      await prefillPeople(queryRunner.manager, schemaName);
+        await prefillPeople(queryRunner.manager, schemaName);
+      }
 
       await prefillWorkflows(
         queryRunner.manager,
@@ -785,7 +828,9 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         flatFieldMetadataMaps,
       );
 
-      await prefillOpportunities(queryRunner.manager, schemaName);
+      if (isWorkspaceDemoDataPrefillEnabled) {
+        await prefillOpportunities(queryRunner.manager, schemaName);
+      }
 
       await prefillDashboards(
         queryRunner.manager,

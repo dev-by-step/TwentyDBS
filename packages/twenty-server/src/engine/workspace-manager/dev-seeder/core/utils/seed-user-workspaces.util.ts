@@ -1,10 +1,7 @@
 import { type QueryRunner } from 'typeorm';
 
 import { type UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import {
-  SEED_APPLE_WORKSPACE_ID,
-  SEED_YCOMBINATOR_WORKSPACE_ID,
-} from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { generateRandomUsers } from 'src/engine/workspace-manager/dev-seeder/core/utils/generate-random-users.util';
 import { USER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-users.util';
 
@@ -15,16 +12,10 @@ export const USER_WORKSPACE_DATA_SEED_IDS = {
   TIM: '20202020-9e3b-46d4-a556-88b9ddc2b035',
   JONY: '20202020-3957-4908-9c36-2929a23f8353',
   PHIL: '20202020-7169-42cf-bc47-1cfef15264b1',
-  JANE_ACME: '20202020-ae8d-41ea-9469-f74f5d4b002e',
-  TIM_ACME: '20202020-e10a-4c27-a90b-b08c57b02d44',
-  JONY_ACME: '20202020-e10a-4c27-a90b-b08c57b02d45',
-  PHIL_ACME: '20202020-e10a-4c27-a90b-b08c57b02d46',
+  LOUIS_WEKNOW: '20202020-d4cf-4f72-bbc8-f2a0724c43bd',
 };
 
-const {
-  userWorkspaces: randomUserWorkspaces,
-  userWorkspaceIds: randomUserWorkspaceIds,
-} = generateRandomUsers();
+const { userWorkspaceIds: randomUserWorkspaceIds } = generateRandomUsers();
 
 export const RANDOM_USER_WORKSPACE_IDS = randomUserWorkspaceIds;
 
@@ -45,7 +36,7 @@ export const seedUserWorkspaces = async ({
   >[] = [];
 
   if (workspaceId === SEED_APPLE_WORKSPACE_ID) {
-    const originalUserWorkspaces = [
+    userWorkspaces = [
       {
         id: USER_WORKSPACE_DATA_SEED_IDS.TIM,
         userId: USER_DATA_SEED_IDS.TIM,
@@ -66,31 +57,9 @@ export const seedUserWorkspaces = async ({
         userId: USER_DATA_SEED_IDS.PHIL,
         workspaceId,
       },
-    ];
-
-    userWorkspaces = [...originalUserWorkspaces, ...randomUserWorkspaces];
-  }
-
-  if (workspaceId === SEED_YCOMBINATOR_WORKSPACE_ID) {
-    userWorkspaces = [
       {
-        id: USER_WORKSPACE_DATA_SEED_IDS.TIM_ACME,
-        userId: USER_DATA_SEED_IDS.TIM,
-        workspaceId,
-      },
-      {
-        id: USER_WORKSPACE_DATA_SEED_IDS.JONY_ACME,
-        userId: USER_DATA_SEED_IDS.JONY,
-        workspaceId,
-      },
-      {
-        id: USER_WORKSPACE_DATA_SEED_IDS.PHIL_ACME,
-        userId: USER_DATA_SEED_IDS.PHIL,
-        workspaceId,
-      },
-      {
-        id: USER_WORKSPACE_DATA_SEED_IDS.JANE_ACME,
-        userId: USER_DATA_SEED_IDS.JANE,
+        id: USER_WORKSPACE_DATA_SEED_IDS.LOUIS_WEKNOW,
+        userId: USER_DATA_SEED_IDS.LOUIS_WEKNOW,
         workspaceId,
       },
     ];

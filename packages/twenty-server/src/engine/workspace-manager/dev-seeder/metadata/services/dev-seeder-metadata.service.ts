@@ -11,10 +11,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import {
-  SEED_APPLE_WORKSPACE_ID,
-  SEED_YCOMBINATOR_WORKSPACE_ID,
-} from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { COMPANY_CUSTOM_FIELD_SEEDS } from 'src/engine/workspace-manager/dev-seeder/metadata/custom-fields/constants/company-custom-field-seeds.constant';
 import { PERSON_CUSTOM_FIELD_SEEDS } from 'src/engine/workspace-manager/dev-seeder/metadata/custom-fields/constants/person-custom-field-seeds.constant';
 import { PET_CARE_AGREEMENT_CARETAKER_MORPH_SEED } from 'src/engine/workspace-manager/dev-seeder/metadata/custom-fields/constants/pet-care-agreement-custom-relation-field-seeds.constant';
@@ -158,18 +155,6 @@ export class DevSeederMetadataService {
           fieldName: 'caredForPets',
           junctionTargetFieldRef: `${PET_CARE_AGREEMENT_CUSTOM_OBJECT_SEED.nameSingular}.pet`,
         },
-      ],
-    },
-    [SEED_YCOMBINATOR_WORKSPACE_ID]: {
-      objects: [
-        {
-          seed: SURVEY_RESULT_CUSTOM_OBJECT_SEED,
-          fields: SURVEY_RESULT_CUSTOM_FIELD_SEEDS,
-        },
-      ],
-      fields: [
-        { objectName: 'company', seeds: COMPANY_CUSTOM_FIELD_SEEDS },
-        { objectName: 'person', seeds: PERSON_CUSTOM_FIELD_SEEDS },
       ],
     },
   };

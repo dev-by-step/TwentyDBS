@@ -14,6 +14,7 @@ import {
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-field-flat-metadata.util';
 import { createStandardRelationFieldFlatMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-relation-field-flat-metadata.util';
 import { getTsVectorColumnExpressionFromFields } from 'src/engine/workspace-manager/utils/get-ts-vector-column-expression.util';
+import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
 import { SEARCH_FIELDS_FOR_CALENDAR_EVENT } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
 
 export const buildCalendarEventStandardFlatFieldMetadatas = ({
@@ -394,6 +395,41 @@ export const buildCalendarEventStandardFlatFieldMetadatas = ({
       icon: 'IconLink',
       isNullable: true,
       isUIReadOnly: true,
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
+  sharingScope: createStandardFieldFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      fieldName: 'sharingScope',
+      type: FieldMetadataType.SELECT,
+      label: i18nLabel(msg`Sharing Scope`),
+      description: i18nLabel(
+        msg`Controls whether event details stay inside the entity or are visible to the workspace`,
+      ),
+      icon: 'IconUsersGroup',
+      isNullable: false,
+      defaultValue: `'${CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY}'`,
+      options: [
+        {
+          id: '20202020-7b0f-4d9e-8d8f-6b95b7aef8a1',
+          value: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+          label: i18nLabel(msg`Entity only`),
+          position: 0,
+          color: 'gray',
+        },
+        {
+          id: '20202020-0900-46f5-b1d4-2f0f2ee0f4cc',
+          value: CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC,
+          label: i18nLabel(msg`Workspace public`),
+          position: 1,
+          color: 'green',
+        },
+      ],
     },
     standardObjectMetadataRelatedEntityIds,
     dependencyFlatEntityMaps,

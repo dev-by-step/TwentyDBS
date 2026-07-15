@@ -14,6 +14,9 @@ import { isDeveloperDefaultSignInPrefilledState } from '@/client-config/states/i
 import { isDefined } from 'twenty-shared/utils';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
+const DEFAULT_DEVELOPER_SIGN_IN_EMAIL = 'aline@weknow.dev';
+const DEFAULT_DEVELOPER_SIGN_IN_PASSWORD = 'twenty-dbs.dev';
+
 const makeValidationSchema = (signInUpStep: SignInUpStep) =>
   z
     .object({
@@ -61,8 +64,8 @@ export const useSignInUpForm = () => {
     }
 
     if (isDeveloperDefaultSignInPrefilled === true) {
-      form.setValue('email', prefilledEmail ?? 'tim@apple.dev');
-      form.setValue('password', 'tim@apple.dev');
+      form.setValue('email', prefilledEmail ?? DEFAULT_DEVELOPER_SIGN_IN_EMAIL);
+      form.setValue('password', DEFAULT_DEVELOPER_SIGN_IN_PASSWORD);
     }
   }, [form, isDeveloperDefaultSignInPrefilled, prefilledEmail]);
   return { form };

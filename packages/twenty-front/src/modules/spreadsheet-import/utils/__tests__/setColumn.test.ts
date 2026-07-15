@@ -82,6 +82,32 @@ describe('setColumn', () => {
     });
   });
 
+  it('matches select options against aliases from the csv values', () => {
+    const field = {
+      ...defaultField,
+      fieldType: {
+        type: 'select',
+        options: [{ value: 'CUSTOMER', label: 'Customer', aliases: ['GAGNE'] }],
+      },
+    } as SpreadsheetImportField;
+
+    const data = [['GAGNE']];
+    const result = setColumn(oldColumn, field, data);
+
+    expect(result).toEqual({
+      index: 0,
+      header: 'Name',
+      type: SpreadsheetColumnType.matchedSelectOptions,
+      value: 'Name',
+      matchedOptions: [
+        {
+          entry: 'GAGNE',
+          value: 'CUSTOMER',
+        },
+      ],
+    });
+  });
+
   it('should return an empty column if field type is not recognized', () => {
     const field = {
       ...defaultField,

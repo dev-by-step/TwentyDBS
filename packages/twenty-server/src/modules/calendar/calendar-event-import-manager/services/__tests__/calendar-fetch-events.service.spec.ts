@@ -6,6 +6,7 @@ const mockCalendarChannelSyncStatusService = {
   markAsCalendarEventListFetchOngoing: jest.fn(),
   markAsCalendarEventListFetchPending: jest.fn(),
   markAsCalendarEventsImportPending: jest.fn(),
+  markAsCompletedAndMarkAsCalendarEventListFetchPending: jest.fn(),
 };
 
 const mockGetCalendarEventsService = {
@@ -221,6 +222,31 @@ describe('CalendarFetchEventsService', () => {
       expect(
         mockGetCalendarEventsService.getCalendarEvents,
       ).toHaveBeenCalledWith(expect.anything(), 'cursor-from-workspace');
+    });
+
+    it('should mark sync completed when provider returns no events and no ids', async () => {
+      mockGetCalendarEventsService.getCalendarEvents.mockResolvedValue({
+        fullEvents: true,
+        calendarEvents: [],
+        nextSyncCursor: 'empty-cursor',
+      });
+
+      await service.fetchCalendarEvents(
+        createCalendarChannel(null),
+        baseConnectedAccount,
+        workspaceId,
+      );
+
+      expect(mockCalendarChannelRepository.update).toHaveBeenCalledWith(
+        { id: 'channel-123', workspaceId },
+        { syncCursor: 'empty-cursor' },
+      );
+      expect(
+        mockCalendarChannelSyncStatusService.markAsCompletedAndMarkAsCalendarEventListFetchPending,
+      ).toHaveBeenCalledWith(['channel-123'], workspaceId);
+      expect(
+        mockCalendarEventsImportService.processCalendarEventsImport,
+      ).not.toHaveBeenCalled();
     });
   });
 });

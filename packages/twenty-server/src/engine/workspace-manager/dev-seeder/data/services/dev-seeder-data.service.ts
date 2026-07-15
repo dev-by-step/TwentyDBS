@@ -36,6 +36,7 @@ import {
 import {
   COMPANY_DATA_SEED_COLUMNS,
   COMPANY_DATA_SEEDS,
+  DEFAULT_COMPANY_DATA_SEEDS,
 } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
 import {
   CONNECTED_ACCOUNT_DATA_SEED_COLUMNS,
@@ -131,13 +132,14 @@ const getRecordSeedsBatches = (
   workspaceId: string,
   attachmentSeeds: RecordSeedConfig['recordSeeds'],
   _featureFlags?: Record<FeatureFlagKey, boolean>,
+  light = false,
 ): RecordSeedConfig[][] => {
   // Batch 1: No dependencies
   const batch1: RecordSeedConfig[] = [
     {
       tableName: 'workspaceMember',
       pgColumns: WORKSPACE_MEMBER_DATA_SEED_COLUMNS,
-      recordSeeds: getWorkspaceMemberDataSeeds(workspaceId),
+      recordSeeds: getWorkspaceMemberDataSeeds(),
     },
     {
       tableName: '_surveyResult',
@@ -150,6 +152,25 @@ const getRecordSeedsBatches = (
       recordSeeds: ROCKET_DATA_SEEDS,
     },
   ];
+
+  if (light) {
+    return [
+      [
+        {
+          tableName: 'workspaceMember',
+          pgColumns: WORKSPACE_MEMBER_DATA_SEED_COLUMNS,
+          recordSeeds: getWorkspaceMemberDataSeeds(),
+        },
+      ],
+      [
+        {
+          tableName: 'company',
+          pgColumns: COMPANY_DATA_SEED_COLUMNS,
+          recordSeeds: DEFAULT_COMPANY_DATA_SEEDS,
+        },
+      ],
+    ];
+  }
 
   // Batch 2: Depends on workspaceMember
   const batch2: RecordSeedConfig[] = [
@@ -392,6 +413,7 @@ export class DevSeederDataService {
       workspaceId,
       attachmentSeeds,
       featureFlags,
+      light,
     );
 
     // Process batches sequentially (respecting dependencies)

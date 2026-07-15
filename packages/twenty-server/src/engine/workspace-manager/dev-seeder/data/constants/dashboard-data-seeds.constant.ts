@@ -1,3 +1,4 @@
+import { getPrimaryDevWorkspaceUserDisplayName } from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { PAGE_LAYOUT_SEEDS } from 'src/engine/workspace-manager/dev-seeder/core/constants/page-layout-seeds.constant';
 import { generateSeedId } from 'src/engine/workspace-manager/dev-seeder/core/utils/generate-seed-id.util';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
@@ -46,10 +47,10 @@ export const getDashboardDataSeeds = (
     ),
     createdBySource: 'MANUAL',
     createdByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-    createdByName: 'Tim Apple',
+    createdByName: getPrimaryDevWorkspaceUserDisplayName('TIM'),
     updatedBySource: 'MANUAL',
     updatedByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-    updatedByName: 'Tim Apple',
+    updatedByName: getPrimaryDevWorkspaceUserDisplayName('TIM'),
     position: 0,
   },
   {
@@ -61,10 +62,10 @@ export const getDashboardDataSeeds = (
     ),
     createdBySource: 'MANUAL',
     createdByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
-    createdByName: 'Jony Ive',
+    createdByName: getPrimaryDevWorkspaceUserDisplayName('JONY'),
     updatedBySource: 'MANUAL',
     updatedByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
-    updatedByName: 'Jony Ive',
+    updatedByName: getPrimaryDevWorkspaceUserDisplayName('JONY'),
     position: 1,
   },
   {
@@ -73,10 +74,10 @@ export const getDashboardDataSeeds = (
     pageLayoutId: generateSeedId(workspaceId, PAGE_LAYOUT_SEEDS.TEAM_DASHBOARD),
     createdBySource: 'MANUAL',
     createdByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
-    createdByName: 'Phil Schiller',
+    createdByName: getPrimaryDevWorkspaceUserDisplayName('PHIL'),
     updatedBySource: 'MANUAL',
     updatedByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
-    updatedByName: 'Phil Schiller',
+    updatedByName: getPrimaryDevWorkspaceUserDisplayName('PHIL'),
     position: 2,
   },
 ];

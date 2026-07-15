@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import { CalendarChannelVisibility } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
@@ -103,6 +102,10 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
               })
             )?.id ?? null)
           : null;
+        const hasRequesterEntityContext =
+          isDefined(userId) ||
+          isDefined(currentUserEntityId) ||
+          isDefined(currentWorkspaceMemberId);
 
         const connectedAccountIds = [
           ...new Set(
@@ -128,55 +131,6 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
               )
             : new Set<string>();
 
-        for (let i = calendarEvents.length - 1; i >= 0; i--) {
-          const associations =
-            associationsByCalendarEventId.get(calendarEvents[i].id) ?? [];
-
-          const calendarChannels = associations
-            .map((association) =>
-              calendarChannelMap.get(association.calendarChannelId),
-            )
-            .filter(isDefined);
-
-          const hasShareEverythingVisibility = calendarChannels.some(
-            (calendarChannel) =>
-              calendarChannel.visibility ===
-              CalendarChannelVisibility.SHARE_EVERYTHING,
-          );
-
-          if (hasShareEverythingVisibility) {
-            continue;
-          }
-
-          const isOwnedByCurrentUser = calendarChannels.some(
-            (calendarChannel) =>
-              ownedConnectedAccountIds.has(calendarChannel.connectedAccountId),
-          );
-
-          if (isOwnedByCurrentUser) {
-            continue;
-          }
-
-          const hasMetadataVisibility = calendarChannels.some(
-            (calendarChannel) =>
-              calendarChannel.visibility === CalendarChannelVisibility.METADATA,
-          );
-
-          if (hasMetadataVisibility) {
-            calendarEvents[i].title =
-              FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
-            calendarEvents[i].description =
-              FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
-            continue;
-          }
-
-          calendarEvents.splice(i, 1);
-        }
-
-        if (calendarEvents.length === 0) {
-          return calendarEvents;
-        }
-
         const calendarEventMaskMap =
           await this.calendarPrivacyService.getCalendarEventMaskMap({
             calendarEventIds: calendarEvents.map(
@@ -187,6 +141,57 @@ export class ApplyCalendarEventsVisibilityRestrictionsService {
             currentUserId: userId,
             currentWorkspaceMemberId,
           });
+
+        for (let i = calendarEvents.length - 1; i >= 0; i--) {
+          const event = calendarEvents[i];
+          const eventChannels = (
+            associationsByCalendarEventId.get(event.id) ?? []
+          )
+            .map((association) =>
+              calendarChannelMap.get(association.calendarChannelId),
+            )
+            .filter(isDefined);
+
+          const hasShareEverythingVisibility = eventChannels.some(
+            (channel) =>
+              channel.visibility === CalendarChannelVisibility.SHARE_EVERYTHING,
+          );
+
+          if (hasShareEverythingVisibility) {
+            continue;
+          }
+
+          const isOwnedByCurrentUser = eventChannels.some((channel) =>
+            ownedConnectedAccountIds.has(channel.connectedAccountId),
+          );
+
+          if (isOwnedByCurrentUser) {
+            continue;
+          }
+
+          const hasMetadataVisibility = eventChannels.some(
+            (channel) =>
+              channel.visibility === CalendarChannelVisibility.METADATA,
+          );
+
+          if (hasMetadataVisibility) {
+            // Force-mask when the privacy service had no requester identity to
+            // evaluate cross-entity visibility; otherwise keep the existing
+            // decision already recorded in calendarEventMaskMap.
+            if (!hasRequesterEntityContext) {
+              calendarEventMaskMap.set(event.id, true);
+            }
+            continue;
+          }
+
+          // Private channel from another user with no metadata fallback → fully
+          // hide the event from the response (not just mask it).
+          calendarEvents.splice(i, 1);
+        }
+
+        if (calendarEvents.length === 0) {
+          return calendarEvents;
+        }
 
         this.calendarPrivacyService.applyInternalEntityPrivacyToWorkspaceCalendarEvents(
           calendarEvents,

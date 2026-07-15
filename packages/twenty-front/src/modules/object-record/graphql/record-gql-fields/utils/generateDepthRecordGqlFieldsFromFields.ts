@@ -110,6 +110,7 @@ export const generateDepthRecordGqlFieldsFromFields = ({
           ...(isDefined(imageIdentifierFieldMetadataItem)
             ? { [imageIdentifierFieldMetadataItem.name]: true }
             : {}),
+          color: true,
         };
 
         const manyToOneGqlFields = {
@@ -157,7 +158,13 @@ export const generateDepthRecordGqlFieldsFromFields = ({
             (morphGqlFields, morphGqlField) => ({
               ...morphGqlFields,
               ...(depth === 1
-                ? { [`${morphGqlField.gqlField}`]: { id: true, name: true } }
+                ? {
+                    [`${morphGqlField.gqlField}`]: {
+                      id: true,
+                      name: true,
+                      color: true,
+                    },
+                  }
                 : {}),
               ...(relationType === RelationType.MANY_TO_ONE
                 ? { [`${morphGqlField.gqlField}Id`]: true }

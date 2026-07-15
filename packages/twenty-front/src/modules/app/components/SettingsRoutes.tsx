@@ -244,6 +244,14 @@ const SettingsWorkspaceMembers = lazy(() =>
   ),
 );
 
+const SettingsInternalEntities = lazy(() =>
+  import('~/pages/settings/internal-entities/SettingsInternalEntities').then(
+    (module) => ({
+      default: module.SettingsInternalEntities,
+    }),
+  ),
+);
+
 const SettingsWorkspaceMember = lazy(() =>
   import('~/pages/settings/members/SettingsWorkspaceMember').then((module) => ({
     default: module.SettingsWorkspaceMember,
@@ -558,6 +566,10 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         }
       >
         <Route path={SettingsPath.Workspace} element={<SettingsWorkspace />} />
+        <Route
+          path={SettingsPath.InternalEntities}
+          element={<SettingsInternalEntities />}
+        />
         <Route path={SettingsPath.Domains} element={<SettingsDomains />} />
         <Route
           path={SettingsPath.ApiWebhooks}

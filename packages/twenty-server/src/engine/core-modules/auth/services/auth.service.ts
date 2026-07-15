@@ -923,6 +923,12 @@ export class AuthService {
       isTargetAnExistingWorkspace &&
       !isAnExistingUser
     ) {
+      if (!this.twentyConfigService.get('IS_MULTIWORKSPACE_ENABLED')) {
+        await this.signInUpService.assertEmailDomainAllowedForAutoSignUp(email);
+
+        return;
+      }
+
       throw new AuthException(
         'User does not have access to this workspace',
         AuthExceptionCode.FORBIDDEN_EXCEPTION,

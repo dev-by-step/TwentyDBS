@@ -9,6 +9,7 @@ export type CalendarChannel = {
   id: string;
   handle: string;
   visibility: CalendarChannelVisibility;
+  visibleInternalEntityIds: string[];
   isContactAutoCreationEnabled: boolean;
   contactAutoCreationPolicy: CalendarChannelContactAutoCreationPolicy;
   isSyncEnabled: boolean;

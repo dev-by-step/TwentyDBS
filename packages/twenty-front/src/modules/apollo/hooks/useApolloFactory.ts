@@ -11,6 +11,8 @@ import { returnToPathState } from '@/auth/states/returnToPathState';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
+import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -30,12 +32,16 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
   const [currentWorkspace, setCurrentWorkspace] = useAtomState(
     currentWorkspaceState,
   );
+  const setActiveEntityId = useSetAtomState(activeEntityIdState);
   const appVersion = useAtomStateValue(appVersionState);
   const [currentWorkspaceMember, setCurrentWorkspaceMember] = useAtomState(
     currentWorkspaceMemberState,
   );
   const setCurrentUser = useSetAtomState(currentUserState);
   const setCurrentUserWorkspace = useSetAtomState(currentUserWorkspaceState);
+  const [selectedEntityId, setSelectedEntityId] = useAtomState(
+    selectedEntityIdState,
+  );
 
   const setReturnToPath = useSetAtomState(returnToPathState);
   const location = useLocation();
@@ -61,6 +67,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       devtools: { enabled: process.env.IS_DEBUG_MODE === 'true' },
       currentWorkspaceMember: currentWorkspaceMember,
       currentWorkspace: currentWorkspace,
+      activeInternalEntityId: selectedEntityId,
       appVersion,
       onTokenPairChange: (tokenPair) => {
         setTokenPair(tokenPair);
@@ -71,6 +78,8 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
         setCurrentWorkspaceMember(null);
         setCurrentWorkspace(null);
         setCurrentUserWorkspace(null);
+        setActiveEntityId(null);
+        setSelectedEntityId(null);
         if (
           !isMatchingLocation(location, AppPath.Verify) &&
           !isMatchingLocation(location, AppPath.SignInUp) &&
@@ -115,6 +124,8 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
     setCurrentWorkspaceMember,
     setCurrentWorkspace,
     setReturnToPath,
+    setActiveEntityId,
+    setSelectedEntityId,
     enqueueErrorSnackBar,
   ]);
 
@@ -129,6 +140,12 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       apolloRef.current.updateCurrentWorkspace(currentWorkspace);
     }
   }, [currentWorkspace]);
+
+  useUpdateEffect(() => {
+    if (isDefined(apolloRef.current)) {
+      apolloRef.current.updateActiveInternalEntityId(selectedEntityId);
+    }
+  }, [selectedEntityId]);
 
   useUpdateEffect(() => {
     if (isDefined(apolloRef.current)) {

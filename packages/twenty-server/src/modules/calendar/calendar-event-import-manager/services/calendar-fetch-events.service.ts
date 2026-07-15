@@ -86,7 +86,10 @@ export class CalendarFetchEventsService {
         const calendarEventIds = getCalendarEventsResponse.calendarEventIds;
         const nextSyncCursor = getCalendarEventsResponse.nextSyncCursor;
 
-        if (!calendarEvents || calendarEvents?.length === 0) {
+        if (
+          (!calendarEvents || calendarEvents.length === 0) &&
+          (!calendarEventIds || calendarEventIds.length === 0)
+        ) {
           await this.calendarChannelRepository.update(
             { id: calendarChannel.id, workspaceId },
             {
@@ -94,10 +97,12 @@ export class CalendarFetchEventsService {
             },
           );
 
-          await this.calendarChannelSyncStatusService.markAsCalendarEventListFetchPending(
+          await this.calendarChannelSyncStatusService.markAsCompletedAndMarkAsCalendarEventListFetchPending(
             [calendarChannel.id],
             workspaceId,
           );
+
+          return;
         }
 
         await this.calendarChannelRepository.update(

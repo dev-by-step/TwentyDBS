@@ -26,6 +26,7 @@ import { type UpdateRoleInput } from 'src/engine/metadata-modules/role/dtos/upda
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { fromFlatRoleToRoleDto } from 'src/engine/metadata-modules/role/utils/fromFlatRoleToRoleDto.util';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
@@ -363,15 +364,71 @@ export class RoleService {
         canUpdateAllSettings: false,
         canAccessAllTools: true,
         canReadAllObjectRecords: true,
-        canUpdateAllObjectRecords: true,
-        canSoftDeleteAllObjectRecords: true,
-        canDestroyAllObjectRecords: true,
+        canUpdateAllObjectRecords: false,
+        canSoftDeleteAllObjectRecords: false,
+        canDestroyAllObjectRecords: false,
         canBeAssignedToUsers: true,
         canBeAssignedToAgents: false,
         canBeAssignedToApiKeys: false,
       },
       ownerFlatApplication,
       workspaceId,
+    });
+  }
+
+  public async createEntityManagerRole({
+    workspaceId,
+    ownerFlatApplication,
+  }: {
+    workspaceId: string;
+    ownerFlatApplication?: FlatApplication;
+  }): Promise<RoleDTO> {
+    const existingStandardRole = await this.getRoleByUniversalIdentifier({
+      workspaceId,
+      universalIdentifier: STANDARD_ROLE.entityManager.universalIdentifier,
+    });
+
+    if (isDefined(existingStandardRole)) {
+      return existingStandardRole;
+    }
+
+    const existingRoleByLabel = await this.roleRepository.findOne({
+      where: {
+        workspaceId,
+        label: STANDARD_ROLE.entityManager.label,
+      },
+    });
+
+    if (isDefined(existingRoleByLabel)) {
+      return existingRoleByLabel as unknown as RoleDTO;
+    }
+
+    const resolvedOwnerFlatApplication =
+      ownerFlatApplication ??
+      (
+        await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
+          { workspaceId },
+        )
+      ).workspaceCustomFlatApplication;
+
+    return this.createRole({
+      input: {
+        label: STANDARD_ROLE.entityManager.label,
+        description: STANDARD_ROLE.entityManager.description,
+        icon: STANDARD_ROLE.entityManager.icon,
+        universalIdentifier: STANDARD_ROLE.entityManager.universalIdentifier,
+        canUpdateAllSettings: false,
+        canAccessAllTools: true,
+        canReadAllObjectRecords: true,
+        canUpdateAllObjectRecords: false,
+        canSoftDeleteAllObjectRecords: false,
+        canDestroyAllObjectRecords: false,
+        canBeAssignedToUsers: true,
+        canBeAssignedToAgents: false,
+        canBeAssignedToApiKeys: false,
+      },
+      workspaceId,
+      ownerFlatApplication: resolvedOwnerFlatApplication,
     });
   }
 

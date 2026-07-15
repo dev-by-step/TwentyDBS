@@ -1,6 +1,5 @@
 import { access, readFile, stat } from 'node:fs/promises';
 
-import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
 import {
   buildRawCsvOpportunityCsv,
   buildRawCsvOpportunityRow,
@@ -10,11 +9,9 @@ import {
   buildPersonRecord,
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import {
-  buildCsvDuplicateOpportunityIdError,
-  buildCsvFileTooLargeError,
-  buildCsvMissingRequiredHeadersError,
-} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
-import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+  ImportCsvOpportunitiesParserService,
+  OpportunityCsvNotFoundError,
+} from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 
 jest.mock('node:fs/promises', () => ({
   access: jest.fn(),
@@ -45,55 +42,51 @@ describe('ImportCsvOpportunitiesParserService', () => {
   it('should parse and validate CSV opportunities', async () => {
     const company = buildCompanyRecord();
     const person = buildPersonRecord();
-    const opportunityRow = buildCsvOpportunityRow({
-      companyId: company.id,
-      personId: person.id,
-      name: 'Deal A',
-      entityName: 'WEKNOW',
-      currency: 'USD',
+    const row1 = buildRawCsvOpportunityRow({
+      Nom: 'Deal A',
+      Société: JSON.stringify(['WEKNOW']),
+      'Montant / Amount': '1200',
+      'Montant / Currency': 'USD',
+      'Entreprise Id': company.id,
+      'Point de contact Id': person.id,
+      Étape: 'NEW',
     });
-    const secondOpportunityRow = buildCsvOpportunityRow({
-      name: 'Deal B',
-      entityName: 'DEVBYSTEP',
-      amount: 0,
-      companyId: null,
-      currency: 'EUR',
-      personId: null,
-      stage: 'QUALIFIED',
-    });
-    const rawOpportunityRow = buildRawCsvOpportunityRow({
-      Id: opportunityRow.id,
-      Nom: opportunityRow.name,
-      Société: JSON.stringify([opportunityRow.entityName]),
-      'Montant / Amount': String(opportunityRow.amount),
-      'Montant / Currency': opportunityRow.currency,
-      'Entreprise Id': opportunityRow.companyId ?? '',
-      'Point de contact Id': opportunityRow.personId ?? '',
-      Étape: opportunityRow.stage,
-    });
-    const rawSecondOpportunityRow = buildRawCsvOpportunityRow({
-      Id: secondOpportunityRow.id,
-      Nom: secondOpportunityRow.name,
-      Société: JSON.stringify([` ${secondOpportunityRow.entityName} `]),
+    const row2 = buildRawCsvOpportunityRow({
+      Nom: 'Deal B',
+      Société: JSON.stringify([' DEVBYSTEP ']),
       'Montant / Amount': '',
-      'Montant / Currency': secondOpportunityRow.currency,
+      'Montant / Currency': 'EUR',
       'Entreprise Id': '',
       'Point de contact Id': '',
-      Étape: secondOpportunityRow.stage,
+      Étape: 'QUALIFIED',
     });
 
     mockCsvFile(
       buildRawCsvOpportunityCsv({
-        rows: [rawOpportunityRow, rawSecondOpportunityRow],
+        rows: [row1, row2],
       }),
     );
 
     await expect(service.readCsvOpportunities()).resolves.toStrictEqual([
       {
-        ...opportunityRow,
+        id: row1.Id,
+        name: 'Deal A',
+        entityName: 'WEKNOW',
+        amount: 1200,
+        currency: 'USD',
+        companyId: row1['Entreprise Id'],
+        personId: row1['Point de contact Id'],
+        stage: 'NEW',
       },
       {
-        ...secondOpportunityRow,
+        id: row2.Id,
+        name: 'Deal B',
+        entityName: 'DEVBYSTEP',
+        amount: 0,
+        currency: 'EUR',
+        companyId: null,
+        personId: null,
+        stage: 'QUALIFIED',
       },
     ]);
   });
@@ -111,7 +104,7 @@ describe('ImportCsvOpportunitiesParserService', () => {
     );
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
-      buildCsvMissingRequiredHeadersError(['Société']),
+      'Colonnes obligatoires manquantes dans le CSV: Société',
     );
   });
 
@@ -137,34 +130,22 @@ describe('ImportCsvOpportunitiesParserService', () => {
   });
 
   it('should reject duplicate opportunity IDs', async () => {
-    const opportunityRow = buildCsvOpportunityRow({
-      entityName: 'WEKNOW',
+    const row = buildRawCsvOpportunityRow({
+      Nom: 'Deal A',
     });
-    const rawOpportunityRow = buildRawCsvOpportunityRow({
-      Id: opportunityRow.id,
-      Nom: opportunityRow.name,
-      Société: JSON.stringify([opportunityRow.entityName]),
-      'Montant / Amount': String(opportunityRow.amount),
-      'Montant / Currency': opportunityRow.currency,
-      Étape: opportunityRow.stage,
-    });
-    const duplicateRawOpportunityRow = buildRawCsvOpportunityRow({
-      Id: opportunityRow.id,
+    const duplicateRow = buildRawCsvOpportunityRow({
+      Id: row.Id,
       Nom: 'Deal B',
-      Société: JSON.stringify([opportunityRow.entityName]),
-      'Montant / Amount': '1300',
-      'Montant / Currency': 'EUR',
-      Étape: 'NEW',
     });
 
     mockCsvFile(
       buildRawCsvOpportunityCsv({
-        rows: [rawOpportunityRow, duplicateRawOpportunityRow],
+        rows: [row, duplicateRow],
       }),
     );
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
-      buildCsvDuplicateOpportunityIdError(opportunityRow.id),
+      `Id opportunité dupliqué dans le CSV: ${row.Id}`,
     );
   });
 
@@ -174,8 +155,16 @@ describe('ImportCsvOpportunitiesParserService', () => {
     } as Awaited<ReturnType<typeof stat>>);
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
-      buildCsvFileTooLargeError(1024 * 1024 + 1),
+      'CSV trop volumineux',
     );
     expect(mockedReadFile).not.toHaveBeenCalled();
+  });
+
+  it('should throw a dedicated error when the optional CSV file is absent', async () => {
+    mockedAccess.mockRejectedValue(new Error('File not found'));
+
+    await expect(service.readCsvOpportunities()).rejects.toBeInstanceOf(
+      OpportunityCsvNotFoundError,
+    );
   });
 });

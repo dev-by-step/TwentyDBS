@@ -1,0 +1,33 @@
+/* oxlint-disable twenty/max-consts-per-file */
+import {
+  CALENDAR_EVENT_SHARING_SCOPE,
+  MULTI_ENTITY_OBJECT_NAME,
+} from 'twenty-shared/constants';
+
+export {
+  CALENDAR_EVENT_SHARING_SCOPE,
+  type CalendarEventSharingScope,
+  MULTI_ENTITY_OBJECT_NAME,
+} from 'twenty-shared/constants';
+
+export const CALENDAR_CHANNEL_EVENT_ASSOCIATION_OBJECT_NAME =
+  MULTI_ENTITY_OBJECT_NAME.CalendarChannelEventAssociation;
+
+export const CALENDAR_EVENT_ENTITY_AUDIENCE_OBJECT_NAME =
+  MULTI_ENTITY_OBJECT_NAME.CalendarEventEntityAudience;
+
+export const CALENDAR_EVENT_PERSON_AUDIENCE_OBJECT_NAME =
+  MULTI_ENTITY_OBJECT_NAME.CalendarEventPersonAudience;
+
+export const WORKSPACE_MEMBER_ENTITY_MEMBERSHIP_OBJECT_NAME =
+  MULTI_ENTITY_OBJECT_NAME.WorkspaceMemberEntityMembership;
+
+export const INTERNAL_ENTITY_OBJECT_NAME_SINGULAR =
+  MULTI_ENTITY_OBJECT_NAME.InternalEntity;
+
+export const CALENDAR_EVENT_SHARING_SCOPE_ENTITY_ONLY =
+  CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY;
+export const CALENDAR_EVENT_SHARING_SCOPE_WORKSPACE_PUBLIC =
+  CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC;
+
+export type AudienceMode = 'group' | 'specific';

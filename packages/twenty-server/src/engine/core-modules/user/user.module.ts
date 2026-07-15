@@ -27,6 +27,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 import { userAutoResolverOpts } from './user.auto-resolver-opts';
 
@@ -56,6 +57,7 @@ import { UserService } from './services/user.service';
     WorkspaceDomainsModule,
     WorkspaceCacheModule,
     CoreEntityCacheModule,
+    WorkspaceMemberInternalEntityModule,
   ],
   exports: [UserService, WorkspaceMemberTranspiler],
   providers: [

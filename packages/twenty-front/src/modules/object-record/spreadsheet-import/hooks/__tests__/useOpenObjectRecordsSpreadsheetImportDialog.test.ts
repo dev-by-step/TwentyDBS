@@ -9,14 +9,33 @@ import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 
 import gql from 'graphql-tag';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
+import { FieldMetadataType } from '~/generated-metadata/graphql';
 
 const mockBatchCreateManyRecords = jest.fn().mockResolvedValue([]);
+const mockUseBatchCreateManyRecords = jest.fn((_args?: unknown) => ({
+  batchCreateManyRecords: mockBatchCreateManyRecords,
+}));
+const mockCreateMetadataField = jest.fn();
 
 jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
-  useBatchCreateManyRecords: () => ({
-    batchCreateManyRecords: mockBatchCreateManyRecords,
+  useBatchCreateManyRecords: (args: unknown) =>
+    mockUseBatchCreateManyRecords(args),
+}));
+
+jest.mock('@/object-metadata/hooks/useFieldMetadataItem', () => ({
+  useFieldMetadataItem: () => ({
+    createMetadataField: mockCreateMetadataField,
   }),
 }));
+
+jest.mock(
+  '@/object-record/spreadsheet-import/hooks/usePrepareOpportunityImportRelations',
+  () => ({
+    usePrepareOpportunityImportRelations: () => ({
+      ensureOpportunityImportRelations: jest.fn().mockResolvedValue(null),
+    }),
+  }),
+);
 
 const companyId = 'cb2e9f4b-20c3-4759-9315-4ffeecfaf71a';
 
@@ -74,6 +93,29 @@ const Wrapper = getJestMetadataAndApolloMocksWrapper({
 describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreateMetadataField.mockResolvedValue({
+      status: 'successful',
+      response: {
+        data: {
+          createOneField: {
+            id: 'created-field-id',
+            universalIdentifier: 'created-field-id',
+            name: 'secteurLocal',
+            label: 'Secteur local',
+            type: FieldMetadataType.TEXT,
+            icon: 'IconTypography',
+            isActive: true,
+            isCustom: true,
+            isSystem: false,
+            isNullable: true,
+            createdAt: '2023-01-01',
+            updatedAt: '2023-01-01',
+            settings: null,
+            options: null,
+          },
+        },
+      },
+    });
   });
 
   it('should open dialog and configure onSubmit function correctly', async () => {
@@ -171,5 +213,105 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(recordToCreate).toHaveProperty('name', 'Example Company');
     expect(recordToCreate).toHaveProperty('idealCustomerProfile', true);
     expect(recordToCreate).toHaveProperty('employees', 0);
+  });
+
+  it('should use a fresh abort controller after a cancelled import', async () => {
+    const { result } = renderHook(
+      () => {
+        const { openObjectRecordsSpreadsheetImportDialog } =
+          useOpenObjectRecordsSpreadsheetImportDialog(
+            CoreObjectNameSingular.Company,
+          );
+        return {
+          openObjectRecordsSpreadsheetImportDialog,
+        };
+      },
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current.openObjectRecordsSpreadsheetImportDialog();
+    });
+
+    const firstDialog = jotaiStore.get(spreadsheetImportDialogState.atom);
+
+    await act(async () => {
+      firstDialog.options?.onAbortSubmit?.();
+    });
+
+    await act(async () => {
+      result.current.openObjectRecordsSpreadsheetImportDialog();
+    });
+
+    const secondDialog = jotaiStore.get(spreadsheetImportDialogState.atom);
+
+    await act(async () => {
+      await secondDialog.options?.onSubmit(
+        {
+          validStructuredRows: [{ name: 'Example Company' }],
+          invalidStructuredRows: [],
+          allStructuredRows: [
+            { __index: 'import-row-1', name: 'Example Company' },
+          ],
+        },
+        fakeCsv(),
+      );
+    });
+
+    const callArgs = mockBatchCreateManyRecords.mock.calls[0][0];
+
+    expect(callArgs.abortController).toBeInstanceOf(AbortController);
+    expect(callArgs.abortController.signal.aborted).toBe(false);
+  });
+
+  it('creates a text field when the csv contains an unknown non-id column', async () => {
+    const { result } = renderHook(
+      () => {
+        const { openObjectRecordsSpreadsheetImportDialog } =
+          useOpenObjectRecordsSpreadsheetImportDialog(
+            CoreObjectNameSingular.Company,
+          );
+        return {
+          openObjectRecordsSpreadsheetImportDialog,
+        };
+      },
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current.openObjectRecordsSpreadsheetImportDialog();
+    });
+
+    const spreadsheetImportDialog = jotaiStore.get(
+      spreadsheetImportDialogState.atom,
+    );
+
+    await act(async () => {
+      await spreadsheetImportDialog.options?.selectHeaderStepHook?.(
+        ['Secteur local'],
+        [['Conseil']],
+      );
+    });
+
+    expect(mockCreateMetadataField).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: 'Secteur local',
+        name: 'secteurLocal',
+        type: FieldMetadataType.TEXT,
+      }),
+    );
+
+    const dialogAfterFieldCreation = jotaiStore.get(
+      spreadsheetImportDialogState.atom,
+    );
+
+    expect(dialogAfterFieldCreation.options?.spreadsheetImportFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'secteurLocal',
+          label: 'Secteur local',
+        }),
+      ]),
+    );
   });
 });

@@ -3,7 +3,8 @@ import {
   ENTITY_FILTER_VIEW_MODE,
   type EntityFilterViewMode,
 } from '@/entity-filter/constants/entityFilterViewMode';
-import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdAtom';
+import { activeEntityIdState } from '@/entity-filter/states/activeEntityIdState';
+import { selectedEntityIdState } from '@/entity-filter/states/selectedEntityIdState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useCallback } from 'react';
@@ -22,6 +23,7 @@ const useMyCompanyViewAvailability = (currentUserEntityId: string | null) => {
 
 export const useEntityFilter = () => {
   const currentUser = useAtomStateValue(currentUserState);
+  const [activeEntityId, setActiveEntityId] = useAtomState(activeEntityIdState);
   const [selectedEntityId, setSelectedEntityId] = useAtomState(
     selectedEntityIdState,
   );
@@ -30,12 +32,23 @@ export const useEntityFilter = () => {
   const isMyCompanyViewAvailable =
     useMyCompanyViewAvailability(currentUserEntityId);
 
+  const setScopedEntityView = useCallback(
+    (entityId: string | null) => {
+      setSelectedEntityId(entityId);
+
+      if (isDefined(entityId) && entityId.length > 0) {
+        setActiveEntityId(entityId);
+      }
+    },
+    [setActiveEntityId, setSelectedEntityId],
+  );
+
   const setMyCompanyView = useCallback(() => {
     if (!isMyCompanyViewAvailable) {
       return;
     }
-    setSelectedEntityId(currentUserEntityId);
-  }, [currentUserEntityId, isMyCompanyViewAvailable, setSelectedEntityId]);
+    setScopedEntityView(currentUserEntityId);
+  }, [currentUserEntityId, isMyCompanyViewAvailable, setScopedEntityView]);
 
   const setGroupView = useCallback(() => {
     setSelectedEntityId(null);
@@ -55,12 +68,14 @@ export const useEntityFilter = () => {
 
   return {
     activeViewMode,
+    activeEntityId,
     currentUserEntityId,
     isMyCompanyViewAvailable,
     selectedEntityId,
+    setActiveEntityId,
     setGroupView,
     setMyCompanyView,
-    setSelectedEntityId,
+    setSelectedEntityId: setScopedEntityView,
     toggleViewMode,
   };
 };

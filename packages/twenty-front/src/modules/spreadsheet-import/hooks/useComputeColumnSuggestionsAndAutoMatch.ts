@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
+import { spreadsheetImportDialogState } from '@/spreadsheet-import/states/spreadsheetImportDialogState';
 import {
   initialComputedColumnsSelector,
   matchColumnsState,
@@ -24,12 +25,19 @@ export const useComputeColumnSuggestionsAndAutoMatch = () => {
       data: ImportedRow[];
     }) => {
       if (autoMapHeaders) {
+        const latestFields =
+          store.get(spreadsheetImportDialogState.atom).options
+            ?.spreadsheetImportFields ?? fields;
         const columns = store.get(
           initialComputedColumnsSelector.selectorFamily(headerValues),
         );
 
         const { matchedColumns, suggestedFieldsByColumnHeader } =
-          getMatchedColumnsWithFuse({ columns, fields, data });
+          getMatchedColumnsWithFuse({
+            columns,
+            fields: latestFields,
+            data,
+          });
 
         store.set(matchColumnsState.atom, matchedColumns);
         store.set(

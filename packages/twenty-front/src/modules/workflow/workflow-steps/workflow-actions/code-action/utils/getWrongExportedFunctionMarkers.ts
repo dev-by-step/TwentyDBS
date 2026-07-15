@@ -1,4 +1,6 @@
+import { msg } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { type editor } from 'monaco-editor';
 const getSubstringCoordinate = (
   text: string,
   substring: string,
@@ -18,7 +20,7 @@ const getSubstringCoordinate = (
   return null;
 };
 
-export const getWrongExportedFunctionMarkers = (value: string) => {
+export const getWrongExportedFunctionMarkers = (value: string): editor.IMarkerData[] => {
   const validRegex = /export\s+const\s+main\s*=/g;
   const invalidRegex = /export\s+const\s+\S*/g;
   const exportRegex = /export\s+const/g;
@@ -33,7 +35,7 @@ export const getWrongExportedFunctionMarkers = (value: string) => {
       const endColumn = invalidMatch[0].length + coordinates.column;
       markers.push({
         severity: 8, //MarkerSeverity.Error,
-        message: 'Exported arrow function should be named "main"',
+        message: msg`Exported arrow function should be named "main"`.id,
         code: 'export const main',
         startLineNumber: coordinates.line,
         startColumn: coordinates.column,
@@ -46,7 +48,7 @@ export const getWrongExportedFunctionMarkers = (value: string) => {
   if (!exportMatch) {
     markers.push({
       severity: 8, //MarkerSeverity.Error,
-      message: 'An exported "main" arrow function is required.',
+      message: msg`An exported "main" arrow function is required.`.id,
       code: 'export const main',
       startLineNumber: 1,
       startColumn: 1,

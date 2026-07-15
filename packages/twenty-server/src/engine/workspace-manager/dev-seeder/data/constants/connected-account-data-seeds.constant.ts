@@ -1,3 +1,7 @@
+import {
+  PRIMARY_DEV_WORKSPACE_SHARED_HANDLES,
+  PRIMARY_DEV_WORKSPACE_USERS,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
 type ConnectedAccountDataSeed = {
@@ -46,7 +50,7 @@ export const CONNECTED_ACCOUNT_DATA_SEEDS: ConnectedAccountDataSeed[] = [
     refreshToken: 'exampleRefreshToken',
     accessToken: 'exampleAccessToken',
     provider: 'google',
-    handle: 'tim@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.TIM.email,
   },
   {
     id: CONNECTED_ACCOUNT_DATA_SEED_IDS.JONY,
@@ -58,7 +62,7 @@ export const CONNECTED_ACCOUNT_DATA_SEEDS: ConnectedAccountDataSeed[] = [
     refreshToken: 'exampleRefreshToken',
     accessToken: 'exampleAccessToken',
     provider: 'google',
-    handle: 'jony.ive@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.JONY.email,
   },
   {
     id: CONNECTED_ACCOUNT_DATA_SEED_IDS.PHIL,
@@ -70,7 +74,7 @@ export const CONNECTED_ACCOUNT_DATA_SEEDS: ConnectedAccountDataSeed[] = [
     refreshToken: 'exampleRefreshToken',
     accessToken: 'exampleAccessToken',
     provider: 'google',
-    handle: 'phil.schiler@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.PHIL.email,
   },
   {
     id: CONNECTED_ACCOUNT_DATA_SEED_IDS.JANE,
@@ -82,7 +86,7 @@ export const CONNECTED_ACCOUNT_DATA_SEEDS: ConnectedAccountDataSeed[] = [
     refreshToken: 'exampleRefreshToken',
     accessToken: 'exampleAccessToken',
     provider: 'google',
-    handle: 'jane.austen@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_USERS.JANE.email,
   },
   {
     id: CONNECTED_ACCOUNT_DATA_SEED_IDS.JANE_DELETABLE,
@@ -94,6 +98,6 @@ export const CONNECTED_ACCOUNT_DATA_SEEDS: ConnectedAccountDataSeed[] = [
     refreshToken: 'exampleRefreshToken',
     accessToken: 'exampleAccessToken',
     provider: 'google',
-    handle: 'jane-deletable@apple.dev',
+    handle: PRIMARY_DEV_WORKSPACE_SHARED_HANDLES.ARCHIVE,
   },
 ];

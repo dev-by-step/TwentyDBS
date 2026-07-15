@@ -130,6 +130,13 @@ const makeRequest = async () => {
 };
 
 describe('ApolloFactory', () => {
+  beforeEach(() => {
+    fetchMock.resetMocks();
+    mockOnError.mockReset();
+    mockOnNetworkError.mockReset();
+    mockOnPayloadTooLarge.mockReset();
+  });
+
   it('should create an instance of ApolloFactory', () => {
     const options = createMockOptions();
     const apolloFactory = new ApolloFactory(options);
@@ -243,6 +250,101 @@ describe('ApolloFactory', () => {
 
     apolloFactory.updateWorkspaceMember(newWorkspaceMember);
     expect(apolloFactory['currentWorkspaceMember']).toEqual(newWorkspaceMember);
+  });
+
+  it('should send the active internal entity id header when configured', async () => {
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        body: JSON.stringify({
+          data: {
+            trackAnalytics: {
+              success: true,
+            },
+          },
+        }),
+      }),
+    );
+
+    const apolloFactory = new ApolloFactory({
+      ...createMockOptions(),
+      activeInternalEntityId: 'internal-entity-1',
+    });
+
+    await apolloFactory.getClient().mutate({
+      mutation: gql`
+        mutation TrackAnalytics(
+          $type: AnalyticsType!
+          $event: String
+          $name: String
+          $properties: JSON
+        ) {
+          trackAnalytics(
+            type: $type
+            event: $event
+            name: $name
+            properties: $properties
+          ) {
+            success
+          }
+        }
+      `,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-active-internal-entity-id': 'internal-entity-1',
+        }),
+      }),
+    );
+  });
+
+  it('should update the active internal entity id header dynamically', async () => {
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        body: JSON.stringify({
+          data: {
+            trackAnalytics: {
+              success: true,
+            },
+          },
+        }),
+      }),
+    );
+
+    const apolloFactory = new ApolloFactory(createMockOptions());
+
+    apolloFactory.updateActiveInternalEntityId('internal-entity-2');
+
+    await apolloFactory.getClient().mutate({
+      mutation: gql`
+        mutation TrackAnalytics(
+          $type: AnalyticsType!
+          $event: String
+          $name: String
+          $properties: JSON
+        ) {
+          trackAnalytics(
+            type: $type
+            event: $event
+            name: $name
+            properties: $properties
+          ) {
+            success
+          }
+        }
+      `,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-active-internal-entity-id': 'internal-entity-2',
+        }),
+      }),
+    );
   });
 
   it('should call onPayloadTooLarge when encountering a 413 error', async () => {

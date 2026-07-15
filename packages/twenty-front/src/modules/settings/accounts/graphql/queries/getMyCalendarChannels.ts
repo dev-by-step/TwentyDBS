@@ -6,6 +6,7 @@ export const GET_MY_CALENDAR_CHANNELS = gql`
       id
       handle
       visibility
+      visibleInternalEntityIds
       syncStatus
       syncStage
       syncStageStartedAt

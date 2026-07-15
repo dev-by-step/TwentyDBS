@@ -11,6 +11,7 @@ interface BaseWorkspaceAuthContext {
   type: WorkspaceAuthContextType;
   workspace: NonNullable<RawAuthContext['workspace']>;
   workspaceMetadataVersion?: string;
+  shouldBypassInternalEntitySourceTagging?: boolean;
 }
 
 export interface ApiKeyWorkspaceAuthContext extends BaseWorkspaceAuthContext {
@@ -22,6 +23,7 @@ export interface UserWorkspaceAuthContext extends BaseWorkspaceAuthContext {
   type: 'user';
   userWorkspaceId: NonNullable<RawAuthContext['userWorkspaceId']>;
   user: NonNullable<RawAuthContext['user']>;
+  activeInternalEntityId?: RawAuthContext['activeInternalEntityId'];
   workspaceMemberId: NonNullable<RawAuthContext['workspaceMemberId']>;
   workspaceMember: NonNullable<RawAuthContext['workspaceMember']>;
 }

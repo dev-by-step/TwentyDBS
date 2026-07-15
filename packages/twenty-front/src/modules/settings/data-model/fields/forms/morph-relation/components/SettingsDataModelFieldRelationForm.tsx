@@ -43,7 +43,7 @@ const StyledInputsContainer = styled.div`
 
 const RELATION_TYPE_OPTIONS = Object.entries(RELATION_TYPES).map(
   ([value, { label, Icon }]) => ({
-    label,
+    label: typeof label === 'string' ? label : label.id,
     value: value as RelationType,
     Icon,
   }),

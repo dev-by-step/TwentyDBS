@@ -9,10 +9,27 @@ type APIsOAuthRequestExtraParams = {
   redirectLocation?: string;
   calendarVisibility?: string;
   messageVisibility?: string;
+  visibleInternalEntityIds?: string | string[];
   loginHint?: string;
   userId?: string;
   workspaceId?: string;
   skipMessageChannelConfiguration?: string;
+};
+
+const parseVisibleInternalEntityIds = (
+  value: string | string[] | undefined,
+): string[] | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  const values = Array.isArray(value) ? value : [value];
+  const ids = values
+    .flatMap((entry) => entry.split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return ids.length > 0 ? [...new Set(ids)] : undefined;
 };
 
 export const setRequestExtraParams = (
@@ -24,6 +41,7 @@ export const setRequestExtraParams = (
     redirectLocation,
     calendarVisibility,
     messageVisibility,
+    visibleInternalEntityIds,
     loginHint,
     userId,
     workspaceId,
@@ -49,6 +67,15 @@ export const setRequestExtraParams = (
 
   if (messageVisibility) {
     request.params.messageVisibility = messageVisibility;
+  }
+
+  const parsedVisibleInternalEntityIds = parseVisibleInternalEntityIds(
+    visibleInternalEntityIds,
+  );
+
+  if (parsedVisibleInternalEntityIds) {
+    (request.params as Record<string, unknown>).visibleInternalEntityIds =
+      parsedVisibleInternalEntityIds;
   }
 
   if (loginHint) {

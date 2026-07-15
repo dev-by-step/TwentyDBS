@@ -638,4 +638,177 @@ describe('buildRecordFromImportedStructuredRow', () => {
       },
     });
   });
+
+  it('should build an opportunity record with currency and relation ids', () => {
+    const companyId = '003f2bd8-d8a5-4efd-b4af-4fd094214bb3';
+    const pointOfContactId = 'a627b96e-25b5-48fb-bb6f-d42b443f8f81';
+
+    const opportunityFields: FieldMetadataItem[] = [
+      {
+        id: 'op-name',
+        universalIdentifier: 'op-name',
+        name: 'name',
+        label: 'Name',
+        type: FieldMetadataType.TEXT,
+        isNullable: false,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconTargetArrow',
+        description: null,
+      },
+      {
+        id: 'op-amount',
+        universalIdentifier: 'op-amount',
+        name: 'amount',
+        label: 'Amount',
+        type: FieldMetadataType.CURRENCY,
+        isNullable: true,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconCurrencyDollar',
+        description: null,
+      },
+      {
+        id: 'op-stage',
+        universalIdentifier: 'op-stage',
+        name: 'stage',
+        label: 'Stage',
+        type: FieldMetadataType.SELECT,
+        isNullable: false,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconProgressCheck',
+        description: null,
+      },
+      {
+        id: 'op-company',
+        universalIdentifier: 'op-company',
+        name: 'company',
+        label: 'Company',
+        type: FieldMetadataType.RELATION,
+        isNullable: true,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconBuilding',
+        description: null,
+        relation: {
+          type: RelationType.MANY_TO_ONE,
+        } as FieldMetadataItemRelation,
+      },
+      {
+        id: 'op-point-of-contact',
+        universalIdentifier: 'op-point-of-contact',
+        name: 'pointOfContact',
+        label: 'Point of Contact',
+        type: FieldMetadataType.RELATION,
+        isNullable: true,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconUser',
+        description: null,
+        relation: {
+          type: RelationType.MANY_TO_ONE,
+        } as FieldMetadataItemRelation,
+      },
+      {
+        id: 'op-created-by',
+        universalIdentifier: 'op-created-by',
+        name: 'createdBy',
+        label: 'Created by',
+        type: FieldMetadataType.ACTOR,
+        isNullable: false,
+        isActive: true,
+        isCustom: false,
+        isSystem: false,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-01',
+        icon: 'IconUsers',
+        description: null,
+      },
+    ];
+
+    const importedStructuredRow: ImportedStructuredRow = {
+      name: 'WeKnow POC',
+      stage: 'CUSTOMER',
+      'Amount (amount)': '6000',
+      'Currency (amount)': 'EUR',
+      'Id (company)': companyId,
+      'Id (pointOfContact)': pointOfContactId,
+    };
+
+    const spreadsheetImportFields = [
+      {
+        fieldMetadataItemId: 'op-company',
+        isNestedField: false,
+        isRelationConnectField: true,
+        label: 'Company / Id',
+        key: 'Id (company)',
+        fieldMetadataType: FieldMetadataType.RELATION,
+        uniqueFieldMetadataItem: {
+          name: 'id',
+          type: FieldMetadataType.UUID,
+        },
+      },
+      {
+        fieldMetadataItemId: 'op-point-of-contact',
+        isNestedField: false,
+        isRelationConnectField: true,
+        label: 'Point of Contact / Id',
+        key: 'Id (pointOfContact)',
+        fieldMetadataType: FieldMetadataType.RELATION,
+        uniqueFieldMetadataItem: {
+          name: 'id',
+          type: FieldMetadataType.UUID,
+        },
+      },
+    ] as SpreadsheetImportField[];
+
+    const result = buildRecordFromImportedStructuredRow({
+      importedStructuredRow,
+      fieldMetadataItems: opportunityFields,
+      spreadsheetImportFields,
+    });
+
+    expect(result).toEqual({
+      name: 'WeKnow POC',
+      amount: {
+        amountMicros: 6000000000,
+        currencyCode: 'EUR',
+      },
+      stage: 'CUSTOMER',
+      company: {
+        connect: {
+          where: {
+            id: companyId,
+          },
+        },
+      },
+      pointOfContact: {
+        connect: {
+          where: {
+            id: pointOfContactId,
+          },
+        },
+      },
+      createdBy: {
+        source: 'IMPORT',
+        context: {},
+      },
+    });
+  });
 });

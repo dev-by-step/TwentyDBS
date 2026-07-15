@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import { type VariableSearchResult } from '@/workflow/workflow-variables/hooks/useSearchVariable';
 import { isBaseOutputSchemaV2 } from '@/workflow/workflow-variables/types/guards/isBaseOutputSchemaV2';
 import { isRecordOutputSchemaV2 } from '@/workflow/workflow-variables/types/guards/isRecordOutputSchemaV2';
@@ -69,16 +70,16 @@ export const searchVariableThroughIteratorOutputSchema = ({
 
   if (iteratorResultKey === 'currentItemIndex') {
     return {
-      variableLabel: 'Current Item Index',
-      variablePathLabel: `${stepName} > Current Item Index`,
+      variableLabel: msg`Current Item Index`,
+      variablePathLabel: `${stepName} > ${msg`Current Item Index`}`,
       variableType: FieldMetadataType.NUMBER,
     };
   }
 
   if (iteratorResultKey === 'hasProcessedAllItems') {
     return {
-      variableLabel: 'Has Processed All Items',
-      variablePathLabel: `${stepName} > Has Processed All Items`,
+      variableLabel: msg`Has Processed All Items`,
+      variablePathLabel: `${stepName} > ${msg`Has Processed All Items`}`,
       variableType: FieldMetadataType.BOOLEAN,
     };
   }

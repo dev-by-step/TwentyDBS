@@ -14,6 +14,8 @@ import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { CalendarPrivacyInterceptor } from 'src/engine/api/graphql/interceptors/calendar-privacy.interceptor';
+import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 
 @ArgsType()
 class GetTimelineCalendarEventsFromPersonIdArgs {
@@ -70,6 +72,10 @@ class GetGroupTimelineCalendarEventsArgs {
   @Field(() => Date, { nullable: true })
   @IsOptional()
   endDate?: Date;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  includeMaskedEvents?: boolean;
 }
 
 @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
@@ -143,12 +149,26 @@ export class TimelineCalendarEventResolver {
   @Query(() => TimelineCalendarEventsWithTotalDTO)
   async getGroupTimelineCalendarEvents(
     @Args()
-    { page, pageSize, startDate, endDate }: GetGroupTimelineCalendarEventsArgs,
+    {
+      page,
+      pageSize,
+      startDate,
+      endDate,
+      includeMaskedEvents,
+    }: GetGroupTimelineCalendarEventsArgs,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ) {
+    const authContext = getWorkspaceAuthContext();
+    const shouldIncludeMaskedEvents =
+      includeMaskedEvents ??
+      (!isUserAuthContext(authContext) ||
+        !authContext.activeInternalEntityId ||
+        authContext.activeInternalEntityId.length === 0);
+
     return this.timelineCalendarEventService.getGroupCalendarEvents({
       currentWorkspaceMemberId: workspaceMemberId,
+      includeMaskedEvents: shouldIncludeMaskedEvents,
       workspaceId: workspace.id,
       page,
       pageSize,

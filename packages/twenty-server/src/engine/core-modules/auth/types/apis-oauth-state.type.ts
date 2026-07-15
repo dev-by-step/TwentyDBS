@@ -8,5 +8,6 @@ export type APIsOAuthState = {
   redirectLocation?: string;
   calendarVisibility?: CalendarChannelVisibility;
   messageVisibility?: MessageChannelVisibility;
+  visibleInternalEntityIds?: string[];
   skipMessageChannelConfiguration?: boolean;
 };

@@ -23,6 +23,7 @@ import {
   type IconComponent,
   IconCurrencyDollar,
   IconDoorEnter,
+  IconBuildingSkyscraper,
   IconHelpCircle,
   IconHierarchy2,
   IconKey,
@@ -120,6 +121,12 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           label: t`General`,
           path: SettingsPath.Workspace,
           Icon: IconSettings,
+          isHidden: !permissionMap[PermissionFlagType.WORKSPACE],
+        },
+        {
+          label: t`Internal entities`,
+          path: SettingsPath.InternalEntities,
+          Icon: IconBuildingSkyscraper,
           isHidden: !permissionMap[PermissionFlagType.WORKSPACE],
         },
         {

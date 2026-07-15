@@ -14,6 +14,7 @@ import UploadHttpLink from 'apollo-upload-client/UploadHttpLink.mjs';
 import { renewToken } from '@/auth/services/AuthService';
 import { type CurrentWorkspaceMember } from '@/auth/states/currentWorkspaceMemberState';
 import { type CurrentWorkspace } from '@/auth/states/currentWorkspaceState';
+import { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from 'twenty-shared/constants';
 import { type AuthTokenPair } from '~/generated-metadata/graphql';
 import { logDebug } from '~/utils/logDebug';
 import { retryWithBackoff } from '~/utils/retryWithBackoff';
@@ -60,6 +61,7 @@ export interface Options {
   onPayloadTooLarge?: (message: string) => void;
   currentWorkspaceMember: CurrentWorkspaceMember | null;
   currentWorkspace: CurrentWorkspace | null;
+  activeInternalEntityId?: string | null;
   extraLinks?: ApolloLink[];
   isDebugMode?: boolean;
   appVersion?: string;
@@ -69,6 +71,7 @@ export class ApolloFactory implements ApolloManager {
   private client: ApolloClient;
   private currentWorkspaceMember: CurrentWorkspaceMember | null = null;
   private currentWorkspace: CurrentWorkspace | null = null;
+  private activeInternalEntityId: string | null = null;
   private appVersion?: string;
 
   constructor(opts: Options) {
@@ -86,6 +89,7 @@ export class ApolloFactory implements ApolloManager {
       onPayloadTooLarge,
       currentWorkspaceMember,
       currentWorkspace,
+      activeInternalEntityId,
       extraLinks,
       isDebugMode,
       appVersion,
@@ -93,6 +97,7 @@ export class ApolloFactory implements ApolloManager {
 
     this.currentWorkspaceMember = currentWorkspaceMember;
     this.currentWorkspace = currentWorkspace;
+    this.activeInternalEntityId = activeInternalEntityId ?? null;
     this.appVersion = appVersion;
 
     const buildApolloLink = (): ApolloLink => {
@@ -131,6 +136,11 @@ export class ApolloFactory implements ApolloManager {
             ...optionHeaders,
             authorization: token ? `Bearer ${token}` : '',
             'x-locale': locale,
+            ...(isDefined(this.activeInternalEntityId) &&
+              this.activeInternalEntityId.length > 0 && {
+                [ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME]:
+                  this.activeInternalEntityId,
+              }),
             ...(isDefined(this.currentWorkspace?.metadataVersion) && {
               'X-Schema-Version': `${this.currentWorkspace.metadataVersion}`,
             }),
@@ -394,6 +404,10 @@ export class ApolloFactory implements ApolloManager {
 
   updateCurrentWorkspace(workspace: CurrentWorkspace | null) {
     this.currentWorkspace = workspace;
+  }
+
+  updateActiveInternalEntityId(activeInternalEntityId: string | null) {
+    this.activeInternalEntityId = activeInternalEntityId;
   }
 
   updateAppVersion(appVersion?: string) {

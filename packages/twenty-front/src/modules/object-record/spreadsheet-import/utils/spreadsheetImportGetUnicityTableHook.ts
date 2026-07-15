@@ -100,8 +100,12 @@ const getUniqueValues = (
       if (
         fieldType === FieldMetadataType.LINKS &&
         columnName.includes(
-          COMPOSITE_FIELD_SUB_FIELD_LABELS[FieldMetadataType.LINKS]
-            .primaryLinkUrl,
+          typeof COMPOSITE_FIELD_SUB_FIELD_LABELS[FieldMetadataType.LINKS]
+            .primaryLinkUrl === 'string'
+            ? COMPOSITE_FIELD_SUB_FIELD_LABELS[FieldMetadataType.LINKS]
+                .primaryLinkUrl
+            : COMPOSITE_FIELD_SUB_FIELD_LABELS[FieldMetadataType.LINKS]
+                .primaryLinkUrl.id,
         )
       ) {
         return normalizeUrlOrigin(row?.[columnName]?.toString().trim() || '');

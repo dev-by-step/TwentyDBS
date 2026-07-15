@@ -9,6 +9,8 @@ export type SpreadsheetImportField = {
   Icon: IconComponent | null | undefined;
   // UI-facing field label
   label: string;
+  // Extra labels used only for import header matching
+  searchAliases?: readonly string[];
   // Field's unique identifier
   key: string;
   // Field's metadata item id - same for all associated nested fields

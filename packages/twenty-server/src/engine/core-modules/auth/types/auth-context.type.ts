@@ -12,6 +12,7 @@ export { type FlatAuthContextUser as AuthContextUser } from 'src/engine/core-mod
 export type RawAuthContext = {
   user?: FlatAuthContextUser | null | undefined;
   apiKey?: FlatApiKey | null | undefined;
+  activeInternalEntityId?: string | null;
   workspaceMemberId?: string;
   workspaceMember?: WorkspaceMemberWorkspaceEntity;
   workspace?: FlatWorkspace;

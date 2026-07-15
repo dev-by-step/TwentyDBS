@@ -21,6 +21,7 @@ const meta: Meta<typeof SettingsAccountsCalendarChannelDetails> = {
       isContactAutoCreationEnabled: true,
       isSyncEnabled: true,
       visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+      visibleInternalEntityIds: [],
     },
   },
   argTypes: {

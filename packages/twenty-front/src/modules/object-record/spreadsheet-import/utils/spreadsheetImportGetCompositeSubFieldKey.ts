@@ -1,6 +1,6 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { getCompositeSubFieldLabel } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldLabel';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
-import { COMPOSITE_FIELD_SUB_FIELD_LABELS } from '@/settings/data-model/constants/CompositeFieldSubFieldLabel';
 
 export const getCompositeSubFieldKey = (
   fieldMetadataItem: FieldMetadataItem,
@@ -12,8 +12,10 @@ export const getCompositeSubFieldKey = (
     );
   }
 
-  const subFieldLabel =
-    COMPOSITE_FIELD_SUB_FIELD_LABELS[fieldMetadataItem.type][subFieldName];
+  const subFieldLabel = getCompositeSubFieldLabel(
+    fieldMetadataItem.type,
+    subFieldName as Parameters<typeof getCompositeSubFieldLabel>[1],
+  );
 
   return `${subFieldLabel} (${fieldMetadataItem.name})`;
 };

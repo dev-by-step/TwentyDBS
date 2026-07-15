@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
@@ -33,7 +34,7 @@ export const mapViewFiltersToFilters = (
       );
 
       const label = isSystemSearchVectorField(availableFieldMetadataItem.name)
-        ? 'Search'
+        ? msg`Search`.id
         : availableFieldMetadataItem.label;
 
       const operand = viewFilter.operand;

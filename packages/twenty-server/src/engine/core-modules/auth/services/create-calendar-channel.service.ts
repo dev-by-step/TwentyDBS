@@ -8,8 +8,9 @@ import {
   CalendarChannelSyncStatus,
   CalendarChannelVisibility,
 } from 'twenty-shared/types';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { CalendarChannelEntityAccessService } from 'src/engine/metadata-modules/calendar-channel/services/calendar-channel-entity-access.service';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
 export type CreateCalendarChannelInput = {
@@ -17,7 +18,11 @@ export type CreateCalendarChannelInput = {
   connectedAccountId: string;
   handle: string;
   calendarVisibility?: CalendarChannelVisibility;
+  visibleInternalEntityIds?: string[];
   skipMessageChannelConfiguration?: boolean;
+  workspaceMemberId?: string;
+  fallbackEntityId?: string | null;
+  canAccessFullAdminPanel?: boolean;
   transactionManager: EntityManager;
 };
 
@@ -25,6 +30,7 @@ export type CreateCalendarChannelInput = {
 export class CreateCalendarChannelService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly calendarChannelEntityAccessService: CalendarChannelEntityAccessService,
   ) {}
 
   async createCalendarChannel(
@@ -35,11 +41,29 @@ export class CreateCalendarChannelService {
       connectedAccountId,
       handle,
       calendarVisibility,
+      visibleInternalEntityIds,
       skipMessageChannelConfiguration,
+      workspaceMemberId,
+      fallbackEntityId,
+      canAccessFullAdminPanel,
       transactionManager,
     } = input;
 
     const authContext = buildSystemAuthContext(workspaceId);
+    const visibility =
+      calendarVisibility || CalendarChannelVisibility.SHARE_EVERYTHING;
+    const validatedVisibleInternalEntityIds =
+      await this.calendarChannelEntityAccessService.resolveVisibleInternalEntityIds(
+        {
+          workspaceId,
+          workspaceMemberId,
+          fallbackEntityId,
+          canAccessFullAdminPanel: canAccessFullAdminPanel ?? false,
+          requestedVisibleInternalEntityIds: visibleInternalEntityIds,
+          shouldDefaultToPrimaryEntity:
+            visibility === CalendarChannelVisibility.METADATA,
+        },
+      );
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
@@ -49,8 +73,8 @@ export class CreateCalendarChannelService {
           id: newCalendarChannelId,
           connectedAccountId,
           handle,
-          visibility:
-            calendarVisibility || CalendarChannelVisibility.SHARE_EVERYTHING,
+          visibility,
+          visibleInternalEntityIds: validatedVisibleInternalEntityIds,
           syncStatus: skipMessageChannelConfiguration
             ? CalendarChannelSyncStatus.ONGOING
             : CalendarChannelSyncStatus.NOT_SYNCED,

@@ -50,7 +50,10 @@ describe('AuthService', () => {
   let workspaceInvitationService: WorkspaceInvitationService;
   let permissionsService: PermissionsService;
   let signInUpServiceMock: jest.Mocked<
-    Pick<SignInUpService, 'validatePassword'>
+    Pick<
+      SignInUpService,
+      'assertEmailDomainAllowedForAutoSignUp' | 'validatePassword'
+    >
   >;
 
   beforeEach(async () => {
@@ -103,6 +106,9 @@ describe('AuthService', () => {
         {
           provide: SignInUpService,
           useValue: {
+            assertEmailDomainAllowedForAutoSignUp: jest
+              .fn()
+              .mockResolvedValue(undefined),
             validatePassword: jest.fn().mockResolvedValue(undefined),
             generateHash: jest.fn(),
           },
@@ -209,12 +215,16 @@ describe('AuthService', () => {
     );
     permissionsService = module.get<PermissionsService>(PermissionsService);
     signInUpServiceMock = module.get(SignInUpService) as jest.Mocked<
-      Pick<SignInUpService, 'validatePassword'>
+      Pick<
+        SignInUpService,
+        'assertEmailDomainAllowedForAutoSignUp' | 'validatePassword'
+      >
     >;
   });
 
   beforeEach(() => {
     twentyConfigServiceGetMock.mockReturnValue(false);
+    signInUpServiceMock.assertEmailDomainAllowedForAutoSignUp.mockClear();
     signInUpServiceMock.validatePassword.mockClear();
   });
 
@@ -579,6 +589,57 @@ describe('AuthService', () => {
           } as unknown as WorkspaceEntity,
         });
       }).not.toThrow();
+    });
+
+    it('checkAccessForSignIn - allow signup for authorized new user who target the existing workspace in single-workspace mode', async () => {
+      await service.checkAccessForSignIn({
+        userData: {
+          type: 'newUser',
+          newUserPayload: {
+            email: 'aline@devbystep.fr',
+          },
+        } as ExistingUserOrNewUser['userData'],
+        invitation: undefined,
+        workspaceInviteHash: undefined,
+        workspace: {
+          id: 'workspace-id',
+          approvedAccessDomains: [],
+        } as unknown as WorkspaceEntity,
+      });
+
+      expect(
+        signInUpServiceMock.assertEmailDomainAllowedForAutoSignUp,
+      ).toHaveBeenCalledWith('aline@devbystep.fr');
+    });
+
+    it('checkAccessForSignIn - reject direct signup in an existing workspace when multi-workspace mode is enabled', async () => {
+      twentyConfigServiceGetMock.mockImplementation(
+        (key) => key === 'IS_MULTIWORKSPACE_ENABLED',
+      );
+
+      await expect(
+        service.checkAccessForSignIn({
+          userData: {
+            type: 'newUser',
+            newUserPayload: {
+              email: 'aline@devbystep.fr',
+            },
+          } as ExistingUserOrNewUser['userData'],
+          invitation: undefined,
+          workspaceInviteHash: undefined,
+          workspace: {
+            id: 'workspace-id',
+            approvedAccessDomains: [],
+          } as unknown as WorkspaceEntity,
+        }),
+      ).rejects.toMatchObject({
+        code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+        message: 'User does not have access to this workspace',
+      });
+
+      expect(
+        signInUpServiceMock.assertEmailDomainAllowedForAutoSignUp,
+      ).not.toHaveBeenCalled();
     });
   });
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { msg } from '@lingui/core/macro';
@@ -15,6 +15,9 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
+import { getEmailDomain } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email-domains.constant';
+import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import {
   PASSWORD_REGEX,
   compareHash,
@@ -28,7 +31,6 @@ import {
   type SignInUpBaseParams,
   type SignInUpNewUserPayload,
 } from 'src/engine/core-modules/auth/types/signInUp.type';
-import { SubdomainManagerService } from 'src/engine/core-modules/domain/subdomain-manager/services/subdomain-manager.service';
 import { EnterprisePlanService } from 'src/engine/core-modules/enterprise/services/enterprise-plan.service';
 import { FileCorePictureService } from 'src/engine/core-modules/file/file-core-picture/services/file-core-picture.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
@@ -40,6 +42,11 @@ import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/use
 import { UserService } from 'src/engine/core-modules/user/services/user.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceInvitationService } from 'src/engine/core-modules/workspace-invitation/services/workspace-invitation.service';
+import {
+  TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
+  TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+} from 'src/engine/core-modules/workspace/constants/twenty-dbs-workspace.constant';
+import { WorkspaceService } from 'src/engine/core-modules/workspace/services/workspace.service';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -60,16 +67,18 @@ export class SignInUpService {
     private readonly onboardingService: OnboardingService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly subdomainManagerService: SubdomainManagerService,
     private readonly userService: UserService,
     private readonly metricsService: MetricsService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly applicationService: ApplicationService,
     private readonly fileCorePictureService: FileCorePictureService,
     private readonly enterprisePlanService: EnterprisePlanService,
+    private readonly workspaceService: WorkspaceService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
+
+  private readonly logger = new Logger(SignInUpService.name);
 
   async computePartialUserFromUserPayload(
     newUserPayload: SignInUpNewUserPayload,
@@ -118,6 +127,10 @@ export class SignInUpService {
       };
     }
 
+    // When a workspace is explicitly passed (public invite link, SSO,
+    // bootstrap onboarding) the caller's AuthService.checkAccessForSignIn has
+    // already validated access — don't re-apply the auto-signup domain check
+    // here, otherwise externally invited teammates would be rejected.
     if (params.workspace) {
       const updatedUser = await this.signInUpOnExistingWorkspace({
         workspace: params.workspace,
@@ -125,6 +138,26 @@ export class SignInUpService {
       });
 
       return { user: updatedUser, workspace: params.workspace };
+    }
+
+    if (params.userData.type === 'newUserWithPicture') {
+      await this.assertEmailDomainAllowedForAutoSignUp(
+        params.userData.newUserWithPicture.email ?? '',
+      );
+    }
+
+    const existingWorkspace = await this.workspaceRepository.findOne({
+      where: {},
+      order: { createdAt: 'ASC' },
+    });
+
+    if (existingWorkspace) {
+      const updatedUser = await this.signInUpOnExistingWorkspace({
+        workspace: existingWorkspace,
+        userData: params.userData,
+      });
+
+      return { user: updatedUser, workspace: existingWorkspace };
     }
 
     return await this.signUpOnNewWorkspace(params.userData);
@@ -271,9 +304,13 @@ export class SignInUpService {
         newUserWithPicture: PartialUserWithPicture;
       };
 
+      const shouldGrantServerAdmin =
+        isBootstrapAdminEmail(userData.newUserWithPicture.email ?? '') &&
+        !(await this.hasServerAdmin());
+
       const user = await this.saveNewUser(userData.newUserWithPicture, {
-        canAccessFullAdminPanel: false,
-        canImpersonate: false,
+        canAccessFullAdminPanel: shouldGrantServerAdmin,
+        canImpersonate: shouldGrantServerAdmin,
       });
 
       await this.activateOnboardingForUser({
@@ -287,6 +324,18 @@ export class SignInUpService {
         params.workspace,
         params.roleId,
       );
+
+      if (
+        shouldGrantServerAdmin ||
+        isBootstrapAdminEmail(userData.newUserWithPicture.email ?? '')
+      ) {
+        await this.onboardingService.setOnboardingSuperadminWorkspaceSetupPending(
+          {
+            workspaceId: params.workspace.id,
+            value: true,
+          },
+        );
+      }
 
       return user;
     }
@@ -493,7 +542,8 @@ export class SignInUpService {
 
     await this.assertWorkspaceCreationAllowed(userData);
 
-    const shouldGrantServerAdmin = !(await this.hasServerAdmin());
+    const shouldGrantServerAdmin =
+      isBootstrapAdminEmail(email) && !(await this.hasServerAdmin());
 
     const isWorkEmailFound = isWorkEmail(email);
 
@@ -504,14 +554,15 @@ export class SignInUpService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let createdWorkspace: WorkspaceEntity;
+    let createdUser: UserEntity;
+
     try {
       const workspaceToCreate = this.workspaceRepository.create({
         id: workspaceId,
-        subdomain: await this.subdomainManagerService.generateSubdomain(
-          isWorkEmailFound ? { userEmail: email } : {},
-        ),
+        subdomain: TWENTY_DBS_WORKSPACE_SUBDOMAIN,
         workspaceCustomApplicationId,
-        displayName: '',
+        displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
         inviteHash: v4(),
         activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
       });
@@ -520,6 +571,8 @@ export class SignInUpService {
         WorkspaceEntity,
         workspaceToCreate,
       );
+
+      createdWorkspace = workspace;
 
       const customApplication =
         await this.applicationService.createWorkspaceCustomApplication(
@@ -551,7 +604,7 @@ export class SignInUpService {
       }
 
       const isExistingUser = userData.type === 'existingUser';
-      const user = isExistingUser
+      const user: UserEntity = isExistingUser
         ? userData.existingUser
         : await this.saveNewUser(
             userData.newUserWithPicture,
@@ -592,9 +645,22 @@ export class SignInUpService {
         queryRunner,
       );
 
-      await queryRunner.commitTransaction();
+      if (
+        user.canAccessFullAdminPanel === true ||
+        isBootstrapAdminEmail(email)
+      ) {
+        await this.onboardingService.setOnboardingSuperadminWorkspaceSetupPending(
+          {
+            workspaceId: workspace.id,
+            value: true,
+          },
+          queryRunner,
+        );
+      }
 
-      return { user, workspace };
+      createdUser = user;
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       if (queryRunner.isTransactionActive) {
         await queryRunner.rollbackTransaction();
@@ -606,6 +672,24 @@ export class SignInUpService {
         'flatApplicationMaps',
       ]);
     }
+
+    try {
+      await this.workspaceService.activateWorkspace(
+        createdUser as unknown as AuthContextUser,
+        createdWorkspace,
+        { displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME },
+      );
+    } catch (activationError) {
+      this.logger.error(
+        `Auto-activation failed for workspace ${createdWorkspace.id}: ${
+          activationError instanceof Error
+            ? activationError.message
+            : String(activationError)
+        }`,
+      );
+    }
+
+    return { user: createdUser, workspace: createdWorkspace };
   }
 
   async signUpWithoutWorkspace(
@@ -624,16 +708,97 @@ export class SignInUpService {
       );
     }
 
-    await this.assertSignUpEnabled();
+    const newUserWithPicture = await this.computePartialUserFromUserPayload(
+      newUserParams,
+      authParams,
+    );
 
-    const shouldGrantServerAdmin = !(await this.hasServerAdmin());
+    await this.assertEmailDomainAllowedForAutoSignUp(newUserParams.email);
 
-    return this.saveNewUser(
-      await this.computePartialUserFromUserPayload(newUserParams, authParams),
+    const existingWorkspace = await this.workspaceRepository.findOne({
+      where: {},
+      order: { createdAt: 'ASC' },
+    });
+
+    if (existingWorkspace) {
+      return this.signInUpOnExistingWorkspace({
+        workspace: existingWorkspace,
+        userData: {
+          type: 'newUserWithPicture',
+          newUserWithPicture,
+        },
+      });
+    }
+
+    const { user } = await this.signUpOnNewWorkspace({
+      type: 'newUserWithPicture',
+      newUserWithPicture,
+    });
+
+    return user;
+  }
+
+  async assertEmailDomainAllowedForAutoSignUp(email: string) {
+    const candidateDomain = getEmailDomain(email);
+
+    const superAdmin = await this.userRepository.findOne({
+      where: { canAccessFullAdminPanel: true },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (superAdmin) {
+      const superAdminDomain = getEmailDomain(superAdmin.email);
+
+      if (
+        candidateDomain !== null &&
+        superAdminDomain !== null &&
+        candidateDomain === superAdminDomain
+      ) {
+        return;
+      }
+
+      if (await this.hasPendingInvitationForEmail(email)) {
+        return;
+      }
+
+      throw new AuthException(
+        'Sign-up is restricted to the workspace owner email domain',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+        {
+          userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
+        },
+      );
+    }
+
+    if (isBootstrapAdminEmail(email)) {
+      return;
+    }
+
+    if (await this.hasPendingInvitationForEmail(email)) {
+      return;
+    }
+
+    throw new AuthException(
+      'Sign-up requires a designated admin email for the first account',
+      AuthExceptionCode.FORBIDDEN_EXCEPTION,
       {
-        canImpersonate: shouldGrantServerAdmin,
-        canAccessFullAdminPanel: shouldGrantServerAdmin,
+        userFriendlyMessage: msg`Sign-up is restricted. The first account must use an authorized admin email.`,
       },
     );
+  }
+
+  /**
+   * Recognise users that an admin has pre-invited from the Invite Team step
+   * but who never received the email (e.g. no SMTP configured). If a valid,
+   * non-expired AppToken invitation exists for this address, the signup is
+   * treated as legitimate even if the email domain doesn't match.
+   */
+  private async hasPendingInvitationForEmail(email: string): Promise<boolean> {
+    const invitations =
+      await this.workspaceInvitationService.findInvitationsByEmail(
+        email.trim().toLowerCase(),
+      );
+
+    return invitations.length > 0;
   }
 }

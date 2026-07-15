@@ -6,19 +6,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { parse } from 'papaparse';
 import { isDefined } from 'twenty-shared/utils';
 
-import {
-  buildCsvDuplicateOpportunityIdError,
-  buildCsvEmptyOrInvalidError,
-  buildCsvFileNotFoundError,
-  buildCsvFileTooLargeError,
-  buildCsvInvalidError,
-  buildCsvMissingRequiredHeadersError,
-  buildCsvRequiredValueMissingError,
-  buildCsvRowCountTooLargeError,
-  CSV_OPPORTUNITY_REQUIRED_HEADERS,
-  MAX_CSV_FILE_SIZE_BYTES,
-  MAX_CSV_OPPORTUNITY_ROWS,
-} from 'src/modules/internal-entity/constants/import-csv-opportunities.constant';
 import { validateUuidOrThrow } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
 
 export type CsvOpportunityRow = {
@@ -34,6 +21,16 @@ export type CsvOpportunityRow = {
 
 type RawCsvOpportunityRow = Record<string, string | undefined>;
 
+const MAX_CSV_FILE_SIZE_BYTES = 1024 * 1024;
+const MAX_CSV_OPPORTUNITY_ROWS = 100;
+
+export class OpportunityCsvNotFoundError extends Error {
+  constructor() {
+    super('docs/opportunity.csv introuvable');
+    this.name = OpportunityCsvNotFoundError.name;
+  }
+}
+
 @Injectable()
 export class ImportCsvOpportunitiesParserService {
   private readonly logger = new Logger(
@@ -45,10 +42,13 @@ export class ImportCsvOpportunitiesParserService {
     const csvStats = await stat(csvPath);
 
     if (csvStats.size > MAX_CSV_FILE_SIZE_BYTES) {
-      throw new Error(buildCsvFileTooLargeError(csvStats.size));
+      throw new Error(
+        `CSV trop volumineux: ${csvStats.size} octets (max ${MAX_CSV_FILE_SIZE_BYTES})`,
+      );
     }
 
     const csvContent = await readFile(csvPath, 'utf8');
+
     const parsed = parse<RawCsvOpportunityRow>(csvContent, {
       delimiter: ',',
       header: true,
@@ -61,27 +61,31 @@ export class ImportCsvOpportunitiesParserService {
         .map((error) => `${error.message} (ligne ${error.row ?? 'n/a'})`)
         .join(', ');
 
-      throw new Error(buildCsvInvalidError(errors));
+      throw new Error(`CSV invalide: ${errors}`);
     }
 
     const headers = parsed.meta.fields ?? [];
 
     if (headers.length === 0 || parsed.data.length === 0) {
-      throw new Error(buildCsvEmptyOrInvalidError(csvPath));
+      throw new Error(`CSV vide ou invalide: ${csvPath}`);
     }
 
-    const missingRequiredHeaders = CSV_OPPORTUNITY_REQUIRED_HEADERS.filter(
+    const missingRequiredHeaders = ['Id', 'Nom', 'Société', 'Étape'].filter(
       (header) => !headers.includes(header),
     );
 
     if (missingRequiredHeaders.length > 0) {
       throw new Error(
-        buildCsvMissingRequiredHeadersError([...missingRequiredHeaders]),
+        `Colonnes obligatoires manquantes dans le CSV: ${missingRequiredHeaders.join(
+          ', ',
+        )}`,
       );
     }
 
     if (parsed.data.length > MAX_CSV_OPPORTUNITY_ROWS) {
-      throw new Error(buildCsvRowCountTooLargeError(parsed.data.length));
+      throw new Error(
+        `CSV trop volumineux: ${parsed.data.length} lignes (max ${MAX_CSV_OPPORTUNITY_ROWS})`,
+      );
     }
 
     const rows = parsed.data.map((row, index) =>
@@ -126,7 +130,9 @@ export class ImportCsvOpportunitiesParserService {
     const value = row[header]?.trim();
 
     if (!isDefined(value) || value.length === 0) {
-      throw new Error(buildCsvRequiredValueMissingError(header, rowNumber));
+      throw new Error(
+        `Valeur CSV obligatoire manquante: ${header} ligne ${rowNumber}`,
+      );
     }
 
     return value;
@@ -181,7 +187,7 @@ export class ImportCsvOpportunitiesParserService {
 
     for (const row of rows) {
       if (seenOpportunityIds.has(row.id)) {
-        throw new Error(buildCsvDuplicateOpportunityIdError(row.id));
+        throw new Error(`Id opportunité dupliqué dans le CSV: ${row.id}`);
       }
 
       seenOpportunityIds.add(row.id);
@@ -210,7 +216,7 @@ export class ImportCsvOpportunitiesParserService {
       }
     }
 
-    throw new Error(buildCsvFileNotFoundError());
+    throw new OpportunityCsvNotFoundError();
   }
 
   private formatErrorMessage(error: unknown): string {

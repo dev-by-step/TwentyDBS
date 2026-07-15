@@ -76,6 +76,15 @@ type DirectExecutionResult = {
   errors?: GraphQLFormattedError[];
 };
 
+type DirectExecutionExecutionArgs = {
+  req: Request;
+  document: DocumentNode;
+  operationName?: string;
+  variables: Record<string, unknown>;
+  hasIntrospectionFields: boolean;
+  hasWorkspaceFields: boolean;
+};
+
 @Injectable()
 export class DirectExecutionService {
   private readonly factoryMap: Map<
@@ -161,17 +170,31 @@ export class DirectExecutionService {
     return new Set(Object.keys(graphQLResolverNameMap));
   }
 
-  async execute(
-    req: Request,
-    document: DocumentNode,
-    hasIntrospectionFields: boolean,
-    hasWorkspaceFields: boolean,
-  ): Promise<DirectExecutionResult | null> {
+  async execute({
+    req,
+    document,
+    operationName,
+    variables,
+    hasIntrospectionFields,
+    hasWorkspaceFields,
+  }: DirectExecutionExecutionArgs): Promise<DirectExecutionResult | null> {
     const [introspectionResult, workspaceResult] = await Promise.all([
       hasIntrospectionFields
-        ? this.executeIntrospectionQuery(req, document)
+        ? this.executeIntrospectionQuery({
+            req,
+            document,
+            operationName,
+            variables,
+          })
         : null,
-      hasWorkspaceFields ? this.executeWorkspaceQuery(req, document) : null,
+      hasWorkspaceFields
+        ? this.executeWorkspaceQuery({
+            req,
+            document,
+            operationName,
+            variables,
+          })
+        : null,
     ]);
 
     return this.mergeDirectExecutionResults(
@@ -180,10 +203,15 @@ export class DirectExecutionService {
     );
   }
 
-  private async executeWorkspaceQuery(
-    req: Request,
-    document: DocumentNode,
-  ): Promise<DirectExecutionResult | null> {
+  private async executeWorkspaceQuery({
+    req,
+    document,
+    operationName,
+    variables,
+  }: Pick<
+    DirectExecutionExecutionArgs,
+    'req' | 'document' | 'operationName' | 'variables'
+  >): Promise<DirectExecutionResult | null> {
     try {
       const workspaceId = req.workspace?.id;
 
@@ -191,15 +219,11 @@ export class DirectExecutionService {
         return null;
       }
 
-      const topLevelFields = graphQLExtractTopLevelFields(
-        document,
-        req.body.operationName,
-      );
+      const topLevelFields = graphQLExtractTopLevelFields(document, operationName);
 
       this.checkRootResolverLimitsOrThrow(topLevelFields);
 
       const fragmentMap = graphQLBuildFragmentMap(document);
-      const variables = req.body.variables ?? {};
       const data: Record<string, unknown> = {};
 
       const {
@@ -279,10 +303,15 @@ export class DirectExecutionService {
     }
   }
 
-  private async executeIntrospectionQuery(
-    req: Request,
-    document: DocumentNode,
-  ): Promise<DirectExecutionResult | null> {
+  private async executeIntrospectionQuery({
+    req,
+    document,
+    operationName,
+    variables,
+  }: Pick<
+    DirectExecutionExecutionArgs,
+    'req' | 'document' | 'operationName' | 'variables'
+  >): Promise<DirectExecutionResult | null> {
     try {
       if (!isDefined(req.workspace)) {
         return null;
@@ -302,8 +331,8 @@ export class DirectExecutionService {
       const result = await execute({
         schema,
         document,
-        operationName: req.body?.operationName as string | undefined,
-        variableValues: (req.body?.variables as Record<string, unknown>) ?? {},
+        operationName,
+        variableValues: variables,
       });
 
       return {

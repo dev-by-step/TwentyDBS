@@ -11,6 +11,9 @@ import { type TimelineCalendarEvent } from '~/generated/graphql';
 type CalendarDayCardContentProps = {
   calendarEvents: TimelineCalendarEvent[];
   divider?: boolean;
+  renderEventActions?: (
+    calendarEvent: TimelineCalendarEvent,
+  ) => React.ReactNode;
 };
 
 const StyledCardContentContainer = styled.div`
@@ -41,18 +44,21 @@ const StyledMonthDay = styled.div`
 const StyledEvents = styled.div`
   align-items: stretch;
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[3]};
+  min-width: 0;
 `;
 
 const StyledEventRowContainer = styled.div`
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 `;
 
 export const CalendarDayCardContent = ({
   calendarEvents,
   divider,
+  renderEventActions,
 }: CalendarDayCardContentProps) => {
   const { theme } = useContext(ThemeContext);
   const endOfDayDate = endOfDay(getCalendarEventStartDate(calendarEvents[0]));
@@ -87,7 +93,10 @@ export const CalendarDayCardContent = ({
         <StyledEvents>
           {calendarEvents.map((calendarEvent) => (
             <StyledEventRowContainer key={calendarEvent.id}>
-              <CalendarEventRow calendarEvent={calendarEvent} />
+              <CalendarEventRow
+                calendarEvent={calendarEvent}
+                actions={renderEventActions?.(calendarEvent)}
+              />
             </StyledEventRowContainer>
           ))}
         </StyledEvents>

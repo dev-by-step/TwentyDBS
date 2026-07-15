@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import {
   type RecordGroupDefinition,
@@ -59,7 +60,7 @@ export const mapViewGroupsToRecordGroupDefinitions = ({
         type: !isDefined(selectedOption)
           ? RecordGroupDefinitionType.NoValue
           : RecordGroupDefinitionType.Value,
-        title: selectedOption?.label ?? 'No Value',
+        title: selectedOption?.label ?? msg`No Value`,
         value: selectedOption?.value ?? null,
         color: selectedOption?.color ?? 'transparent',
         position: viewGroup.position,

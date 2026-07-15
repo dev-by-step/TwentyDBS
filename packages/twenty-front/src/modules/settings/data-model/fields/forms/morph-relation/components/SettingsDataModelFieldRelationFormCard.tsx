@@ -101,7 +101,7 @@ export const SettingsDataModelFieldRelationFormCard = ({
           <SettingsDataModelRelationPreviewImage
             src={relationTypeConfig.imageSrc}
             flip={relationTypeConfig.isImageFlipped}
-            alt={relationTypeConfig.label}
+            alt={typeof relationTypeConfig.label === 'string' ? relationTypeConfig.label : relationTypeConfig.label.id}
             isMobile={isMobile}
           />
           <SettingsDataModelRelationFieldPreviewSubWidget

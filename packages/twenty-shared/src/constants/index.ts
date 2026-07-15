@@ -7,9 +7,18 @@
  *                              |___/
  */
 
+export { ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME } from './ActiveInternalEntityIdHeaderName';
 export { AUTO_SELECT_FAST_MODEL_ID } from './AutoSelectFastModelId';
 export { AUTO_SELECT_SMART_MODEL_ID } from './AutoSelectSmartModelId';
 export { BACKEND_BATCH_REQUEST_MAX_COUNT } from './BackendBatchRequestMaxCount';
+export type {
+  CalendarEventSharingScope,
+  MultiEntityObjectName,
+} from './CalendarEventAudience';
+export {
+  CALENDAR_EVENT_SHARING_SCOPE,
+  MULTI_ENTITY_OBJECT_NAME,
+} from './CalendarEventAudience';
 export { CalendarStartDay } from './CalendarStartDay';
 export { COMPOSITE_FIELD_TYPE_SUB_FIELDS_NAMES } from './CompositeFieldTypeSubFieldsNames';
 export { CurrencyCode } from './CurrencyCode';

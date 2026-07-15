@@ -56,9 +56,11 @@ import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserModule } from 'src/engine/core-modules/user/user.module';
 import { WorkspaceInvitationModule } from 'src/engine/core-modules/workspace-invitation/workspace-invitation.module';
+import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { CoreEntityCacheModule } from 'src/engine/core-entity-cache/core-entity-cache.module';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { CalendarChannelEntityAccessService } from 'src/engine/metadata-modules/calendar-channel/services/calendar-channel-entity-access.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
@@ -66,6 +68,7 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
+import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-common.module';
 import { MessagingFolderSyncManagerModule } from 'src/modules/messaging/message-folder-manager/messaging-folder-sync-manager.module';
 
@@ -99,6 +102,7 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     UserWorkspaceModule,
     OnboardingModule,
     ConnectedAccountModule,
+    WorkspaceMemberInternalEntityModule,
     MessagingCommonModule,
     MessagingFolderSyncManagerModule,
     WorkspaceSSOModule,
@@ -120,6 +124,7 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     SecureHttpClientModule,
     EnterpriseModule,
     FileModule,
+    WorkspaceModule,
   ],
   controllers: [
     GoogleAuthController,
@@ -148,6 +153,7 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     // which forces us to have these services in the auth module
     // TODO: Move these calendar, message, and connected account services to the business modules once possible
     CalendarChannelSyncStatusService,
+    CalendarChannelEntityAccessService,
     CreateMessageChannelService,
     CreateCalendarChannelService,
     CreateConnectedAccountService,

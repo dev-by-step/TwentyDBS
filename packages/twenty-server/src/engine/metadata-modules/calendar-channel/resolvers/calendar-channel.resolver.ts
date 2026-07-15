@@ -3,9 +3,12 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { CalendarChannelMetadataService } from 'src/engine/metadata-modules/calendar-channel/calendar-channel-metadata.service';
@@ -53,18 +56,29 @@ export class CalendarChannelResolver {
   async updateCalendarChannel(
     @Args('input') input: UpdateCalendarChannelInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUser() user: AuthContextUser,
     @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<CalendarChannelDTO> {
-    await this.calendarChannelMetadataService.verifyOwnership({
-      id: input.id,
-      userWorkspaceId,
-      workspaceId: workspace.id,
-    });
+    const calendarChannel =
+      await this.calendarChannelMetadataService.verifyOwnership({
+        id: input.id,
+        userWorkspaceId,
+        workspaceId: workspace.id,
+      });
+    const validatedUpdate =
+      await this.calendarChannelMetadataService.buildValidatedUpdate({
+        calendarChannel,
+        workspaceId: workspace.id,
+        workspaceMemberId,
+        user,
+        update: input.update,
+      });
 
     return this.calendarChannelMetadataService.update({
       id: input.id,
       workspaceId: workspace.id,
-      data: input.update,
+      data: validatedUpdate,
     });
   }
 }

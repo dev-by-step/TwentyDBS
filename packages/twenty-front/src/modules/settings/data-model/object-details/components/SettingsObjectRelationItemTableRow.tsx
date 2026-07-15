@@ -144,7 +144,8 @@ export const SettingsObjectRelationItemTableRow = ({
       return t`${morphRelationCount} Objects`;
     }
     if (isDefined(relationType) === true) {
-      return RELATION_TYPES[relationType].label;
+      const label = RELATION_TYPES[relationType].label;
+      return typeof label === 'string' ? label : label.id;
     }
     return '';
   })();

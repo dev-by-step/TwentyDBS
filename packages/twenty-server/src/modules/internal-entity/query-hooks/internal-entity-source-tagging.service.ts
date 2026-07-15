@@ -37,12 +37,14 @@ import {
   getInternalEntityMembershipConfig,
   isInternalEntitySourceTargetObjectName,
 } from 'src/modules/internal-entity/query-hooks/utils/internal-entity-source-tagging.util';
+import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 @Injectable()
 export class InternalEntitySourceTaggingService {
   constructor(
     private readonly globalWorkspaceDataSourceService: GlobalWorkspaceDataSourceService,
     private readonly objectMetadataService: ObjectMetadataService,
+    private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
   ) {}
 
   async tagCreateOnePayload(
@@ -56,12 +58,25 @@ export class InternalEntitySourceTaggingService {
 
     this.assertPayloadDataIsDefined(payload.data);
 
-    const internalEntityId =
-      await this.resolveAndValidateUserInternalEntityId(authContext);
-
-    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+    if (
+      this.shouldBypassInternalEntitySourceTagging(authContext) &&
+      objectName !== OPPORTUNITY_OBJECT_NAME
+    ) {
       return payload;
     }
+
+    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+      await this.resolveAndValidateUserInternalEntityId(authContext);
+
+      return payload;
+    }
+
+    if (this.hasExplicitInternalEntityAssignment(payload.data)) {
+      return payload;
+    }
+
+    const internalEntityId =
+      await this.resolveAndValidateUserInternalEntityId(authContext);
 
     return {
       ...payload,
@@ -89,20 +104,53 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    const internalEntityId =
-      await this.resolveAndValidateUserInternalEntityId(authContext);
-
-    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+    if (
+      this.shouldBypassInternalEntitySourceTagging(authContext) &&
+      objectName !== OPPORTUNITY_OBJECT_NAME
+    ) {
       return payload;
     }
+
+    if (objectName !== OPPORTUNITY_OBJECT_NAME) {
+      await this.resolveAndValidateUserInternalEntityId(authContext);
+
+      return payload;
+    }
+
+    const hasRecordsMissingInternalEntityAssignment = payload.data.some(
+      (record) => !this.hasExplicitInternalEntityAssignment(record),
+    );
+
+    if (!hasRecordsMissingInternalEntityAssignment) {
+      return payload;
+    }
+
+    const internalEntityId =
+      await this.resolveAndValidateUserInternalEntityId(authContext);
 
     return {
       ...payload,
       data: payload.data.map((record) => ({
         ...record,
-        internalEntityId,
+        ...(this.hasExplicitInternalEntityAssignment(record)
+          ? {}
+          : { internalEntityId }),
       })),
     };
+  }
+
+  private hasExplicitInternalEntityAssignment(
+    record: InternalEntitySourceTaggableRecordInput,
+  ): boolean {
+    return (
+      isDefined(record.internalEntity) || isDefined(record.internalEntityId)
+    );
+  }
+
+  private shouldBypassInternalEntitySourceTagging(
+    authContext: WorkspaceAuthContext,
+  ): boolean {
+    return authContext.shouldBypassInternalEntitySourceTagging === true;
   }
 
   async createMembershipsForRecords({
@@ -120,7 +168,12 @@ export class InternalEntitySourceTaggingService {
       return;
     }
 
-    const internalEntityId = this.getUserInternalEntityIdOrThrow(authContext);
+    if (this.shouldBypassInternalEntitySourceTagging(authContext)) {
+      return;
+    }
+
+    const internalEntityId =
+      await this.getUserInternalEntityIdOrThrow(authContext);
     const recordIds = this.extractCreatedRecordIds(records);
 
     if (recordIds.length === 0) {
@@ -176,7 +229,8 @@ export class InternalEntitySourceTaggingService {
   private async resolveAndValidateUserInternalEntityId(
     authContext: WorkspaceAuthContext,
   ): Promise<string> {
-    const internalEntityId = this.getUserInternalEntityIdOrThrow(authContext);
+    const internalEntityId =
+      await this.getUserInternalEntityIdOrThrow(authContext);
     const workspaceId = validateUuidOrThrow(
       authContext.workspace.id,
       'workspaceId',
@@ -218,9 +272,9 @@ export class InternalEntitySourceTaggingService {
     return internalEntityId;
   }
 
-  private getUserInternalEntityIdOrThrow(
+  private async getUserInternalEntityIdOrThrow(
     authContext: WorkspaceAuthContext,
-  ): string {
+  ): Promise<string> {
     if (!isUserAuthContext(authContext)) {
       throw new CommonQueryRunnerException(
         'User authentication is required to tag records with an internal entity',
@@ -231,14 +285,20 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    const internalEntityId = authContext.user.entityId;
+    const { activeEntityId: internalEntityId } =
+      await this.workspaceMemberInternalEntityService.resolveContext({
+        workspaceId: authContext.workspace.id,
+        workspaceMemberId: authContext.workspaceMemberId,
+        fallbackEntityId: authContext.user.entityId,
+        requestedActiveEntityId: authContext.activeInternalEntityId,
+      });
 
     if (!isDefined(internalEntityId) || internalEntityId.length === 0) {
       throw new CommonQueryRunnerException(
-        'User entityId is required to tag records with an internal entity',
+        'An active internal entity is required to tag records with an internal entity',
         CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
         {
-          userFriendlyMessage: msg`Your profile is missing an internal entity. Ask an administrator to assign one before creating records.`,
+          userFriendlyMessage: msg`Your profile is missing an active internal entity. Ask an administrator to assign one before creating records.`,
         },
       );
     }
@@ -253,7 +313,9 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    return internalEntityId.toLowerCase();
+    // WorkspaceMemberInternalEntityService normalizes activeEntityId via
+    // normalizeOptionalEntityId (trim + lowercase) before returning it.
+    return internalEntityId;
   }
 
   private async resolveWorkspaceObjectTableName({

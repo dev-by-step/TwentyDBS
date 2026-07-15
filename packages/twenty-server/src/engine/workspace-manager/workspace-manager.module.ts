@@ -19,6 +19,7 @@ import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/works
 import { DevSeederModule } from 'src/engine/workspace-manager/dev-seeder/dev-seeder.module';
 import { TwentyStandardApplicationModule } from 'src/engine/workspace-manager/twenty-standard-application/twenty-standard-application.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
+import { InternalEntityModule } from 'src/modules/internal-entity/internal-entity.module';
 
 import { WorkspaceManagerService } from './workspace-manager.service';
 
@@ -43,6 +44,7 @@ import { WorkspaceManagerService } from './workspace-manager.service';
       RoleEntity,
       LogicFunctionEntity,
     ]),
+    InternalEntityModule,
   ],
   exports: [WorkspaceManagerService],
   providers: [WorkspaceManagerService],

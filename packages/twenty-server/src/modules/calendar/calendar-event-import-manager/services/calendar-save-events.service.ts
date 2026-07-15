@@ -17,7 +17,34 @@ type FetchedCalendarEventWithDBEvent = {
   fetchedCalendarEvent: FetchedCalendarEvent;
   existingCalendarEvent: CalendarEventWorkspaceEntity | null;
   newlyCreatedCalendarEvent: CalendarEventWorkspaceEntity | null;
+  matchKind: 'icalUid' | 'signature' | null;
 };
+
+const normalizeCalendarEventTitle = (title: string | null | undefined) =>
+  (title ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+
+const getCalendarEventSignature = ({
+  title,
+  startsAt,
+  endsAt,
+  isFullDay,
+}: {
+  title: string | null | undefined;
+  startsAt: string | null | undefined;
+  endsAt: string | null | undefined;
+  isFullDay: boolean;
+}) => {
+  const normalizedTitle = normalizeCalendarEventTitle(title);
+
+  if (!normalizedTitle || !startsAt || !endsAt) {
+    return null;
+  }
+
+  return `${normalizedTitle}|${startsAt}|${endsAt}|${isFullDay}`;
+};
+
+const isNonEmptyString = (value: string | null | undefined): value is string =>
+  Boolean(value);
 
 @Injectable()
 export class CalendarSaveEventsService {
@@ -52,15 +79,71 @@ export class CalendarSaveEventsService {
 
       await workspaceDataSource.transaction(
         async (transactionManager: WorkspaceEntityManager) => {
-          const existingCalendarEvents = await calendarEventRepository.find(
-            {
-              where: {
-                iCalUid: Any(
-                  fetchedCalendarEvents.map((event) => event.iCalUid as string),
-                ),
-              },
-            },
-            transactionManager,
+          const fetchedICalUids = [
+            ...new Set(
+              fetchedCalendarEvents
+                .map((event) => event.iCalUid)
+                .filter(isNonEmptyString),
+            ),
+          ];
+          const fetchedStartDates = [
+            ...new Set(
+              fetchedCalendarEvents
+                .map((event) => event.startsAt)
+                .filter(isNonEmptyString),
+            ),
+          ];
+          const fetchedEndDates = [
+            ...new Set(
+              fetchedCalendarEvents
+                .map((event) => event.endsAt)
+                .filter(isNonEmptyString),
+            ),
+          ];
+
+          const existingCalendarEventsByICalUid =
+            fetchedICalUids.length > 0
+              ? await calendarEventRepository.find(
+                  {
+                    where: {
+                      iCalUid: Any(fetchedICalUids),
+                    },
+                  },
+                  transactionManager,
+                )
+              : [];
+
+          const existingCalendarEventsByTimeSignature =
+            fetchedStartDates.length > 0 && fetchedEndDates.length > 0
+              ? await calendarEventRepository.find(
+                  {
+                    where: {
+                      startsAt: Any(fetchedStartDates),
+                      endsAt: Any(fetchedEndDates),
+                    },
+                  },
+                  transactionManager,
+                )
+              : [];
+
+          const existingCalendarEvents = [
+            ...existingCalendarEventsByICalUid,
+            ...existingCalendarEventsByTimeSignature,
+          ].filter(
+            (event, index, events) =>
+              events.findIndex(({ id }) => id === event.id) === index,
+          );
+          const existingCalendarEventBySignature = new Map(
+            existingCalendarEvents
+              .map(
+                (event) => [getCalendarEventSignature(event), event] as const,
+              )
+              .filter(
+                (
+                  entry,
+                ): entry is readonly [string, CalendarEventWorkspaceEntity] =>
+                  entry[0] !== null,
+              ),
           );
 
           const fetchedCalendarEventsWithDBEvents: FetchedCalendarEventWithDBEvent[] =
@@ -68,40 +151,62 @@ export class CalendarSaveEventsService {
               (event): FetchedCalendarEventWithDBEvent => {
                 const existingEventWithSameiCalUid =
                   existingCalendarEvents.find(
-                    (existingEvent) => existingEvent.iCalUid === event.iCalUid,
+                    (existingEvent) =>
+                      event.iCalUid && existingEvent.iCalUid === event.iCalUid,
                   );
+                const existingEventWithSameSignature =
+                  existingCalendarEventBySignature.get(
+                    getCalendarEventSignature(event) ?? '',
+                  );
+                const existingCalendarEvent =
+                  existingEventWithSameiCalUid ??
+                  existingEventWithSameSignature ??
+                  null;
 
                 return {
                   fetchedCalendarEvent: event,
-                  existingCalendarEvent: existingEventWithSameiCalUid ?? null,
+                  existingCalendarEvent,
                   newlyCreatedCalendarEvent: null,
+                  matchKind: existingEventWithSameiCalUid
+                    ? 'icalUid'
+                    : existingEventWithSameSignature
+                      ? 'signature'
+                      : null,
                 };
               },
             );
 
-          const newCalendarEventsToInsert = fetchedCalendarEventsWithDBEvents
-            .filter(
-              ({ existingCalendarEvent }) => existingCalendarEvent === null,
-            )
-            .map(({ fetchedCalendarEvent }) => ({
-              id: uuid(),
-              iCalUid: fetchedCalendarEvent.iCalUid,
-              title: fetchedCalendarEvent.title,
-              description: fetchedCalendarEvent.description,
-              startsAt: fetchedCalendarEvent.startsAt,
-              endsAt: fetchedCalendarEvent.endsAt,
-              location: fetchedCalendarEvent.location,
-              isFullDay: fetchedCalendarEvent.isFullDay,
-              isCanceled: fetchedCalendarEvent.isCanceled,
-              conferenceSolution: fetchedCalendarEvent.conferenceSolution,
-              conferenceLink: {
-                primaryLinkLabel: fetchedCalendarEvent.conferenceLinkLabel,
-                primaryLinkUrl: fetchedCalendarEvent.conferenceLinkUrl,
-                secondaryLinks: [],
-              },
-              externalCreatedAt: fetchedCalendarEvent.externalCreatedAt,
-              externalUpdatedAt: fetchedCalendarEvent.externalUpdatedAt,
-            }));
+          const newCalendarEventsToInsertWithFetched =
+            fetchedCalendarEventsWithDBEvents
+              .filter(
+                ({ existingCalendarEvent }) => existingCalendarEvent === null,
+              )
+              .map(({ fetchedCalendarEvent }) => ({
+                fetchedCalendarEvent,
+                calendarEventToInsert: {
+                  id: uuid(),
+                  iCalUid: fetchedCalendarEvent.iCalUid,
+                  title: fetchedCalendarEvent.title,
+                  description: fetchedCalendarEvent.description,
+                  startsAt: fetchedCalendarEvent.startsAt,
+                  endsAt: fetchedCalendarEvent.endsAt,
+                  location: fetchedCalendarEvent.location,
+                  isFullDay: fetchedCalendarEvent.isFullDay,
+                  isCanceled: fetchedCalendarEvent.isCanceled,
+                  conferenceSolution: fetchedCalendarEvent.conferenceSolution,
+                  conferenceLink: {
+                    primaryLinkLabel: fetchedCalendarEvent.conferenceLinkLabel,
+                    primaryLinkUrl: fetchedCalendarEvent.conferenceLinkUrl,
+                    secondaryLinks: [],
+                  },
+                  externalCreatedAt: fetchedCalendarEvent.externalCreatedAt,
+                  externalUpdatedAt: fetchedCalendarEvent.externalUpdatedAt,
+                },
+              }));
+          const newCalendarEventsToInsert =
+            newCalendarEventsToInsertWithFetched.map(
+              ({ calendarEventToInsert }) => calendarEventToInsert,
+            );
 
           if (newCalendarEventsToInsert.length > 0) {
             await calendarEventRepository.insert(
@@ -112,11 +217,12 @@ export class CalendarSaveEventsService {
 
           const fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents: FetchedCalendarEventWithDBEvent[] =
             fetchedCalendarEventsWithDBEvents.map(
-              ({ fetchedCalendarEvent, existingCalendarEvent }) => {
-                const savedCalendarEvent = newCalendarEventsToInsert.find(
-                  (inserted) =>
-                    inserted.iCalUid === fetchedCalendarEvent.iCalUid,
-                );
+              ({ fetchedCalendarEvent, existingCalendarEvent, matchKind }) => {
+                const savedCalendarEvent =
+                  newCalendarEventsToInsertWithFetched.find(
+                    (inserted) =>
+                      inserted.fetchedCalendarEvent === fetchedCalendarEvent,
+                  )?.calendarEventToInsert;
 
                 return {
                   fetchedCalendarEvent,
@@ -127,6 +233,7 @@ export class CalendarSaveEventsService {
                         iCalUid: savedCalendarEvent.iCalUid,
                       } as CalendarEventWorkspaceEntity)
                     : null,
+                  matchKind,
                 };
               },
             );
@@ -134,7 +241,8 @@ export class CalendarSaveEventsService {
           const existingEventsToUpdate =
             fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
               .filter(
-                ({ existingCalendarEvent }) => existingCalendarEvent !== null,
+                ({ existingCalendarEvent, matchKind }) =>
+                  existingCalendarEvent !== null && matchKind === 'icalUid',
               )
               .map(({ fetchedCalendarEvent, existingCalendarEvent }) => {
                 if (!existingCalendarEvent) {
@@ -174,36 +282,70 @@ export class CalendarSaveEventsService {
             );
           }
 
+          const calendarEventIds =
+            fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
+              .map(
+                ({ existingCalendarEvent, newlyCreatedCalendarEvent }) =>
+                  existingCalendarEvent?.id ?? newlyCreatedCalendarEvent?.id,
+              )
+              .filter(isNonEmptyString);
+          const existingCalendarChannelEventAssociations =
+            calendarEventIds.length > 0
+              ? await calendarChannelEventAssociationRepository.find(
+                  {
+                    where: {
+                      calendarChannelId: calendarChannel.id,
+                      calendarEventId: Any(calendarEventIds),
+                    },
+                  },
+                  transactionManager,
+                )
+              : [];
+
           const calendarChannelEventAssociationsToSave: Pick<
             CalendarChannelEventAssociationWorkspaceEntity,
             | 'calendarEventId'
             | 'eventExternalId'
             | 'calendarChannelId'
             | 'recurringEventExternalId'
-          >[] = fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents.map(
-            ({
-              fetchedCalendarEvent,
-              existingCalendarEvent,
-              newlyCreatedCalendarEvent,
-            }) => {
-              const calendarEventId =
-                existingCalendarEvent?.id ?? newlyCreatedCalendarEvent?.id;
+          >[] =
+            fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents.flatMap(
+              ({
+                fetchedCalendarEvent,
+                existingCalendarEvent,
+                newlyCreatedCalendarEvent,
+              }) => {
+                const calendarEventId =
+                  existingCalendarEvent?.id ?? newlyCreatedCalendarEvent?.id;
 
-              if (!calendarEventId) {
-                throw new Error(
-                  `Calendar event id not found for event with iCalUid ${fetchedCalendarEvent.iCalUid} - should never happen`,
-                );
-              }
+                if (!calendarEventId) {
+                  throw new Error(
+                    `Calendar event id not found for event with iCalUid ${fetchedCalendarEvent.iCalUid} - should never happen`,
+                  );
+                }
 
-              return {
-                calendarEventId,
-                eventExternalId: fetchedCalendarEvent.id,
-                calendarChannelId: calendarChannel.id,
-                recurringEventExternalId:
-                  fetchedCalendarEvent.recurringEventExternalId ?? '',
-              };
-            },
-          );
+                const existingAssociation =
+                  existingCalendarChannelEventAssociations.find(
+                    (association) =>
+                      association.calendarEventId === calendarEventId ||
+                      association.eventExternalId === fetchedCalendarEvent.id,
+                  );
+
+                if (existingAssociation) {
+                  return [];
+                }
+
+                return [
+                  {
+                    calendarEventId,
+                    eventExternalId: fetchedCalendarEvent.id,
+                    calendarChannelId: calendarChannel.id,
+                    recurringEventExternalId:
+                      fetchedCalendarEvent.recurringEventExternalId ?? '',
+                  },
+                ];
+              },
+            );
 
           if (calendarChannelEventAssociationsToSave.length > 0) {
             await calendarChannelEventAssociationRepository.insert(
@@ -240,7 +382,8 @@ export class CalendarSaveEventsService {
           const participantsToUpdate =
             fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
               .filter(
-                ({ existingCalendarEvent }) => existingCalendarEvent !== null,
+                ({ existingCalendarEvent, matchKind }) =>
+                  existingCalendarEvent !== null && matchKind === 'icalUid',
               )
               .flatMap(({ fetchedCalendarEvent, existingCalendarEvent }) => {
                 if (!existingCalendarEvent?.id) {

@@ -1,5 +1,10 @@
 import { type QueryRunner } from 'typeorm';
 
+import {
+  PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
+  PRIMARY_DEV_WORKSPACE_USERS,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/primary-dev-workspace-data.constant';
+
 import { generateRandomUsers } from './generate-random-users.util';
 
 const tableName = 'user';
@@ -9,6 +14,7 @@ export const USER_DATA_SEED_IDS = {
   TIM: '20202020-9e3b-46d4-a556-88b9ddc2b034',
   JONY: '20202020-3957-4908-9c36-2929a23f8357',
   PHIL: '20202020-7169-42cf-bc47-1cfef15264b8',
+  LOUIS_WEKNOW: '20202020-4a1e-4dfc-b8ca-41c2fe6a94a1',
 };
 
 const { users: randomUsers, userIds: randomUserIds } = generateRandomUsers();
@@ -18,57 +24,48 @@ export const RANDOM_USER_IDS = randomUserIds;
 type SeedUsersArgs = {
   queryRunner: QueryRunner;
   schemaName: string;
+  light?: boolean;
 };
 
-export const seedUsers = async ({ queryRunner, schemaName }: SeedUsersArgs) => {
+export const seedUsers = async ({
+  queryRunner,
+  schemaName,
+  light = false,
+}: SeedUsersArgs) => {
   const originalUsers = [
     {
       id: USER_DATA_SEED_IDS.TIM,
-      firstName: 'Tim',
-      lastName: 'Apple',
-      email: 'tim@apple.dev',
-      passwordHash:
-        '$2b$10$3LwXjJRtLsfx4hLuuXhxt.3mWgismTiZFCZSG3z9kDrSfsrBl0fT6', // tim@apple.dev
-      canImpersonate: true,
-      canAccessFullAdminPanel: true,
+      ...PRIMARY_DEV_WORKSPACE_USERS.TIM,
+      passwordHash: PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
       isEmailVerified: true,
     },
     {
       id: USER_DATA_SEED_IDS.JONY,
-      firstName: 'Jony',
-      lastName: 'Ive',
-      email: 'jony.ive@apple.dev',
-      passwordHash:
-        '$2b$10$3LwXjJRtLsfx4hLuuXhxt.3mWgismTiZFCZSG3z9kDrSfsrBl0fT6', // tim@apple.dev
-      canImpersonate: true,
-      canAccessFullAdminPanel: true,
+      ...PRIMARY_DEV_WORKSPACE_USERS.JONY,
+      passwordHash: PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
       isEmailVerified: true,
     },
     {
       id: USER_DATA_SEED_IDS.PHIL,
-      firstName: 'Phil',
-      lastName: 'Schiler',
-      email: 'phil.schiler@apple.dev',
-      passwordHash:
-        '$2b$10$3LwXjJRtLsfx4hLuuXhxt.3mWgismTiZFCZSG3z9kDrSfsrBl0fT6', // tim@apple.dev
-      canImpersonate: true,
-      canAccessFullAdminPanel: true,
+      ...PRIMARY_DEV_WORKSPACE_USERS.PHIL,
+      passwordHash: PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
       isEmailVerified: true,
     },
     {
       id: USER_DATA_SEED_IDS.JANE,
-      firstName: 'Jane',
-      lastName: 'Austen',
-      email: 'jane.austen@apple.dev',
-      passwordHash:
-        '$2b$10$3LwXjJRtLsfx4hLuuXhxt.3mWgismTiZFCZSG3z9kDrSfsrBl0fT6', // tim@apple.dev
-      canImpersonate: true,
-      canAccessFullAdminPanel: true,
+      ...PRIMARY_DEV_WORKSPACE_USERS.JANE,
+      passwordHash: PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
+      isEmailVerified: true,
+    },
+    {
+      id: USER_DATA_SEED_IDS.LOUIS_WEKNOW,
+      ...PRIMARY_DEV_WORKSPACE_USERS.LOUIS_WEKNOW,
+      passwordHash: PRIMARY_DEV_WORKSPACE_DEFAULT_PASSWORD_HASH,
       isEmailVerified: true,
     },
   ];
 
-  const allUsers = [...originalUsers, ...randomUsers];
+  const allUsers = light ? originalUsers : [...originalUsers, ...randomUsers];
 
   await queryRunner.manager
     .createQueryBuilder()
@@ -78,6 +75,7 @@ export const seedUsers = async ({ queryRunner, schemaName }: SeedUsersArgs) => {
       'firstName',
       'lastName',
       'email',
+      'entityId',
       'passwordHash',
       'canImpersonate',
       'canAccessFullAdminPanel',

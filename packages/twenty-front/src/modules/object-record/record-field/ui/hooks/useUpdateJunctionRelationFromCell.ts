@@ -29,6 +29,16 @@ type UseUpdateJunctionRelationFromCellArgs = {
   recordId: string;
 };
 
+const isDuplicateRelationError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.includes(
+    'A record with this relationship already exists',
+  );
+};
+
 export const useUpdateJunctionRelationFromCell = ({
   fieldMetadataItem,
   fieldDefinition,
@@ -166,6 +176,16 @@ export const useUpdateJunctionRelationFromCell = ({
           },
         );
       } else {
+        const existingJunctionRecord = findJunctionRecordByTargetId({
+          junctionRecords: currentJunctionRecords,
+          targetRecordId: morphItem.recordId,
+          targetFieldName,
+        });
+
+        if (isDefined(existingJunctionRecord)) {
+          return;
+        }
+
         const searchRecord = store.get(
           searchRecordStoreFamilyState.atomFamily(morphItem.recordId),
         );
@@ -194,7 +214,13 @@ export const useUpdateJunctionRelationFromCell = ({
           [targetJoinColumnName]: morphItem.recordId,
         };
 
-        await createJunctionRecord(newJunctionRecordForApi);
+        try {
+          await createJunctionRecord(newJunctionRecordForApi);
+        } catch (error) {
+          if (!isDuplicateRelationError(error)) {
+            throw error;
+          }
+        }
 
         store.set(
           recordStoreFamilyState.atomFamily(recordId),
@@ -204,9 +230,17 @@ export const useUpdateJunctionRelationFromCell = ({
             }
 
             const currentFieldValue = currentRecord[fieldName];
-            const updatedJunctionRecords = Array.isArray(currentFieldValue)
-              ? [...currentFieldValue, junctionRecordForStore]
-              : [junctionRecordForStore];
+            const currentRecords = Array.isArray(currentFieldValue)
+              ? currentFieldValue
+              : [];
+            const alreadyPresent = findJunctionRecordByTargetId({
+              junctionRecords: currentRecords as FieldRelationFromManyValue,
+              targetRecordId: morphItem.recordId,
+              targetFieldName,
+            });
+            const updatedJunctionRecords = alreadyPresent
+              ? currentRecords
+              : [...currentRecords, junctionRecordForStore];
 
             return {
               ...currentRecord,

@@ -22,6 +22,7 @@ describe('JwtAuthStrategy', () => {
   let permissionsService: any;
   let workspaceCacheService: any;
   let coreEntityCacheService: any;
+  let twentyConfigService: any;
 
   const jwt = {
     sub: 'sub-default',
@@ -103,6 +104,16 @@ describe('JwtAuthStrategy', () => {
       }),
       invalidate: jest.fn(),
     };
+
+    twentyConfigService = {
+      get: jest.fn((key: string) => {
+        if (key === 'IS_MULTIWORKSPACE_ENABLED') {
+          return true;
+        }
+
+        return undefined;
+      }),
+    };
   });
 
   afterEach(() => {
@@ -117,6 +128,7 @@ describe('JwtAuthStrategy', () => {
       permissionsService,
       workspaceCacheService,
       coreEntityCacheService,
+      twentyConfigService,
     );
 
   describe('API_KEY validation', () => {
@@ -327,6 +339,88 @@ describe('JwtAuthStrategy', () => {
 
       expect(user.user?.lastName).toBe('lastNameDefault');
       expect(user.userWorkspaceId).toBe(validUserWorkspaceId);
+    });
+
+    it('should fallback to the active single workspace when the token workspace was archived', async () => {
+      const validUserId = 'valid-user-id';
+      const archivedUserWorkspaceId = randomUUID();
+      const archivedWorkspaceId = randomUUID();
+      const activeUserWorkspaceId = randomUUID();
+      const activeWorkspaceId = randomUUID();
+
+      const payload = {
+        sub: validUserId,
+        type: JwtTokenTypeEnum.ACCESS,
+        userWorkspaceId: archivedUserWorkspaceId,
+        workspaceId: archivedWorkspaceId,
+      };
+
+      twentyConfigService.get.mockImplementation((key: string) => {
+        if (key === 'IS_MULTIWORKSPACE_ENABLED') {
+          return false;
+        }
+
+        return undefined;
+      });
+
+      workspaceStore[activeWorkspaceId] = {
+        id: activeWorkspaceId,
+        activationStatus: 'ACTIVE',
+      };
+      userStore[validUserId] = {
+        id: validUserId,
+        lastName: 'lastNameDefault',
+      };
+
+      userWorkspaceRepository.findOne.mockImplementation(({ where }: any) => {
+        if (where?.id === archivedUserWorkspaceId) {
+          return null;
+        }
+
+        if (where?.userId === validUserId) {
+          return {
+            id: activeUserWorkspaceId,
+            userId: validUserId,
+            workspaceId: activeWorkspaceId,
+            workspace: workspaceStore[activeWorkspaceId],
+          };
+        }
+
+        return null;
+      });
+
+      coreEntityCacheService.get.mockImplementation(
+        async (keyName: string, entityId: string) => {
+          if (keyName === 'workspaceEntity') {
+            return workspaceStore[entityId] ?? null;
+          }
+
+          if (keyName === 'user') {
+            return userStore[entityId] ?? null;
+          }
+
+          if (keyName === 'userWorkspaceEntity') {
+            if (entityId === activeUserWorkspaceId) {
+              return {
+                id: activeUserWorkspaceId,
+                userId: validUserId,
+                workspaceId: activeWorkspaceId,
+              };
+            }
+
+            return null;
+          }
+
+          return null;
+        },
+      );
+
+      strategy = createStrategy();
+
+      const authContext = await strategy.validate(payload as JwtPayload);
+
+      expect(authContext.workspace?.id).toBe(activeWorkspaceId);
+      expect(authContext.userWorkspaceId).toBe(activeUserWorkspaceId);
     });
   });
 

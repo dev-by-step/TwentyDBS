@@ -9,6 +9,10 @@ import { buildUrlWithPathnameAndSearchParams } from 'src/engine/core-modules/dom
 import { WorkspaceDomainConfig } from 'src/engine/core-modules/domain/workspace-domains/types/workspace-domain-config.type';
 import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import {
+  TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
+  TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+} from 'src/engine/core-modules/workspace/constants/twenty-dbs-workspace.constant';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
@@ -74,12 +78,17 @@ export class WorkspaceDomainsService {
 
     if (workspaces.length > 1) {
       Logger.warn(
-        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. Apple seed workspace will be used as fallback if it found.`,
+        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. The twwentydbs workspace will be used as fallback if it is found.`,
       );
     }
 
     const foundWorkspace =
       workspaces.find(({ id }) => id === SEED_APPLE_WORKSPACE_ID) ??
+      workspaces.find(
+        ({ displayName, subdomain }) =>
+          displayName === TWENTY_DBS_WORKSPACE_DISPLAY_NAME ||
+          subdomain === TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+      ) ??
       workspaces[0];
 
     assertIsDefinedOrThrow(foundWorkspace, WorkspaceNotFoundDefaultError);

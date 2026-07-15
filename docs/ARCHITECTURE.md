@@ -81,6 +81,43 @@ export class CalendarPrivacyInterceptor implements NestInterceptor {
 // Enregistrement dans le module GraphQL, pas globalement
 ```
 
+### Pre-query hooks d'accès (Carte 10 — Permissions multi-entités)
+
+`InternalEntityAccessPolicyService` est branché sur tous les `*.findMany`,
+`*.findOne`, `*.groupBy`, `*.create*`, `*.update*`, `*.delete*`, etc., via des
+`WorkspaceQueryHook` génériques :
+
+```
+findMany → scopeFindManyPayload
+            ├── sanitizeEntityScopeFilterFromPayload   ← retire les clés
+            │                                            internalEntityId /
+            │                                            internalEntitiesId du
+            │                                            filtre client si la
+            │                                            métadonnée n'est pas
+            │                                            initialisée
+            └── buildScopedFilter
+                  ├── ENTITY_SCOPED   → filtre par activeInternalEntityId
+                  │                     (gate `isEntityScopeFieldAvailable`
+                  │                     en cache process)
+                  ├── HYBRID_SCOPED   → timelineActivity (OR personnel +
+                  │                     entité)
+                  └── PERSONAL_WORK   → note/task/attachment/noteTarget/
+                                        taskTarget (filtre par createdBy
+                                        ou assignee)
+```
+
+**Gating métadonnée :** avant d'injecter un filtre `internalEntitiesId` /
+`internalEntityId`, le service vérifie via `ObjectMetadataService` que le
+champ relation existe et (pour les M2M Person/Company) que
+`junctionTargetFieldId` est positionné. Si la métadonnée n'est pas prête
+(workspace pas encore initialisé), le filtre est silencieusement ignoré pour
+laisser passer les pages au lieu de planter avec `Invalid filter`.
+
+**Header de scope :** le front pose l'entité active dans le header HTTP
+`ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` (cf. `twenty-shared/constants`),
+normalisé via `normalizeOptionalEntityId` (trim + lowercase) côté serveur.
+Vue Groupe = header absent → aucun filtre d'entité appliqué en lecture.
+
 ---
 
 ## Frontend — Patterns à respecter
@@ -164,7 +201,22 @@ Person
 
 Company
 └── internalEntities: M2M via CompanyEntityMembership
+
+WorkspaceMember
+└── internalEntities: M2M via WorkspaceMemberEntityMembership
+
+CalendarEvent
+├── sharingScope: 'ENTITY_ONLY' | 'WORKSPACE_PUBLIC'
+└── audienceEntities: M2M via CalendarEventEntityAudience (Carte 10)
 ```
+
+### Audience de calendrier (Carte 10)
+
+Arbitrage du masquage par événement, dans l'ordre :
+
+1. `sharingScope = WORKSPACE_PUBLIC` → jamais masqué.
+2. `audienceEntities` non vide → masqué si l'entité du requêtant n'est pas dans l'audience (l'auteur peut cibler une entité dont il ne fait pas partie).
+3. Sinon → règle Carte 5 (masqué si l'entité propriétaire du canal diffère de l'entité du requêtant).
 
 ### Propagation de l'entité (Carte 2)
 
@@ -203,8 +255,9 @@ Notes :
 ## Commandes de développement (Nx)
 
 ```bash
-# Démarrer tout l'environnement
-yarn start
+# Démarrer tout l'environnement (script local du repo)
+yarn dev
+# (équivalent : yarn start)
 
 # Type checking (remplace tsc --noEmit)
 npx nx typecheck twenty-front
@@ -221,6 +274,10 @@ npx nx test twenty-front
 # GraphQL — régénérer après tout changement de schéma
 npx nx run twenty-front:graphql:generate
 
+# Init multi-entités — à relancer après toute évolution de la metadata
+# (ajout d'objet, nouvelle relation M2M, junctionTargetFieldId, …)
+npx nx run twenty-server:command -- init-internal-entities
+
 # Instance commands — obligatoire après tout changement d'entity TypeORM
 npx nx run twenty-server:database:migrate:generate --name <nom> --type fast
 npx nx run twenty-server:database:migrate:generate --name <nom> --type slow  # si migration de données
@@ -234,3 +291,4 @@ npx nx run twenty-server:database:migrate:generate --name <nom> --type slow  # s
 2. **WorkspaceId partout** : Chaque query doit être scopée par `workspaceId`. Le metadata engine le requiert.
 3. **Apollo Cache** : Après mutation, invalider le cache via `refetchQueries` ou `cache.evict`, pas de manipulation directe.
 4. **TypeORM + Twenty** : Twenty utilise un `DataSourceService` custom pour le multi-tenant. Ne pas injecter `DataSource` directement — utiliser `TwentyORMGlobalManager`.
+5. **Filtres ONE_TO_MANY via junction** : pour qu'un filtre `<field>Id: { in: [...] }` soit accepté sur une M2M, le champ relation côté Person/Company/CalendarEvent doit avoir `junctionTargetFieldId` positionné. Sinon `FilterArgProcessorService` lève `Invalid filter`. Le service `init-internal-entities` gère ce câblage ; côté front, ne pas appeler `useCreateOneRecord` / `useObjectMetadataItem` sur un objet metadata absent (ça throw au mount) — gater via `useObjectMetadataItems`.

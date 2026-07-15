@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
 import { IconX } from 'twenty-ui/display';
@@ -71,7 +72,7 @@ export const BaseChip = ({
   label,
   title,
   onRemove,
-  removeAriaLabel = 'Remove',
+  removeAriaLabel = t`Remove`,
   danger = false,
   leftIcon,
 }: BaseChipProps) => {

@@ -27,10 +27,7 @@ const StyledContent = styled.div`
 export const GroupCalendarPage = () => (
   <StyledPageWrapper>
     <StyledHeader>
-      <H1Title
-        title={t`Calendrier Groupe`}
-        fontColor={H1TitleFontColor.Primary}
-      />
+      <H1Title title={t`Group calendar`} fontColor={H1TitleFontColor.Primary} />
     </StyledHeader>
     <StyledContent>
       <GroupCalendarEventsCard />

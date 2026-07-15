@@ -3,7 +3,7 @@ import { type FrontComponentExecutionContext } from 'twenty-sdk/front-component'
 import {
   FRONT_COMPONENT_CONTEXT_KEY,
   FRONT_COMPONENT_LISTENERS_KEY,
-} from 'twenty-sdk/front-component-renderer';
+} from '@/shims/twentySdkFrontComponentRenderer';
 
 type Listener = () => void;
 

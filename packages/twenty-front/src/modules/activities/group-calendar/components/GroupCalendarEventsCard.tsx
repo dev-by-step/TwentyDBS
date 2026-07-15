@@ -1,15 +1,32 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { format, getYear } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useState } from 'react';
 
 import { CalendarDayCardContent } from '@/activities/calendar/components/CalendarDayCardContent';
+import { GroupCalendarBoard } from '@/activities/group-calendar/components/GroupCalendarBoard';
+import { GroupCalendarEditEventModal } from '@/activities/group-calendar/components/GroupCalendarEditEventModal';
 import { GroupCalendarTopBar } from '@/activities/group-calendar/components/GroupCalendarTopBar';
+import { useCurrentUserEntityIds } from '@/activities/group-calendar/hooks/useCurrentUserEntityIds';
 import { useGroupCalendarEvents } from '@/activities/group-calendar/hooks/useGroupCalendarEvents';
+import { groupCalendarDisplayModeState } from '@/activities/group-calendar/states/groupCalendarDisplayModeState';
 import { CalendarContext } from '@/activities/calendar/contexts/CalendarContext';
 import { useCalendarEvents } from '@/activities/calendar/hooks/useCalendarEvents';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
-import { H3Title } from 'twenty-ui/display';
+import { currentUserState } from '@/auth/states/currentUserState';
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { dateLocaleState } from '~/localization/states/dateLocaleState';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import {
+  CalendarChannelVisibility,
+  type TimelineCalendarEvent,
+} from '~/generated/graphql';
+import { H3Title, IconPencil } from 'twenty-ui/display';
+import { IconButton } from 'twenty-ui/input';
 import {
   AnimatedPlaceholder,
   AnimatedPlaceholderEmptyContainer,
@@ -54,10 +71,60 @@ export const GroupCalendarEventsCard = () => {
     selectedDate,
     loading,
     calendarEvents,
+    refetch,
     navigatePrev,
     navigateNext,
     navigateToday,
   } = useGroupCalendarEvents();
+  const { localeCatalog } = useAtomStateValue(dateLocaleState);
+  const { objectMetadataItem: calendarEventMetadata } = useObjectMetadataItem({
+    objectNameSingular: CoreObjectNameSingular.CalendarEvent,
+  });
+  const calendarEventPermissions = useObjectPermissionsForObject(
+    calendarEventMetadata.id,
+  );
+  const hasGlobalCalendarEventUpdatePermission =
+    calendarEventPermissions.canUpdateObjectRecords ||
+    calendarEventPermissions.canSoftDeleteObjectRecords;
+  const currentUser = useAtomStateValue(currentUserState);
+  const currentUserEntityIds = useCurrentUserEntityIds();
+  const isPlatformAdmin = currentUser?.canAccessFullAdminPanel === true;
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [groupCalendarDisplayMode, setGroupCalendarDisplayMode] = useAtomState(
+    groupCalendarDisplayModeState,
+  );
+
+  const renderEventActions = (calendarEvent: TimelineCalendarEvent) => {
+    if (!hasGlobalCalendarEventUpdatePermission) {
+      return null;
+    }
+
+    if (
+      calendarEvent.visibility !== CalendarChannelVisibility.SHARE_EVERYTHING
+    ) {
+      return null;
+    }
+
+    const ownerEntityId = calendarEvent.ownerEntityId;
+
+    const canManageThisEvent =
+      isPlatformAdmin ||
+      (isDefined(ownerEntityId) && currentUserEntityIds.has(ownerEntityId));
+
+    if (!canManageThisEvent) {
+      return null;
+    }
+
+    return (
+      <IconButton
+        Icon={IconPencil}
+        size="small"
+        variant="tertiary"
+        ariaLabel={t`Edit event`}
+        onClick={() => setEditingEventId(calendarEvent.id)}
+      />
+    );
+  };
 
   const {
     calendarEventsByDayTime,
@@ -71,10 +138,13 @@ export const GroupCalendarEventsCard = () => {
       <GroupCalendarTopBar
         viewMode={viewMode}
         selectedDate={selectedDate}
+        displayMode={groupCalendarDisplayMode}
+        onDisplayModeChange={setGroupCalendarDisplayMode}
         onViewModeChange={setViewMode}
         onPrev={navigatePrev}
         onNext={navigateNext}
         onToday={navigateToday}
+        onEventCreated={refetch}
       />
 
       {loading ? (
@@ -87,51 +157,76 @@ export const GroupCalendarEventsCard = () => {
           <AnimatedPlaceholder type="noMatchRecord" />
           <AnimatedPlaceholderEmptyTextContainer>
             <AnimatedPlaceholderEmptyTitle>
-              {t`Aucun événement`}
+              {t`No Events`}
             </AnimatedPlaceholderEmptyTitle>
             <AnimatedPlaceholderEmptySubTitle>
-              {t`Aucun créneau n'est planifié pour cette période.`}
+              {t`No event is scheduled for this period.`}
             </AnimatedPlaceholderEmptySubTitle>
           </AnimatedPlaceholderEmptyTextContainer>
         </AnimatedPlaceholderEmptyContainer>
       ) : (
-        <CalendarContext.Provider value={{ calendarEventsByDayTime }}>
-          <StyledScrollArea>
-            {monthTimes.map((monthTime) => {
-              const monthDayTimes = daysByMonthTime[monthTime] ?? [];
-              const year = getYear(monthTime);
-              const lastMonthOfYear = monthTimesByYear[year]?.[0];
-              const isLastMonthOfYear = lastMonthOfYear === monthTime;
-              const monthLabel = format(monthTime, 'MMMM', { locale: fr });
+        <>
+          {groupCalendarDisplayMode === 'CALENDAR' ? (
+            <GroupCalendarBoard
+              calendarEvents={calendarEvents}
+              locale={localeCatalog}
+              selectedDate={selectedDate}
+              viewMode={viewMode}
+              renderEventActions={renderEventActions}
+            />
+          ) : (
+            <CalendarContext.Provider value={{ calendarEventsByDayTime }}>
+              <StyledScrollArea>
+                {monthTimes.map((monthTime) => {
+                  const monthDayTimes = daysByMonthTime[monthTime] ?? [];
+                  const year = getYear(monthTime);
+                  const lastMonthOfYear = monthTimesByYear[year]?.[0];
+                  const isLastMonthOfYear = lastMonthOfYear === monthTime;
+                  const monthLabel = format(monthTime, 'MMMM', {
+                    locale: localeCatalog,
+                  });
 
-              return (
-                <Section key={monthTime}>
-                  <StyledTitleContainer>
-                    <H3Title
-                      title={
-                        <>
-                          {monthLabel}
-                          {isLastMonthOfYear && (
-                            <StyledYear> {year}</StyledYear>
-                          )}
-                        </>
-                      }
-                    />
-                  </StyledTitleContainer>
-                  <Card fullWidth>
-                    {monthDayTimes.map((dayTime, index) => (
-                      <CalendarDayCardContent
-                        key={dayTime}
-                        calendarEvents={calendarEventsByDayTime[dayTime] ?? []}
-                        divider={index < monthDayTimes.length - 1}
-                      />
-                    ))}
-                  </Card>
-                </Section>
-              );
-            })}
-          </StyledScrollArea>
-        </CalendarContext.Provider>
+                  return (
+                    <Section key={monthTime}>
+                      <StyledTitleContainer>
+                        <H3Title
+                          title={
+                            <>
+                              {monthLabel}
+                              {isLastMonthOfYear && (
+                                <StyledYear> {year}</StyledYear>
+                              )}
+                            </>
+                          }
+                        />
+                      </StyledTitleContainer>
+                      <Card fullWidth>
+                        {monthDayTimes.map((dayTime, index) => (
+                          <CalendarDayCardContent
+                            key={dayTime}
+                            calendarEvents={
+                              calendarEventsByDayTime[dayTime] ?? []
+                            }
+                            divider={index < monthDayTimes.length - 1}
+                            renderEventActions={renderEventActions}
+                          />
+                        ))}
+                      </Card>
+                    </Section>
+                  );
+                })}
+              </StyledScrollArea>
+            </CalendarContext.Provider>
+          )}
+        </>
+      )}
+      {editingEventId && (
+        <GroupCalendarEditEventModal
+          eventId={editingEventId}
+          onClose={() => setEditingEventId(null)}
+          onSaved={refetch}
+          onDeleted={refetch}
+        />
       )}
     </StyledWrapper>
   );
