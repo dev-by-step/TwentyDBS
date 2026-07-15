@@ -3,10 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import omit from 'lodash.omit';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
-import { Any, In, type Repository } from 'typeorm';
+import {
+  Any,
+  Between,
+  type FindOptionsWhere,
+  In,
+  LessThan,
+  MoreThanOrEqual,
+  type Repository,
+} from 'typeorm';
 
 import { CalendarChannelVisibility } from 'twenty-shared/types';
 import { TIMELINE_CALENDAR_EVENTS_DEFAULT_PAGE_SIZE } from 'src/engine/core-modules/calendar/constants/calendar.constants';
+import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
 import { type TimelineCalendarEventsWithTotalDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-events-with-total.dto';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -55,195 +64,96 @@ export class TimelineCalendarEventService {
             'calendarEvent',
           );
 
-        const calendarEventIds = await calendarEventRepository.find({
+        const paginatedIds = await calendarEventRepository.find({
           where: {
             calendarEventParticipants: {
               personId: Any(personIds),
             },
           },
-          select: {
-            id: true,
-            startsAt: true,
-          },
+          select: { id: true, startsAt: true },
           skip: offset,
           take: pageSize,
-          order: {
-            startsAt: 'DESC',
-          },
+          order: { startsAt: 'DESC' },
         });
 
-        const ids = calendarEventIds.map(({ id }) => id);
+        const ids = paginatedIds.map(({ id }) => id);
 
-        if (ids.length <= 0) {
-          return {
-            totalNumberOfCalendarEvents: 0,
-            timelineCalendarEvents: [],
-          };
+        if (ids.length === 0) {
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
         }
 
-        const [events, total] = await calendarEventRepository.findAndCount({
-          where: {
-            id: Any(ids),
-          },
-          relations: {
-            calendarEventParticipants: {
-              person: true,
-              workspaceMember: true,
-            },
-            calendarChannelEventAssociations: true,
-          },
-        });
-
-        const allCalendarChannelIds = [
-          ...new Set(
-            events.flatMap((event) =>
-              event.calendarChannelEventAssociations.map(
-                (association) => association.calendarChannelId,
-              ),
-            ),
-          ),
-        ];
-
-        const calendarChannels =
-          allCalendarChannelIds.length > 0
-            ? await this.calendarChannelRepository.find({
-                where: { id: In(allCalendarChannelIds), workspaceId },
-              })
-            : [];
-
-        // Resolve current user's userWorkspaceId (workspaceMember → userId → userWorkspace)
-        const workspaceMemberRepo =
-          await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
+        const timelineCalendarEvents =
+          await this.buildTimelineCalendarEventsFromIds({
+            calendarEventRepository,
+            ids,
+            currentWorkspaceMemberId,
             workspaceId,
-            'workspaceMember',
-            { shouldBypassPermissionChecks: true },
-          );
-
-        const currentMember = await workspaceMemberRepo.findOne({
-          where: { id: currentWorkspaceMemberId },
-          select: { userId: true },
-        });
-
-        const currentUserWorkspaceId = currentMember
-          ? ((
-              await this.userWorkspaceRepository.findOne({
-                where: { userId: currentMember.userId, workspaceId },
-                select: { id: true },
-              })
-            )?.id ?? null)
-          : null;
-
-        // Find which connected accounts the current user owns (1 query)
-        const connectedAccountIds = [
-          ...new Set(
-            calendarChannels.map((channel) => channel.connectedAccountId),
-          ),
-        ];
-
-        const ownedAccountIds =
-          connectedAccountIds.length > 0 && currentUserWorkspaceId
-            ? new Set(
-                (
-                  await this.connectedAccountRepository.find({
-                    where: {
-                      id: In(connectedAccountIds),
-                      userWorkspaceId: currentUserWorkspaceId,
-                    },
-                    select: { id: true },
-                  })
-                ).map((a) => a.id),
-              )
-            : new Set<string>();
-
-        const calendarChannelMap = new Map(
-          calendarChannels.map((channel) => [
-            channel.id,
-            {
-              visibility: channel.visibility,
-              isOwnedByCurrentUser: ownedAccountIds.has(
-                channel.connectedAccountId,
-              ),
-            },
-          ]),
-        );
-
-        const orderedEvents = events.sort(
-          (a, b) => ids.indexOf(a.id) - ids.indexOf(b.id),
-        );
-
-        const timelineCalendarEvents = orderedEvents.map((event) => {
-          const participants = event.calendarEventParticipants.map(
-            (participant) => ({
-              calendarEventId: event.id,
-              personId: participant.personId ?? null,
-              workspaceMemberId: participant.workspaceMemberId ?? null,
-              firstName:
-                participant.person?.name?.firstName ||
-                participant.workspaceMember?.name.firstName ||
-                '',
-              lastName:
-                participant.person?.name?.lastName ||
-                participant.workspaceMember?.name.lastName ||
-                '',
-              displayName:
-                participant.person?.name?.firstName ||
-                participant.person?.name?.lastName ||
-                participant.workspaceMember?.name.firstName ||
-                participant.workspaceMember?.name.lastName ||
-                participant.displayName ||
-                participant.handle ||
-                '',
-              avatarUrl:
-                participant.person?.avatarUrl ||
-                participant.workspaceMember?.avatarUrl ||
-                '',
-              handle: participant.handle ?? '',
-            }),
-          );
-
-          const hasFullAccess = event.calendarChannelEventAssociations.some(
-            (association) => {
-              const channel = calendarChannelMap.get(
-                association.calendarChannelId,
-              );
-
-              return (
-                channel?.visibility === 'SHARE_EVERYTHING' ||
-                channel?.isOwnedByCurrentUser
-              );
-            },
-          );
-
-          const visibility = hasFullAccess
-            ? CalendarChannelVisibility.SHARE_EVERYTHING
-            : CalendarChannelVisibility.METADATA;
-
-          return {
-            ...omit(event, [
-              'calendarEventParticipants',
-              'calendarChannelEventAssociations',
-            ]),
-            title:
-              visibility === CalendarChannelVisibility.METADATA
-                ? FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED
-                : (event.title ?? ''),
-            description:
-              visibility === CalendarChannelVisibility.METADATA
-                ? FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED
-                : (event.description ?? ''),
-            startsAt: event.startsAt as unknown as Date,
-            endsAt: event.endsAt as unknown as Date,
-            participants,
-            visibility,
-            location: event.location ?? '',
-            conferenceSolution: event.conferenceSolution ?? '',
-          };
-        });
+          });
 
         return {
-          totalNumberOfCalendarEvents: total,
+          totalNumberOfCalendarEvents: timelineCalendarEvents.length,
           timelineCalendarEvents,
         };
+      },
+      authContext,
+    );
+  }
+
+  async getGroupCalendarEvents({
+    currentWorkspaceMemberId,
+    workspaceId,
+    page = 1,
+    pageSize = TIMELINE_CALENDAR_EVENTS_DEFAULT_PAGE_SIZE,
+    startDate,
+    endDate,
+  }: {
+    currentWorkspaceMemberId: string;
+    workspaceId: string;
+    page: number;
+    pageSize: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimelineCalendarEventsWithTotalDTO> {
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const offset = (page - 1) * pageSize;
+
+        const calendarEventRepository =
+          await this.globalWorkspaceOrmManager.getRepository<CalendarEventWorkspaceEntity>(
+            workspaceId,
+            'calendarEvent',
+          );
+
+        const dateWhere = this.buildDateWhereClause(startDate, endDate);
+
+        const [totalNumberOfCalendarEvents, paginatedIds] = await Promise.all([
+          calendarEventRepository.count({ where: dateWhere }),
+          calendarEventRepository.find({
+            where: dateWhere,
+            select: { id: true },
+            skip: offset,
+            take: pageSize,
+            order: { startsAt: 'DESC' },
+          }),
+        ]);
+
+        const ids = paginatedIds.map(({ id }) => id);
+
+        if (ids.length === 0) {
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
+        }
+
+        const timelineCalendarEvents =
+          await this.buildTimelineCalendarEventsFromIds({
+            calendarEventRepository,
+            ids,
+            currentWorkspaceMemberId,
+            workspaceId,
+          });
+
+        return { totalNumberOfCalendarEvents, timelineCalendarEvents };
       },
       authContext,
     );
@@ -273,33 +183,22 @@ export class TimelineCalendarEventService {
             { shouldBypassPermissionChecks: true },
           );
 
-        const personIds = await personRepository.find({
-          where: {
-            companyId,
-          },
-          select: {
-            id: true,
-          },
+        const persons = await personRepository.find({
+          where: { companyId },
+          select: { id: true },
         });
 
-        if (personIds.length <= 0) {
-          return {
-            totalNumberOfCalendarEvents: 0,
-            timelineCalendarEvents: [],
-          };
+        if (persons.length === 0) {
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
         }
 
-        const formattedPersonIds = personIds.map(({ id }) => id);
-
-        const calendarEvents = await this.getCalendarEventsFromPersonIds({
+        return this.getCalendarEventsFromPersonIds({
           currentWorkspaceMemberId,
-          personIds: formattedPersonIds,
+          personIds: persons.map(({ id }) => id),
           workspaceId,
           page,
           pageSize,
         });
-
-        return calendarEvents;
       },
       authContext,
     );
@@ -330,32 +229,195 @@ export class TimelineCalendarEventService {
           );
 
         const opportunity = await opportunityRepository.findOne({
-          where: {
-            id: opportunityId,
-          },
-          select: {
-            companyId: true,
-          },
+          where: { id: opportunityId },
+          select: { companyId: true },
         });
 
         if (!opportunity?.companyId) {
-          return {
-            totalNumberOfCalendarEvents: 0,
-            timelineCalendarEvents: [],
-          };
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
         }
 
-        const calendarEvents = await this.getCalendarEventsFromCompanyId({
+        return this.getCalendarEventsFromCompanyId({
           currentWorkspaceMemberId,
           companyId: opportunity.companyId,
           workspaceId,
           page,
           pageSize,
         });
-
-        return calendarEvents;
       },
       authContext,
     );
+  }
+
+  private buildDateWhereClause(
+    startDate?: Date,
+    endDate?: Date,
+  ): FindOptionsWhere<CalendarEventWorkspaceEntity> {
+    if (startDate != null && endDate != null) {
+      return {
+        startsAt: Between(startDate, endDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
+    }
+    if (startDate != null) {
+      return {
+        startsAt: MoreThanOrEqual(startDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
+    }
+    if (endDate != null) {
+      return {
+        startsAt: LessThan(endDate),
+      } as unknown as FindOptionsWhere<CalendarEventWorkspaceEntity>;
+    }
+
+    return {};
+  }
+
+  private async buildTimelineCalendarEventsFromIds({
+    calendarEventRepository,
+    ids,
+    currentWorkspaceMemberId,
+    workspaceId,
+  }: {
+    calendarEventRepository: Repository<CalendarEventWorkspaceEntity>;
+    ids: string[];
+    currentWorkspaceMemberId: string;
+    workspaceId: string;
+  }): Promise<TimelineCalendarEventDTO[]> {
+    const events = await calendarEventRepository.find({
+      where: { id: Any(ids) },
+      relations: {
+        calendarEventParticipants: { person: true, workspaceMember: true },
+        calendarChannelEventAssociations: true,
+      },
+    });
+
+    const allCalendarChannelIds = [
+      ...new Set(
+        events.flatMap((event) =>
+          event.calendarChannelEventAssociations.map(
+            (assoc) => assoc.calendarChannelId,
+          ),
+        ),
+      ),
+    ];
+
+    const calendarChannels =
+      allCalendarChannelIds.length > 0
+        ? await this.calendarChannelRepository.find({
+            where: { id: In(allCalendarChannelIds), workspaceId },
+          })
+        : [];
+
+    const workspaceMemberRepo =
+      await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
+        workspaceId,
+        'workspaceMember',
+        { shouldBypassPermissionChecks: true },
+      );
+
+    const currentMember = await workspaceMemberRepo.findOne({
+      where: { id: currentWorkspaceMemberId },
+      select: { userId: true },
+    });
+
+    const currentUserWorkspaceId = currentMember
+      ? ((
+          await this.userWorkspaceRepository.findOne({
+            where: { userId: currentMember.userId, workspaceId },
+            select: { id: true },
+          })
+        )?.id ?? null)
+      : null;
+
+    const connectedAccountIds = [
+      ...new Set(calendarChannels.map((ch) => ch.connectedAccountId)),
+    ];
+
+    const ownedAccountIds =
+      connectedAccountIds.length > 0 && currentUserWorkspaceId != null
+        ? new Set(
+            (
+              await this.connectedAccountRepository.find({
+                where: {
+                  id: In(connectedAccountIds),
+                  userWorkspaceId: currentUserWorkspaceId,
+                },
+                select: { id: true },
+              })
+            ).map((a) => a.id),
+          )
+        : new Set<string>();
+
+    const calendarChannelMap = new Map(
+      calendarChannels.map((ch) => [
+        ch.id,
+        {
+          visibility: ch.visibility,
+          isOwnedByCurrentUser: ownedAccountIds.has(ch.connectedAccountId),
+        },
+      ]),
+    );
+
+    return events
+      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
+      .map((event) => {
+        const participants = event.calendarEventParticipants.map((p) => ({
+          calendarEventId: event.id,
+          personId: p.personId ?? null,
+          workspaceMemberId: p.workspaceMemberId ?? null,
+          firstName:
+            p.person?.name?.firstName ||
+            p.workspaceMember?.name.firstName ||
+            '',
+          lastName:
+            p.person?.name?.lastName || p.workspaceMember?.name.lastName || '',
+          displayName:
+            p.person?.name?.firstName ||
+            p.person?.name?.lastName ||
+            p.workspaceMember?.name.firstName ||
+            p.workspaceMember?.name.lastName ||
+            p.displayName ||
+            p.handle ||
+            '',
+          avatarUrl: p.person?.avatarUrl || p.workspaceMember?.avatarUrl || '',
+          handle: p.handle ?? '',
+        }));
+
+        const hasFullAccess = event.calendarChannelEventAssociations.some(
+          (assoc) => {
+            const ch = calendarChannelMap.get(assoc.calendarChannelId);
+
+            return (
+              ch?.visibility === 'SHARE_EVERYTHING' || ch?.isOwnedByCurrentUser
+            );
+          },
+        );
+
+        const visibility = hasFullAccess
+          ? CalendarChannelVisibility.SHARE_EVERYTHING
+          : CalendarChannelVisibility.METADATA;
+
+        return {
+          ...omit(event, [
+            'calendarEventParticipants',
+            'calendarChannelEventAssociations',
+          ]),
+          title:
+            visibility === CalendarChannelVisibility.METADATA
+              ? FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED
+              : (event.title ?? ''),
+          description:
+            visibility === CalendarChannelVisibility.METADATA
+              ? null
+              : (event.description ?? null),
+          startsAt: event.startsAt as unknown as Date,
+          endsAt: event.endsAt as unknown as Date,
+          participants,
+          visibility,
+          location: event.location ?? null,
+          conferenceSolution: event.conferenceSolution ?? null,
+          conferenceLink: null,
+        };
+      });
   }
 }

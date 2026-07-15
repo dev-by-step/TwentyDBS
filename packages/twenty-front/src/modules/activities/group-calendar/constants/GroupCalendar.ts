@@ -1,0 +1,1 @@
+export const GROUP_CALENDAR_DEFAULT_PAGE_SIZE = 100;
