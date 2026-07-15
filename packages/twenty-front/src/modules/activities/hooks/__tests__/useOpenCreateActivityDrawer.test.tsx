@@ -119,4 +119,32 @@ describe('useOpenCreateActivityDrawer', () => {
       targetableObjects,
     );
   });
+
+  it('should create a note target with the opportunity relation when an opportunity target is provided', async () => {
+    const targetableObjects = [
+      {
+        id: 'opportunity-id',
+        targetObjectNameSingular: CoreObjectNameSingular.Opportunity,
+      },
+    ];
+
+    const { result } = renderHook(
+      () =>
+        useOpenCreateActivityDrawer({
+          activityObjectNameSingular: CoreObjectNameSingular.Note,
+        }),
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      await result.current({
+        targetableObjects,
+      });
+    });
+
+    expect(mockCreateOneNoteTarget).toHaveBeenCalledWith({
+      noteId: fakeNoteId,
+      targetOpportunityId: 'opportunity-id',
+    });
+  });
 });

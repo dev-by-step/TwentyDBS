@@ -1,12 +1,11 @@
 import { styled } from '@linaria/react';
 
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
+import { useCanCreateActivity } from '@/activities/hooks/useCanCreateActivity';
 import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
 import { useTasks } from '@/activities/tasks/hooks/useTasks';
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
 import { type Task } from '@/activities/types/Task';
-import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { t } from '@lingui/core/macro';
@@ -41,15 +40,9 @@ export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
     targetableObjects: [targetableObject],
   });
 
-  const { objectMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: targetableObject.targetObjectNameSingular,
+  const canCreateTask = useCanCreateActivity({
+    activityObjectNameSingular: CoreObjectNameSingular.Task,
   });
-
-  const objectPermissions = useObjectPermissionsForObject(
-    objectMetadataItem.id,
-  );
-
-  const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
 
   const openCreateActivity = useOpenCreateActivityDrawer({
     activityObjectNameSingular: CoreObjectNameSingular.Task,
@@ -84,7 +77,7 @@ export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
             {t`All tasks addressed. Maintain the momentum.`}
           </AnimatedPlaceholderEmptySubTitle>
         </AnimatedPlaceholderEmptyTextContainer>
-        {hasObjectUpdatePermissions && (
+        {canCreateTask && (
           <Button
             Icon={IconPlus}
             title={t`New task`}
