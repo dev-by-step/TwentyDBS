@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { In } from 'typeorm';
 
 import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
@@ -179,6 +180,7 @@ const buildServiceContext = ({
     noteTargetRepository,
     taskTargetRepository,
     membershipRepository,
+    globalWorkspaceOrmManager,
     userRoleService,
     entityId,
     workspaceMemberId,
@@ -915,7 +917,29 @@ describe('InternalEntityAccessPolicyService', () => {
     });
   });
 
-  it('should scope attachments to the author workspace member', async () => {
+  it('should resolve task target queries inside the workspace context', async () => {
+    const { service, authContext, taskRepository, globalWorkspaceOrmManager } =
+      buildServiceContext();
+
+    taskRepository.find.mockResolvedValue([{ id: 'task-1' }]);
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'taskTarget',
+      {},
+    );
+
+    expect(payload.filter).toEqual({
+      taskId: {
+        in: ['task-1'],
+      },
+    });
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).toHaveBeenCalledWith(expect.any(Function), authContext);
+  });
+
+  it('should scope attachments to the creator workspace member', async () => {
     const { service, authContext, workspaceMemberId } = buildServiceContext();
 
     const payload = await service.scopeFindManyPayload(
@@ -938,20 +962,11 @@ describe('InternalEntityAccessPolicyService', () => {
           },
         },
         {
-          or: [
-            {
-              authorId: {
-                eq: workspaceMemberId,
-              },
+          createdBy: {
+            workspaceMemberId: {
+              eq: workspaceMemberId,
             },
-            {
-              createdBy: {
-                workspaceMemberId: {
-                  eq: workspaceMemberId,
-                },
-              },
-            },
-          ],
+          },
         },
       ],
     });
@@ -1025,6 +1040,42 @@ describe('InternalEntityAccessPolicyService', () => {
     });
   });
 
+  it('should validate task target creation inside the workspace context', async () => {
+    const {
+      service,
+      authContext,
+      taskRepository,
+      workspaceMemberId,
+      globalWorkspaceOrmManager,
+    } = buildServiceContext();
+    const taskId = faker.string.uuid();
+    const targetOpportunityId = faker.string.uuid();
+
+    taskRepository.findOne.mockResolvedValue({
+      id: taskId,
+      createdBy: {
+        workspaceMemberId,
+      },
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'taskTarget', {
+        data: {
+          taskId,
+          targetOpportunityId,
+        },
+      }),
+    ).resolves.toEqual({
+      data: {
+        taskId,
+        targetOpportunityId,
+      },
+    });
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).toHaveBeenCalledWith(expect.any(Function), authContext);
+  });
+
   it('should scope timeline activities to accessible personal and entity records', async () => {
     const {
       service,
@@ -1078,9 +1129,7 @@ describe('InternalEntityAccessPolicyService', () => {
 
     expect(opportunityRepository.find).toHaveBeenCalledWith({
       where: {
-        internalEntityId: {
-          in: [entityId],
-        },
+        internalEntityId: In([entityId]),
       },
     });
   });
