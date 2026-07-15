@@ -1,11 +1,10 @@
-import { randomUUID } from 'node:crypto';
-
 import { type QueryRunner } from 'typeorm';
 
 import {
   buildCsvOpportunityRow,
   buildInternalEntitySeed,
 } from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
+import { buildWorkspaceRecord } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
@@ -73,7 +72,7 @@ const setCommandLogger = (command: unknown): MockLogger => {
 
 describe('ImportCsvOpportunitiesCommand', () => {
   const buildCommandContext = () => {
-    const workspaceId = randomUUID();
+    const workspace = buildWorkspaceRecord();
     const configuredInternalEntity = buildInternalEntitySeed({
       name: 'WEKNOW',
     });
@@ -139,7 +138,7 @@ describe('ImportCsvOpportunitiesCommand', () => {
       objectMetadataService,
       queryRunner,
       unknownEntityRow,
-      workspaceId,
+      workspaceId: workspace.id,
     };
   };
 
