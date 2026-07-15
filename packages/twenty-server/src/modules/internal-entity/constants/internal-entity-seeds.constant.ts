@@ -30,3 +30,11 @@ export const DEFAULT_INTERNAL_ENTITY_SEEDS: ReadonlyArray<InternalEntitySeed> =
       color: '#7C3AED',
     },
   ];
+
+export const INTERNAL_ENTITY_SEEDS: Record<string, InternalEntitySeed> =
+  Object.fromEntries(
+    DEFAULT_INTERNAL_ENTITY_SEEDS.map((internalEntitySeed) => [
+      internalEntitySeed.name,
+      internalEntitySeed,
+    ]),
+  );
