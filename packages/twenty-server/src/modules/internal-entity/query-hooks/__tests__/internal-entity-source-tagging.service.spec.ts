@@ -3,7 +3,7 @@ import { type ObjectRecord } from 'twenty-shared/types';
 import { CommonQueryRunnerExceptionCode } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSourceService } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.service';
-import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/internal-entity-test.factory';
+import { buildInternalEntitySeed } from 'src/modules/internal-entity/__tests__/factories/internal-entity-seed.factory';
 import { buildWorkspaceAuthContext } from 'src/modules/internal-entity/__tests__/factories/workspace-auth-context.factory';
 import {
   buildCompanyRecord,
@@ -46,7 +46,9 @@ const buildServiceContext = () => {
     objectMetadataService as unknown as ObjectMetadataService,
   );
 
-  const makeAuthContext = ({ entityId = internalEntity.id } = {}) =>
+  const makeAuthContext = ({
+    entityId = internalEntity.id,
+  }: { entityId?: string | null } = {}) =>
     buildWorkspaceAuthContext({
       entityId,
       workspaceId: workspace.id,
