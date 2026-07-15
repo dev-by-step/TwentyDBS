@@ -11,6 +11,6 @@ export const buildInternalEntity = (
 ): TestInternalEntity => ({
   id: faker.string.uuid(),
   name: `ENTITY_${faker.string.alphanumeric(8).toUpperCase()}`,
-  color: '#2563EB',
+  color: faker.color.rgb({ format: 'hex' }),
   ...overrides,
 });

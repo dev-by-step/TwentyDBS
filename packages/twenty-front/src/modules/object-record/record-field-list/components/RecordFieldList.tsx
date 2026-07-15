@@ -1,4 +1,5 @@
 import { ActivityTargetsInlineCell } from '@/activities/inline-cell/components/ActivityTargetsInlineCell';
+import { getInternalEntityRelationFieldBehavior } from '@/internal-entity/utils/getInternalEntityRelationFieldBehavior';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { formatFieldMetadataItemAsColumnDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsColumnDefinition';
@@ -165,6 +166,12 @@ export const RecordFieldList = ({
             showLabel: true,
             labelWidth: 90,
           });
+          const internalEntityRelationBehavior =
+            getInternalEntityRelationFieldBehavior({
+              fieldMetadataItem,
+              sourceObjectMetadataId: objectMetadataItem.id,
+              objectMetadataItems,
+            });
 
           return (
             <FieldContext.Provider
@@ -176,6 +183,10 @@ export const RecordFieldList = ({
                 fieldDefinition,
                 useUpdateRecord: useUpdateOneObjectRecordMutation,
                 isDisplayModeFixHeight: true,
+                overridenIsFieldEmpty:
+                  internalEntityRelationBehavior?.shouldDisplayContentWhenEmpty
+                    ? false
+                    : undefined,
                 isRecordFieldReadOnly: isRecordFieldReadOnly({
                   isRecordReadOnly,
                   isSystemObject: objectMetadataItem.isSystem,

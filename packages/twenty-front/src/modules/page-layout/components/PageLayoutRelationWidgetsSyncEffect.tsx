@@ -1,6 +1,6 @@
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { useFieldListFieldMetadataItems } from '@/object-record/record-field-list/hooks/useFieldListFieldMetadataItems';
 import { useBasePageLayout } from '@/page-layout/hooks/useBasePageLayout';
+import { usePageLayoutRelationWidgetConfig } from '@/page-layout/hooks/usePageLayoutRelationWidgetConfig';
 import { pageLayoutCurrentLayoutsComponentState } from '@/page-layout/states/pageLayoutCurrentLayoutsComponentState';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { pageLayoutIsInitializedComponentState } from '@/page-layout/states/pageLayoutIsInitializedComponentState';
@@ -35,9 +35,11 @@ export const PageLayoutRelationWidgetsSyncEffect = ({
 
   const basePageLayout = useBasePageLayout(pageLayoutId);
 
-  const { boxedRelationFieldMetadataItems } = useFieldListFieldMetadataItems({
-    objectNameSingular: targetRecordIdentifier?.targetObjectNameSingular ?? '',
-  });
+  const { getFieldDisplayMode, relationFieldMetadataItems } =
+    usePageLayoutRelationWidgetConfig({
+      objectNameSingular:
+        targetRecordIdentifier?.targetObjectNameSingular ?? '',
+    });
 
   const pageLayoutPersistedComponentCallbackState =
     useAtomComponentStateCallbackState(pageLayoutPersistedComponentState);
@@ -177,15 +179,19 @@ export const PageLayoutRelationWidgetsSyncEffect = ({
 
     const layoutWithRelationWidgets = injectRelationWidgetsIntoLayout(
       basePageLayout,
-      boxedRelationFieldMetadataItems,
+      relationFieldMetadataItems,
+      {
+        getFieldDisplayMode,
+      },
     );
 
     syncPageLayoutWithRelationWidgets(layoutWithRelationWidgets);
   }, [
     basePageLayout,
-    boxedRelationFieldMetadataItems,
+    getFieldDisplayMode,
     pageLayoutIsInitialized,
     layoutType,
+    relationFieldMetadataItems,
     syncPageLayoutWithRelationWidgets,
   ]);
 

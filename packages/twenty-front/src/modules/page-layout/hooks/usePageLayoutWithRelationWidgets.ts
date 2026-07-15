@@ -1,4 +1,4 @@
-import { useFieldListFieldMetadataItems } from '@/object-record/record-field-list/hooks/useFieldListFieldMetadataItems';
+import { usePageLayoutRelationWidgetConfig } from '@/page-layout/hooks/usePageLayoutRelationWidgetConfig';
 import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { injectRelationWidgetsIntoLayout } from '@/page-layout/utils/injectRelationWidgetsIntoLayout';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
@@ -9,10 +9,13 @@ export const usePageLayoutWithRelationWidgets = (
   basePageLayout: PageLayout | undefined,
 ): PageLayout | undefined => {
   const { targetRecordIdentifier, layoutType } = useLayoutRenderingContext();
+  const targetObjectNameSingular =
+    targetRecordIdentifier?.targetObjectNameSingular ?? '';
 
-  const { boxedRelationFieldMetadataItems } = useFieldListFieldMetadataItems({
-    objectNameSingular: targetRecordIdentifier?.targetObjectNameSingular ?? '',
-  });
+  const { getFieldDisplayMode, relationFieldMetadataItems } =
+    usePageLayoutRelationWidgetConfig({
+      objectNameSingular: targetObjectNameSingular,
+    });
 
   if (!isDefined(basePageLayout)) {
     return undefined;
@@ -26,6 +29,9 @@ export const usePageLayoutWithRelationWidgets = (
 
   return injectRelationWidgetsIntoLayout(
     basePageLayout,
-    boxedRelationFieldMetadataItems,
+    relationFieldMetadataItems,
+    {
+      getFieldDisplayMode,
+    },
   );
 };

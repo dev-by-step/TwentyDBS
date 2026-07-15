@@ -1,6 +1,8 @@
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { formatFieldMetadataItemAsColumnDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsColumnDefinition';
+import { getInternalEntityRelationFieldBehavior } from '@/internal-entity/utils/getInternalEntityRelationFieldBehavior';
 import { isFieldMorphRelation } from '@/object-record/record-field/ui/types/guards/isFieldMorphRelation';
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { isFieldRichText } from '@/object-record/record-field/ui/types/guards/isFieldRichText';
@@ -52,6 +54,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular: targetRecord.targetObjectNameSingular,
   });
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const fieldMetadataId = widget.configuration.fieldMetadataId;
 
@@ -121,6 +124,25 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
   }
 
   if (isFieldRelation(fieldDefinition)) {
+    const internalEntityRelationBehavior =
+      getInternalEntityRelationFieldBehavior({
+        fieldMetadataItem,
+        sourceObjectMetadataId: objectMetadataItem.id,
+        objectMetadataItems,
+      });
+
+    if (internalEntityRelationBehavior?.shouldRenderWithFieldWidgetDisplay) {
+      return (
+        <FieldWidgetDisplay
+          fieldDefinition={fieldDefinition}
+          fieldMetadataItem={fieldMetadataItem}
+          objectMetadataItem={objectMetadataItem}
+          recordId={targetRecord.id}
+          isInSidePanel={isInSidePanel}
+        />
+      );
+    }
+
     const isJunctionRelation = hasJunctionConfig(
       fieldDefinition.metadata.settings,
     );

@@ -10,6 +10,8 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type CoreObjectNameSingular } from 'twenty-shared/types';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
+import { InternalEntityRelationPicker } from '@/internal-entity/components/InternalEntityRelationPicker';
+import { getInternalEntityRelationFieldBehavior } from '@/internal-entity/utils/getInternalEntityRelationFieldBehavior';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { isActivityTargetField } from '@/object-record/record-field-list/utils/categorizeRelationFields';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
@@ -81,6 +83,13 @@ export const RelationOneToManyFieldInput = () => {
   );
 
   const isJunctionRelation = hasJunctionConfig(fieldMetadataItem.settings);
+  const internalEntityRelationBehavior = getInternalEntityRelationFieldBehavior(
+    {
+      fieldMetadataItem,
+      sourceObjectMetadataId: objectMetadataItem.id,
+      objectMetadataItems,
+    },
+  );
 
   const { activityTargetObjectRecords } = useActivityTargetObjectRecords(
     recordId,
@@ -293,9 +302,13 @@ export const RelationOneToManyFieldInput = () => {
     ],
   );
 
-  // Disable "Add New" for activity targets and MORPH junction relations
-  // (For MORPH, we don't know which object type to create)
-  const canCreateNew = !isRelationFromActivityTargets && !isMorphJunction;
+  // Disable "Add New" for activity targets, MORPH junction relations,
+  // and managed junction relations where the target catalog is controlled
+  // by application rules rather than ad hoc record creation.
+  const canCreateNew =
+    !isRelationFromActivityTargets &&
+    !isMorphJunction &&
+    (internalEntityRelationBehavior?.canCreateTargetRecord ?? true);
 
   // For junction relations, use the target object for "Add New", not the junction object
   const objectMetadataItemIdForCreate =
@@ -303,34 +316,57 @@ export const RelationOneToManyFieldInput = () => {
       ? junctionTargetObjectMetadata.id
       : relationObjectMetadataItem.id;
 
+  const handleChange = (morphItem: Parameters<typeof updateRelation>[0]) => {
+    if (isRelationFromActivityTargets) {
+      updateActivityTargetFromCell({
+        morphItem,
+        activityTargetWithTargetRecords: activityTargetObjectRecords,
+        recordPickerInstanceId: instanceId,
+      });
+
+      return;
+    }
+
+    if (isJunctionRelation && isJunctionConfigValid) {
+      updateJunctionRelationFromCell({
+        morphItem,
+      });
+
+      return;
+    }
+
+    updateRelation(morphItem);
+  };
+
+  const layoutDirection =
+    recordFieldInputLayoutDirection === 'downward'
+      ? 'search-bar-on-top'
+      : 'search-bar-on-bottom';
+
+  if (internalEntityRelationBehavior?.requiresDetachConfirmation) {
+    return (
+      <InternalEntityRelationPicker
+        focusId={instanceId}
+        componentInstanceId={instanceId}
+        layoutDirection={layoutDirection}
+        modalInstanceId={`internal-entity-picker:${recordId}:${fieldDefinition.fieldMetadataId}`}
+        onChange={handleChange}
+        onClickOutside={handleSubmit}
+        onSubmit={handleSubmit}
+      />
+    );
+  }
+
   return (
     <MultipleRecordPicker
       focusId={instanceId}
       componentInstanceId={instanceId}
       onSubmit={handleSubmit}
-      onChange={(morphItem) => {
-        if (isRelationFromActivityTargets) {
-          updateActivityTargetFromCell({
-            morphItem,
-            activityTargetWithTargetRecords: activityTargetObjectRecords,
-            recordPickerInstanceId: instanceId,
-          });
-        } else if (isJunctionRelation && isJunctionConfigValid) {
-          updateJunctionRelationFromCell({
-            morphItem,
-          });
-        } else {
-          updateRelation(morphItem);
-        }
-      }}
+      onChange={handleChange}
       onCreate={canCreateNew ? handleCreateNew : undefined}
       objectMetadataItemIdForCreate={objectMetadataItemIdForCreate}
       onClickOutside={handleSubmit}
-      layoutDirection={
-        recordFieldInputLayoutDirection === 'downward'
-          ? 'search-bar-on-top'
-          : 'search-bar-on-bottom'
-      }
+      layoutDirection={layoutDirection}
     />
   );
 };
