@@ -24,7 +24,8 @@
     ├── ARCHITECTURE.md  ← architecture technique multi-entités
     ├── CONVENTIONS.md   ← conventions de code Twenty
     ├── WORKFLOW.md      ← commandes Nx, débug, init multi-entités
-    └── REVIEW.md        ← checklist des retours de revue récurrents
+    ├── REVIEW.md        ← checklist des retours de revue récurrents
+    └── AUDIT-BACKLOG.md ← backlog vivant des bugs (FIX-XX) et améliorations (IMP-XX) issus des audits — à mettre à jour à chaque correctif
 ```
 
 ## Ordre de lecture recommandé

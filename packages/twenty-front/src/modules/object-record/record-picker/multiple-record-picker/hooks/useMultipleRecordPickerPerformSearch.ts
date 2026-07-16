@@ -37,12 +37,16 @@ export const useMultipleRecordPickerPerformSearch = () => {
       forceSearchableObjectMetadataItems = [],
       forcePickableMorphItems = [],
       loadMore = false,
+      replacePickableMorphItems = false,
+      hidePickedMorphItems = false,
     }: {
       multipleRecordPickerInstanceId: string;
       forceSearchFilter?: string;
       forceSearchableObjectMetadataItems?: EnrichedObjectMetadataItem[];
       forcePickableMorphItems?: RecordPickerPickableMorphItem[];
       loadMore?: boolean;
+      replacePickableMorphItems?: boolean;
+      hidePickedMorphItems?: boolean;
     }) => {
       const atomFamilyKey = { instanceId: multipleRecordPickerInstanceId };
 
@@ -117,16 +121,22 @@ export const useMultipleRecordPickerPerformSearch = () => {
         after: loadMore ? paginationState.endCursor : null,
       });
 
-      const existingMorphItems = store.get(
-        multipleRecordPickerPickableMorphItemsComponentState.atomFamily(
-          atomFamilyKey,
-        ),
-      );
+      const existingMorphItems = replacePickableMorphItems
+        ? pickableMorphItems
+        : store.get(
+            multipleRecordPickerPickableMorphItemsComponentState.atomFamily(
+              atomFamilyKey,
+            ),
+          );
 
-      const allPickedItems = [
-        ...existingMorphItems.filter(({ isSelected }) => isSelected),
-        ...pickableMorphItems.filter(({ isSelected }) => isSelected),
-      ];
+      const allPickedItems = hidePickedMorphItems
+        ? []
+        : [
+            ...(replacePickableMorphItems
+              ? []
+              : existingMorphItems.filter(({ isSelected }) => isSelected)),
+            ...pickableMorphItems.filter(({ isSelected }) => isSelected),
+          ];
 
       const uniquePickedItems = allPickedItems.reduce(
         (acc, item) => {
@@ -160,40 +170,44 @@ export const useMultipleRecordPickerPerformSearch = () => {
         };
       });
 
-      const updatedNonPickedExistingItems = existingMorphItems
-        .filter((item) => !item.isSelected)
-        .map((morphItem) => {
-          if (!searchFilter) {
-            return {
-              ...morphItem,
-              isMatchingSearchFilter: true,
-            };
-          }
+      const updatedNonPickedExistingItems = replacePickableMorphItems
+        ? []
+        : existingMorphItems
+            .filter((item) => !item.isSelected)
+            .map((morphItem) => {
+              if (!searchFilter) {
+                return {
+                  ...morphItem,
+                  isMatchingSearchFilter: true,
+                };
+              }
 
-          const isMatchingSearchFilter =
-            searchRecordsFilteredOnPickedRecords.some(
-              ({ recordId }) => recordId === morphItem.recordId,
-            ) ||
-            searchRecordsExcludingPickedRecords.some(
-              ({ recordId }) => recordId === morphItem.recordId,
-            );
+              const isMatchingSearchFilter =
+                searchRecordsFilteredOnPickedRecords.some(
+                  ({ recordId }) => recordId === morphItem.recordId,
+                ) ||
+                searchRecordsExcludingPickedRecords.some(
+                  ({ recordId }) => recordId === morphItem.recordId,
+                );
 
-          return {
-            ...morphItem,
-            isMatchingSearchFilter,
-          };
-        });
+              return {
+                ...morphItem,
+                isMatchingSearchFilter,
+              };
+            });
 
       const searchRecordsFilteredOnPickedRecordsWithoutDuplicates =
-        searchRecordsFilteredOnPickedRecords.filter(
-          (searchRecord) =>
-            !updatedPickedItems.some(
-              ({ recordId }) => recordId === searchRecord.recordId,
-            ) &&
-            !updatedNonPickedExistingItems.some(
-              ({ recordId }) => recordId === searchRecord.recordId,
-            ),
-        );
+        hidePickedMorphItems
+          ? []
+          : searchRecordsFilteredOnPickedRecords.filter(
+              (searchRecord) =>
+                !updatedPickedItems.some(
+                  ({ recordId }) => recordId === searchRecord.recordId,
+                ) &&
+                !updatedNonPickedExistingItems.some(
+                  ({ recordId }) => recordId === searchRecord.recordId,
+                ),
+            );
 
       const searchRecordsExcludingPickedRecordsWithoutDuplicates =
         searchRecordsExcludingPickedRecords.filter(

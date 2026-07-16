@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 
 import { msg } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { In } from 'typeorm';
+import { In, type FindOptionsWhere, type Repository } from 'typeorm';
 
 import {
   CommonQueryRunnerException,
@@ -33,18 +34,19 @@ import {
   PermissionsExceptionMessage,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
-import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import {
   ENTITY_CONFIGURATION_OBJECT_NAME_SET,
-  ENTITY_MANAGER_ROLE_LABEL,
   ENTITY_SCOPED_CRM_OBJECT_NAME_SET,
   ENTITY_SCOPED_OBJECT_NAME_SET,
   HYBRID_SCOPED_OBJECT_NAME_SET,
   PERSONAL_WORK_OBJECT_NAME_SET,
 } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
+import { extractRelationTargetId } from 'src/modules/internal-entity/query-hooks/utils/extract-relation-target-id.util';
+import { InternalEntityScopeCacheService } from 'src/modules/internal-entity/query-hooks/services/internal-entity-scope-cache.service';
+import { InternalEntityAuditLoggerService } from 'src/modules/internal-entity/services/internal-entity-audit-logger.service';
+import { InternalEntityRoleService } from 'src/modules/internal-entity/services/internal-entity-role.service';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 type RecordFilter = Record<string, unknown>;
@@ -71,29 +73,46 @@ type ScopeMode = 'read' | 'mutation';
 
 type EntityScopeFieldRequirement = {
   fieldName: string;
-  filterFieldName: string;
   requiresJunctionTargetFieldId: boolean;
 };
 
+type PermissionDeniedAuditMetadata = {
+  authContext?: UserWorkspaceAuthContext;
+  objectName?: string;
+  recordId?: string;
+  reason?: string;
+};
+
+type CachedAvailability = {
+  isAvailable: boolean;
+  expiresAt: number | null;
+};
+
+// Negative availability results must expire: `init-internal-entities` can run
+// against a live server (e.g. `dokku enter` in production) and entity scoping
+// has to become effective without a restart. Positive results are cached for
+// the process lifetime since the fields never disappear once created.
+const NEGATIVE_AVAILABILITY_RECHECK_DELAY_MS = 30_000;
+const NEVER_MATCH_RECORD_ID = '00000000-0000-0000-0000-000000000000';
+
 @Injectable()
 export class InternalEntityAccessPolicyService {
-  // Per-process cache. Schema changes (init-internal-entities) are infrequent
-  // and clearing this requires a server restart, which already happens after
-  // a metadata migration in dev.
   private readonly entityScopeFieldAvailabilityByKey = new Map<
     string,
-    boolean
+    CachedAvailability
   >();
   private readonly entityScopeBootstrapAvailabilityByWorkspaceId = new Map<
     string,
-    boolean
+    CachedAvailability
   >();
 
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly userRoleService: UserRoleService,
     private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
     private readonly objectMetadataService: ObjectMetadataService,
+    private readonly internalEntityScopeCacheService: InternalEntityScopeCacheService,
+    private readonly internalEntityAuditLoggerService: InternalEntityAuditLoggerService,
+    private readonly internalEntityRoleService: InternalEntityRoleService,
   ) {}
 
   async scopeFindManyPayload(
@@ -355,37 +374,73 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (!(await this.isInternalEntitySuperAdmin(authContext))) {
+      if (!(await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))) {
         this.throwPermissionDenied(
           msg`Only superadmins can modify internal entity settings.`,
+          {
+            authContext,
+            objectName,
+            reason: 'not-internal-entity-super-admin',
+          },
+        );
+      }
+    } else if (objectName === 'workspaceMemberEntityMembership') {
+      if (!(await this.internalEntityRoleService.isPlatformAdmin(authContext))) {
+        this.throwPermissionDenied(
+          msg`Bulk updates on workspace member entity assignments are reserved to platform administrators.`,
+          {
+            authContext,
+            objectName,
+            reason: 'not-platform-admin',
+          },
         );
       }
     } else if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
-      if (!(await this.canManageEntityScopedRecords(authContext))) {
+      if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
         this.throwPermissionDenied(
           msg`Bulk updates on entity assignments are reserved to entity managers and platform administrators.`,
+          {
+            authContext,
+            objectName,
+            reason: 'cannot-manage-entity-scoped-records',
+          },
         );
       }
     }
 
     if (
       ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-      !(await this.canManageEntityScopedRecords(authContext))
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))
     ) {
       this.throwPermissionDenied(
         msg`Bulk updates are reserved to entity managers and platform administrators.`,
+        {
+          authContext,
+          objectName,
+          reason: 'bulk-update-not-entity-manager',
+        },
       );
     }
 
     if (PERSONAL_WORK_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
         msg`Bulk updates are not allowed on personal work records.`,
+        {
+          authContext,
+          objectName,
+          reason: 'bulk-update-on-personal-work',
+        },
       );
     }
 
     if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
         msg`Bulk updates are not allowed on scoped timeline records.`,
+        {
+          authContext,
+          objectName,
+          reason: 'bulk-update-on-hybrid-scoped',
+        },
       );
     }
 
@@ -437,18 +492,28 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.isInternalEntitySuperAdmin(authContext)) {
+      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
         return payload;
       }
 
       this.throwPermissionDenied(
         msg`Duplicate detection on internal entities is reserved to superadmins.`,
+        {
+          authContext,
+          objectName,
+          reason: 'duplicate-detection-not-super-admin',
+        },
       );
     }
 
-    if (!(await this.canManageEntityScopedRecords(authContext))) {
+    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
         msg`Duplicate detection on entity-scoped records is reserved to entity managers and platform administrators.`,
+        {
+          authContext,
+          objectName,
+          reason: 'duplicate-detection-not-manager',
+        },
       );
     }
 
@@ -459,27 +524,35 @@ export class InternalEntityAccessPolicyService {
     }
 
     const activeEntityId = await this.requireActiveEntityId(authContext);
-    const recordSummaries = await Promise.all(
-      recordIds.map((recordId) =>
-        this.resolveRecordSummary({
-          workspaceId: authContext.workspace.id,
-          objectName,
-          recordId,
-        }),
-      ),
-    );
+    const recordSummaries =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          Promise.all(
+            recordIds.map((recordId) =>
+              this.resolveRecordSummary({
+                workspaceId: authContext.workspace.id,
+                objectName,
+                recordId,
+              }),
+            ),
+          ),
+        authContext,
+      );
 
     if (
       recordSummaries.some(
         (recordSummary) =>
           recordSummary.entityIds.length === 0 ||
-          recordSummary.entityIds.some(
-            (recordEntityId) => recordEntityId !== activeEntityId,
-          ),
+          !recordSummary.entityIds.includes(activeEntityId),
       )
     ) {
       this.throwPermissionDenied(
         msg`You can only detect duplicates on records attached to your entity.`,
+        {
+          authContext,
+          objectName,
+          reason: 'duplicate-detection-record-out-of-scope',
+        },
       );
     }
 
@@ -502,37 +575,55 @@ export class InternalEntityAccessPolicyService {
     if (!ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
         msg`Only entity-scoped CRM records can be merged.`,
+        {
+          authContext,
+          objectName,
+          reason: 'merge-not-crm-object',
+        },
       );
     }
 
-    if (!(await this.canManageEntityScopedRecords(authContext))) {
+    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can merge entity records.`,
+        {
+          authContext,
+          objectName,
+          reason: 'merge-not-manager',
+        },
       );
     }
 
     const activeEntityId = await this.requireActiveEntityId(authContext);
-    const recordSummaries = await Promise.all(
-      payload.ids.map((recordId) =>
-        this.resolveRecordSummary({
-          workspaceId: authContext.workspace.id,
-          objectName,
-          recordId,
-        }),
-      ),
-    );
+    const recordSummaries =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          Promise.all(
+            payload.ids.map((recordId) =>
+              this.resolveRecordSummary({
+                workspaceId: authContext.workspace.id,
+                objectName,
+                recordId,
+              }),
+            ),
+          ),
+        authContext,
+      );
 
     if (
       recordSummaries.some(
         (recordSummary) =>
           recordSummary.entityIds.length === 0 ||
-          recordSummary.entityIds.some(
-            (recordEntityId) => recordEntityId !== activeEntityId,
-          ),
+          !recordSummary.entityIds.includes(activeEntityId),
       )
     ) {
       this.throwPermissionDenied(
         msg`You can only merge records attached to your entity.`,
+        {
+          authContext,
+          objectName,
+          reason: 'merge-record-out-of-scope',
+        },
       );
     }
 
@@ -551,15 +642,16 @@ export class InternalEntityAccessPolicyService {
 
     if (
       objectName === 'internalEntity' &&
-      (await this.isInternalEntitySuperAdmin(authContext))
+      (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))
     ) {
       return;
     }
 
     if (
       (objectName === 'companyEntityMembership' ||
-        objectName === 'personEntityMembership') &&
-      (await this.isPlatformAdmin(authContext))
+        objectName === 'personEntityMembership' ||
+        objectName === 'workspaceMemberEntityMembership') &&
+      (await this.internalEntityRoleService.isPlatformAdmin(authContext))
     ) {
       return;
     }
@@ -597,43 +689,84 @@ export class InternalEntityAccessPolicyService {
 
       this.throwPermissionDenied(
         msg`You can only modify your own personal work records.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'personal-work-record-not-owner',
+        },
       );
     }
 
     if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
         msg`Scoped timeline records cannot be modified manually.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'hybrid-scoped-record-mutation',
+        },
       );
     }
 
     const activeEntityId = await this.requireActiveEntityId(authContext);
+    // Entity managers and platform administrators are meant to bypass the
+    // active-entity match on CRM objects entirely (that's the whole point of
+    // `canManageEntityScopedRecords`) — so this check must be evaluated
+    // before the unconditional entity-match throw below, not after it, or a
+    // privileged user's cross-entity mutation would be denied before ever
+    // reaching the bypass.
+    const canBypassEntityMatchForCrmObject =
+      ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
+      (await this.internalEntityRoleService.canManageEntityScopedRecords(authContext));
 
     if (
+      !canBypassEntityMatchForCrmObject &&
       recordSummary.entityIds.length > 0 &&
       !recordSummary.entityIds.includes(activeEntityId)
     ) {
       this.throwPermissionDenied(
         msg`You can only mutate records attached to your entity.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'single-mutation-record-out-of-scope',
+        },
       );
     }
 
     if (objectName === 'internalEntity') {
       this.throwPermissionDenied(
         msg`Only superadmins can create, update, restore, delete, or destroy internal entities.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'internal-entity-not-super-admin',
+        },
       );
     }
 
     if (
       objectName === 'companyEntityMembership' ||
-      objectName === 'personEntityMembership'
+      objectName === 'personEntityMembership' ||
+      objectName === 'workspaceMemberEntityMembership'
     ) {
       this.throwPermissionDenied(
         msg`Only platform administrators can manage entity assignments.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'membership-management-not-platform-admin',
+        },
       );
     }
 
     if (ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName)) {
-      if (await this.canManageEntityScopedRecords(authContext)) {
+      if (canBypassEntityMatchForCrmObject) {
         return;
       }
 
@@ -647,6 +780,12 @@ export class InternalEntityAccessPolicyService {
 
       this.throwPermissionDenied(
         msg`You can only modify records that you created, unless you are an entity manager or a platform administrator.`,
+        {
+          authContext,
+          objectName,
+          recordId,
+          reason: 'crm-record-not-owner-nor-manager',
+        },
       );
     }
   }
@@ -673,6 +812,11 @@ export class InternalEntityAccessPolicyService {
     if (HYBRID_SCOPED_OBJECT_NAME_SET.has(objectName)) {
       this.throwPermissionDenied(
         msg`Scoped timeline records cannot be created manually.`,
+        {
+          authContext,
+          objectName,
+          reason: 'create-hybrid-scoped-record',
+        },
       );
     }
 
@@ -681,31 +825,47 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.isInternalEntitySuperAdmin(authContext)) {
+      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
         return;
       }
 
       this.throwPermissionDenied(
         msg`Only superadmins can create internal entities.`,
+        {
+          authContext,
+          objectName,
+          reason: 'create-internal-entity-not-super-admin',
+        },
       );
     }
 
     if (
       objectName === 'companyEntityMembership' ||
-      objectName === 'personEntityMembership'
+      objectName === 'personEntityMembership' ||
+      objectName === 'workspaceMemberEntityMembership'
     ) {
-      if (await this.isPlatformAdmin(authContext)) {
+      if (await this.internalEntityRoleService.isPlatformAdmin(authContext)) {
         return;
       }
 
       this.throwPermissionDenied(
         msg`Only platform administrators can manage entity assignments.`,
+        {
+          authContext,
+          objectName,
+          reason: 'create-membership-not-platform-admin',
+        },
       );
     }
 
-    if (!(await this.canManageEntityScopedRecords(authContext))) {
+    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can manage entity assignments.`,
+        {
+          authContext,
+          objectName,
+          reason: 'create-entity-config-not-manager',
+        },
       );
     }
 
@@ -756,6 +916,14 @@ export class InternalEntityAccessPolicyService {
     objectName: string,
     scopeMode: ScopeMode,
   ): Promise<RecordFilter | undefined> {
+    if (
+      scopeMode === 'read' &&
+      ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName) &&
+      (await this.internalEntityRoleService.isPlatformAdmin(authContext))
+    ) {
+      return undefined;
+    }
+
     if (scopeMode === 'read' && !this.hasRequestedActiveEntity(authContext)) {
       return undefined;
     }
@@ -791,8 +959,10 @@ export class InternalEntityAccessPolicyService {
   private async isEntityScopeBootstrapAvailable(
     workspaceId: string,
   ): Promise<boolean> {
-    const cached =
-      this.entityScopeBootstrapAvailabilityByWorkspaceId.get(workspaceId);
+    const cached = this.readCachedAvailability(
+      this.entityScopeBootstrapAvailabilityByWorkspaceId,
+      workspaceId,
+    );
 
     if (isDefined(cached)) {
       return cached;
@@ -813,7 +983,8 @@ export class InternalEntityAccessPolicyService {
       );
 
       if (!isObjectReady) {
-        this.entityScopeBootstrapAvailabilityByWorkspaceId.set(
+        this.writeCachedAvailability(
+          this.entityScopeBootstrapAvailabilityByWorkspaceId,
           workspaceId,
           false,
         );
@@ -822,7 +993,11 @@ export class InternalEntityAccessPolicyService {
       }
     }
 
-    this.entityScopeBootstrapAvailabilityByWorkspaceId.set(workspaceId, true);
+    this.writeCachedAvailability(
+      this.entityScopeBootstrapAvailabilityByWorkspaceId,
+      workspaceId,
+      true,
+    );
 
     return true;
   }
@@ -832,7 +1007,10 @@ export class InternalEntityAccessPolicyService {
     objectName: string,
   ): Promise<boolean> {
     const cacheKey = `${workspaceId}::${objectName}`;
-    const cached = this.entityScopeFieldAvailabilityByKey.get(cacheKey);
+    const cached = this.readCachedAvailability(
+      this.entityScopeFieldAvailabilityByKey,
+      cacheKey,
+    );
 
     if (isDefined(cached)) {
       return cached;
@@ -841,7 +1019,11 @@ export class InternalEntityAccessPolicyService {
     const requirement = this.getEntityScopeFieldRequirement(objectName);
 
     if (!isDefined(requirement)) {
-      this.entityScopeFieldAvailabilityByKey.set(cacheKey, true);
+      this.writeCachedAvailability(
+        this.entityScopeFieldAvailabilityByKey,
+        cacheKey,
+        true,
+      );
 
       return true;
     }
@@ -855,20 +1037,63 @@ export class InternalEntityAccessPolicyService {
     const field = objectMetadata?.fields?.find(
       (objectField) => objectField.name === requirement.fieldName,
     );
-    const filterField = objectMetadata?.fields?.find(
-      (objectField) => objectField.name === requirement.filterFieldName,
+
+    // `filterFieldName` (e.g. "internalEntityId", "internalEntitiesId") is a
+    // join-column / filter-input key computed at the GraphQL schema layer
+    // from the relation field — it is never a discrete, independently
+    // listed entry in objectMetadata.fields (neither for the MANY_TO_ONE
+    // join column nor for the ONE_TO_MANY virtual filter key). Looking it up
+    // as if it were its own field always failed, which made
+    // isEntityScopeBootstrapAvailable() permanently false for the whole
+    // workspace and silently disabled read-side entity scoping for every
+    // object. The relation `field` existing (with junctionTargetFieldId set,
+    // for the junction/ONE_TO_MANY case) is itself the complete availability
+    // signal — nothing else needs to be looked up.
+    const isAvailable = requirement.requiresJunctionTargetFieldId
+      ? isDefined(field) &&
+        typeof (field.settings as { junctionTargetFieldId?: unknown })
+          ?.junctionTargetFieldId === 'string'
+      : isDefined(field);
+
+    this.writeCachedAvailability(
+      this.entityScopeFieldAvailabilityByKey,
+      cacheKey,
+      isAvailable,
     );
 
-    const isAvailable =
-      isDefined(field) &&
-      isDefined(filterField) &&
-      (!requirement.requiresJunctionTargetFieldId ||
-        typeof (field.settings as { junctionTargetFieldId?: unknown })
-          ?.junctionTargetFieldId === 'string');
-
-    this.entityScopeFieldAvailabilityByKey.set(cacheKey, isAvailable);
-
     return isAvailable;
+  }
+
+  private readCachedAvailability(
+    cache: Map<string, CachedAvailability>,
+    key: string,
+  ): boolean | undefined {
+    const cached = cache.get(key);
+
+    if (!isDefined(cached)) {
+      return undefined;
+    }
+
+    if (cached.expiresAt !== null && cached.expiresAt <= Date.now()) {
+      cache.delete(key);
+
+      return undefined;
+    }
+
+    return cached.isAvailable;
+  }
+
+  private writeCachedAvailability(
+    cache: Map<string, CachedAvailability>,
+    key: string,
+    isAvailable: boolean,
+  ): void {
+    cache.set(key, {
+      isAvailable,
+      expiresAt: isAvailable
+        ? null
+        : Date.now() + NEGATIVE_AVAILABILITY_RECHECK_DELAY_MS,
+    });
   }
 
   private getEntityScopeFieldRequirement(
@@ -879,7 +1104,6 @@ export class InternalEntityAccessPolicyService {
       case 'person':
         return {
           fieldName: 'internalEntities',
-          filterFieldName: 'internalEntitiesId',
           requiresJunctionTargetFieldId: true,
         };
       case 'companyEntityMembership':
@@ -887,7 +1111,6 @@ export class InternalEntityAccessPolicyService {
       case 'personEntityMembership':
         return {
           fieldName: 'internalEntity',
-          filterFieldName: 'internalEntityId',
           requiresJunctionTargetFieldId: false,
         };
       case 'internalEntity':
@@ -948,22 +1171,22 @@ export class InternalEntityAccessPolicyService {
         return this.buildCreatedByWorkspaceMemberFilter(
           currentWorkspaceMemberId,
         );
-      case 'noteTarget': {
-        const noteIds = await this.listAccessibleNoteIds(
-          authContext.workspace.id,
-          currentWorkspaceMemberId,
+      case 'noteTarget':
+        return this.buildIdsScopeFilter(
+          'noteId',
+          await this.getReadablePersonalNoteIds(
+            authContext,
+            currentWorkspaceMemberId,
+          ),
         );
-
-        return { noteId: { in: noteIds } };
-      }
-      case 'taskTarget': {
-        const taskIds = await this.listAccessibleTaskIds(
-          authContext.workspace.id,
-          currentWorkspaceMemberId,
+      case 'taskTarget':
+        return this.buildIdsScopeFilter(
+          'taskId',
+          await this.getReadablePersonalTaskIds(
+            authContext,
+            currentWorkspaceMemberId,
+          ),
         );
-
-        return { taskId: { in: taskIds } };
-      }
       default:
         return undefined;
     }
@@ -981,95 +1204,232 @@ export class InternalEntityAccessPolicyService {
       this.requireCurrentWorkspaceMemberId(authContext);
     const accessibleEntityIds =
       await this.requireAccessibleEntityIds(authContext);
-    const [noteIds, taskIds, companyIds, personIds, opportunityIds] =
-      await Promise.all([
-        this.listAccessibleNoteIds(
-          authContext.workspace.id,
-          currentWorkspaceMemberId,
-        ),
-        this.listAccessibleTaskIds(
-          authContext.workspace.id,
-          currentWorkspaceMemberId,
-        ),
-        this.listEntityScopedRecordIds(
-          authContext.workspace.id,
-          'companyEntityMembership',
-          'companyId',
-          accessibleEntityIds,
-        ),
-        this.listEntityScopedRecordIds(
-          authContext.workspace.id,
-          'personEntityMembership',
-          'personId',
-          accessibleEntityIds,
-        ),
-        this.listEntityScopedRecordIds(
-          authContext.workspace.id,
-          'opportunity',
-          'id',
-          accessibleEntityIds,
-          'internalEntityId',
-        ),
-      ]);
+    const [
+      readableNoteIds,
+      readableTaskIds,
+      readableCompanyIds,
+      readablePersonIds,
+      readableOpportunityIds,
+    ] = await Promise.all([
+      this.getReadablePersonalNoteIds(authContext, currentWorkspaceMemberId),
+      this.getReadablePersonalTaskIds(authContext, currentWorkspaceMemberId),
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'company',
+        accessibleEntityIds,
+      ),
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'person',
+        accessibleEntityIds,
+      ),
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'opportunity',
+        accessibleEntityIds,
+      ),
+    ]);
+    const scopeBranches = [
+      { workspaceMemberId: { eq: currentWorkspaceMemberId } },
+      this.buildOptionalIdsScopeFilter('targetNoteId', readableNoteIds),
+      this.buildOptionalIdsScopeFilter('targetTaskId', readableTaskIds),
+      this.buildOptionalIdsScopeFilter('targetCompanyId', readableCompanyIds),
+      this.buildOptionalIdsScopeFilter('targetPersonId', readablePersonIds),
+      this.buildOptionalIdsScopeFilter(
+        'targetOpportunityId',
+        readableOpportunityIds,
+      ),
+    ].filter(isDefined);
 
     return {
-      or: [
-        { workspaceMemberId: { eq: currentWorkspaceMemberId } },
-        { targetNoteId: { in: noteIds } },
-        { targetTaskId: { in: taskIds } },
-        { targetCompanyId: { in: companyIds } },
-        { targetPersonId: { in: personIds } },
-        { targetOpportunityId: { in: opportunityIds } },
-      ],
+      or: scopeBranches,
     };
   }
 
-  private async isPlatformAdmin(
+  private async getReadablePersonalNoteIds(
     authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    if (authContext.user.canAccessFullAdminPanel) {
-      return true;
+    workspaceMemberId: string,
+  ): Promise<string[]> {
+    const cacheKey = {
+      workspaceId: authContext.workspace.id,
+      workspaceMemberId,
+      entityIds: [],
+      objectName: 'readableNoteIds',
+    };
+    const cached =
+      this.internalEntityScopeCacheService.getReadableIds(cacheKey);
+
+    if (isDefined(cached)) {
+      return cached;
     }
 
-    const roles = await this.getUserWorkspaceRoles(authContext);
+    const noteRepository = await this.globalWorkspaceOrmManager.getRepository<
+      Record<string, unknown>
+    >(authContext.workspace.id, 'note', { shouldBypassPermissionChecks: true });
+    const createdByFilter =
+      this.buildCreatedByWorkspaceMemberWhere(workspaceMemberId);
+    const notes = await noteRepository.find({
+      where: createdByFilter,
+    });
+    const ids = this.extractRecordIds(notes);
 
-    return roles.some(
-      (role) =>
-        role.universalIdentifier === STANDARD_ROLE.admin.universalIdentifier,
-    );
+    this.internalEntityScopeCacheService.setReadableIds(cacheKey, ids);
+
+    return ids;
   }
 
-  private async canManageEntityScopedRecords(
+  private async getReadablePersonalTaskIds(
     authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    if (await this.isPlatformAdmin(authContext)) {
-      return true;
+    workspaceMemberId: string,
+  ): Promise<string[]> {
+    const cacheKey = {
+      workspaceId: authContext.workspace.id,
+      workspaceMemberId,
+      entityIds: [],
+      objectName: 'readableTaskIds',
+    };
+    const cached =
+      this.internalEntityScopeCacheService.getReadableIds(cacheKey);
+
+    if (isDefined(cached)) {
+      return cached;
     }
 
-    return this.isEntityManager(authContext);
+    const taskRepository = await this.globalWorkspaceOrmManager.getRepository<
+      Record<string, unknown>
+    >(authContext.workspace.id, 'task', { shouldBypassPermissionChecks: true });
+    const createdByFilter =
+      this.buildCreatedByWorkspaceMemberWhere(workspaceMemberId);
+    const assigneeFilter = {
+      assigneeId: workspaceMemberId,
+    } as FindOptionsWhere<Record<string, unknown>>;
+    const tasks = await taskRepository.find({
+      where: [createdByFilter, assigneeFilter],
+    });
+    const ids = this.extractRecordIds(tasks);
+
+    this.internalEntityScopeCacheService.setReadableIds(cacheKey, ids);
+
+    return ids;
   }
 
-  private async isEntityManager(
+  private async getReadableEntityScopedRecordIds(
     authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    const roles = await this.getUserWorkspaceRoles(authContext);
+    objectName: 'company' | 'opportunity' | 'person',
+    entityIds: string[],
+  ): Promise<string[]> {
+    if (entityIds.length === 0) {
+      return [];
+    }
 
-    return roles.some(
-      (role) =>
-        role.universalIdentifier ===
-          STANDARD_ROLE.entityManager.universalIdentifier ||
-        role.label === ENTITY_MANAGER_ROLE_LABEL,
-    );
-  }
+    const cacheKey = {
+      workspaceId: authContext.workspace.id,
+      workspaceMemberId: authContext.workspaceMemberId,
+      entityIds,
+      objectName: `readable${this.capitalize(objectName)}Ids`,
+    };
+    const cached =
+      this.internalEntityScopeCacheService.getReadableIds(cacheKey);
 
-  private async getUserWorkspaceRoles(authContext: UserWorkspaceAuthContext) {
-    const rolesByUserWorkspace =
-      await this.userRoleService.getRolesByUserWorkspaces({
-        userWorkspaceIds: [authContext.userWorkspaceId],
-        workspaceId: authContext.workspace.id,
+    if (isDefined(cached)) {
+      return cached;
+    }
+
+    let ids: string[];
+
+    if (objectName === 'opportunity') {
+      const opportunityRepository =
+        await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(authContext.workspace.id, 'opportunity', {
+          shouldBypassPermissionChecks: true,
+        });
+      const opportunities = await opportunityRepository.find({
+        where: { internalEntityId: In(entityIds) },
       });
 
-    return rolesByUserWorkspace.get(authContext.userWorkspaceId) ?? [];
+      ids = this.extractRecordIds(opportunities);
+    } else {
+      const membershipObjectName =
+        objectName === 'company'
+          ? 'companyEntityMembership'
+          : 'personEntityMembership';
+      const sourceFieldName =
+        objectName === 'company' ? 'companyId' : 'personId';
+      const membershipRepository =
+        await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(authContext.workspace.id, membershipObjectName, {
+          shouldBypassPermissionChecks: true,
+        });
+      const memberships = await membershipRepository.find({
+        where: { internalEntityId: In(entityIds) },
+      });
+
+      ids = this.extractRecordFieldIds(memberships, sourceFieldName);
+    }
+
+    this.internalEntityScopeCacheService.setReadableIds(cacheKey, ids);
+
+    return ids;
+  }
+
+  private capitalize(value: string): string {
+    return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+  }
+
+  private buildIdsScopeFilter(fieldName: string, ids: string[]): RecordFilter {
+    return (
+      this.buildOptionalIdsScopeFilter(fieldName, ids) ??
+      this.buildNeverMatchFilter()
+    );
+  }
+
+  private buildOptionalIdsScopeFilter(
+    fieldName: string,
+    ids: string[],
+  ): RecordFilter | undefined {
+    const uniqueIds = this.normalizeUniqueIds(ids);
+
+    if (uniqueIds.length === 0) {
+      return undefined;
+    }
+
+    return {
+      [fieldName]: {
+        in: uniqueIds,
+      },
+    };
+  }
+
+  private buildNeverMatchFilter(): RecordFilter {
+    return {
+      id: {
+        eq: NEVER_MATCH_RECORD_ID,
+      },
+    };
+  }
+
+  private extractRecordIds(records: Record<string, unknown>[]): string[] {
+    return this.extractRecordFieldIds(records, 'id');
+  }
+
+  private extractRecordFieldIds(
+    records: Record<string, unknown>[],
+    fieldName: string,
+  ): string[] {
+    return this.normalizeUniqueIds(records.map((record) => record[fieldName]));
+  }
+
+  private normalizeUniqueIds(values: unknown[]): string[] {
+    return Array.from(
+      new Set(
+        values.filter(
+          (value): value is string =>
+            typeof value === 'string' && value.length > 0,
+        ),
+      ),
+    );
   }
 
   private requireCurrentWorkspaceMemberId(
@@ -1140,7 +1500,7 @@ export class InternalEntityAccessPolicyService {
     const activeEntityId = (
       await this.requireActiveEntityId(authContext)
     ).toLowerCase();
-    const targetEntityId = this.extractRelationTargetId(
+    const targetEntityId = extractRelationTargetId(
       payloadData,
       'internalEntity',
       'internalEntityId',
@@ -1152,7 +1512,7 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    const sourceRecordId = this.extractRelationTargetId(
+    const sourceRecordId = extractRelationTargetId(
       payloadData,
       objectName === 'companyEntityMembership' ? 'company' : 'person',
       objectName === 'companyEntityMembership' ? 'companyId' : 'personId',
@@ -1245,6 +1605,7 @@ export class InternalEntityAccessPolicyService {
         >(workspaceId, 'note', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
+          withDeleted: true,
         });
 
         return {
@@ -1261,6 +1622,7 @@ export class InternalEntityAccessPolicyService {
         >(workspaceId, 'task', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
+          withDeleted: true,
         });
 
         return {
@@ -1295,6 +1657,7 @@ export class InternalEntityAccessPolicyService {
         >(workspaceId, 'noteTarget', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
+          withDeleted: true,
         });
         const noteId =
           typeof record?.noteId === 'string' ? record.noteId : null;
@@ -1319,6 +1682,7 @@ export class InternalEntityAccessPolicyService {
         >(workspaceId, 'taskTarget', { shouldBypassPermissionChecks: true });
         const record = await repository.findOne({
           where: { id: recordId },
+          withDeleted: true,
         });
         const taskId =
           typeof record?.taskId === 'string' ? record.taskId : null;
@@ -1442,80 +1806,6 @@ export class InternalEntityAccessPolicyService {
     }
   }
 
-  private async listAccessibleNoteIds(
-    workspaceId: string,
-    workspaceMemberId: string,
-  ): Promise<string[]> {
-    const repository = await this.globalWorkspaceOrmManager.getRepository<
-      Record<string, unknown>
-    >(workspaceId, 'note', { shouldBypassPermissionChecks: true });
-    const records = await (
-      repository as {
-        find: (args: unknown) => Promise<Record<string, unknown>[]>;
-      }
-    ).find({
-      where: {
-        createdByWorkspaceMemberId: workspaceMemberId,
-      },
-    });
-
-    return records
-      .map((record) => this.extractStringField(record, 'id'))
-      .filter(isDefined);
-  }
-
-  private async listAccessibleTaskIds(
-    workspaceId: string,
-    workspaceMemberId: string,
-  ): Promise<string[]> {
-    const repository = await this.globalWorkspaceOrmManager.getRepository<
-      Record<string, unknown>
-    >(workspaceId, 'task', { shouldBypassPermissionChecks: true });
-    const records = await (
-      repository as {
-        find: (args: unknown) => Promise<Record<string, unknown>[]>;
-      }
-    ).find({
-      where: [
-        { createdByWorkspaceMemberId: workspaceMemberId },
-        { assigneeId: workspaceMemberId },
-      ],
-    });
-
-    return records
-      .map((record) => this.extractStringField(record, 'id'))
-      .filter(isDefined);
-  }
-
-  private async listEntityScopedRecordIds(
-    workspaceId: string,
-    objectName: string,
-    idFieldName: string,
-    entityIds: string[],
-    entityFieldName = 'internalEntityId',
-  ): Promise<string[]> {
-    if (entityIds.length === 0) {
-      return [];
-    }
-
-    const repository = await this.globalWorkspaceOrmManager.getRepository<
-      Record<string, unknown>
-    >(workspaceId, objectName, { shouldBypassPermissionChecks: true });
-    const records = await (
-      repository as {
-        find: (args: unknown) => Promise<Record<string, unknown>[]>;
-      }
-    ).find({
-      where: {
-        [entityFieldName]: In(entityIds),
-      },
-    });
-
-    return records
-      .map((record) => this.extractStringField(record, idFieldName))
-      .filter(isDefined);
-  }
-
   private buildCreatedByWorkspaceMemberFilter(
     workspaceMemberId: string,
   ): RecordFilter {
@@ -1526,6 +1816,16 @@ export class InternalEntityAccessPolicyService {
         },
       },
     };
+  }
+
+  private buildCreatedByWorkspaceMemberWhere(
+    workspaceMemberId: string,
+  ): FindOptionsWhere<Record<string, unknown>> {
+    return {
+      createdBy: {
+        workspaceMemberId,
+      },
+    } as FindOptionsWhere<Record<string, unknown>>;
   }
 
   private extractWorkspaceMemberId(actor: unknown): string | null {
@@ -1561,58 +1861,6 @@ export class InternalEntityAccessPolicyService {
     return typeof value === 'string' && value.length > 0 ? value : null;
   }
 
-  private extractRelationTargetId(
-    record: Record<string, unknown> | undefined,
-    relationFieldName: string,
-    joinColumnFieldName: string,
-  ): string | null {
-    const joinColumnValue = this.extractStringField(
-      record,
-      joinColumnFieldName,
-    );
-
-    if (isDefined(joinColumnValue)) {
-      return joinColumnValue;
-    }
-
-    if (!isDefined(record)) {
-      return null;
-    }
-
-    const relationFieldValue = record[relationFieldName];
-
-    if (
-      typeof relationFieldValue !== 'object' ||
-      relationFieldValue === null ||
-      Array.isArray(relationFieldValue)
-    ) {
-      return null;
-    }
-
-    const directId = (relationFieldValue as Record<string, unknown>).id;
-
-    if (typeof directId === 'string' && directId.length > 0) {
-      return directId;
-    }
-
-    const connectValue = (relationFieldValue as Record<string, unknown>)
-      .connect;
-
-    if (
-      typeof connectValue !== 'object' ||
-      connectValue === null ||
-      Array.isArray(connectValue)
-    ) {
-      return null;
-    }
-
-    const connectId = (connectValue as Record<string, unknown>).id;
-
-    return typeof connectId === 'string' && connectId.length > 0
-      ? connectId
-      : null;
-  }
-
   private normalizeEntityIds(entityId: unknown): string[] {
     const normalized = normalizeOptionalEntityId(entityId);
 
@@ -1632,7 +1880,21 @@ export class InternalEntityAccessPolicyService {
 
   private throwPermissionDenied(
     userFriendlyMessage?: ReturnType<typeof msg>,
+    auditMetadata?: PermissionDeniedAuditMetadata,
   ): never {
+    if (auditMetadata != null) {
+      const { authContext, objectName, recordId, reason } = auditMetadata;
+
+      this.internalEntityAuditLoggerService.logPermissionDenied({
+        workspaceId: authContext?.workspace.id ?? '',
+        userId: authContext?.user.id,
+        workspaceMemberId: authContext?.workspaceMemberId,
+        objectName,
+        recordId,
+        reason,
+      });
+    }
+
     throw new PermissionsException(
       PermissionsExceptionMessage.PERMISSION_DENIED,
       PermissionsExceptionCode.PERMISSION_DENIED,
@@ -1710,11 +1972,5 @@ export class InternalEntityAccessPolicyService {
     }
 
     return normalizedData;
-  }
-
-  private async isInternalEntitySuperAdmin(
-    authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    return authContext.user.canAccessFullAdminPanel;
   }
 }

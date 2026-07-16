@@ -28,6 +28,7 @@ import { getJoinColumnName } from '@/object-record/record-field/ui/utils/junctio
 import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
 import { getSourceJoinColumnName } from '@/object-record/record-field/ui/utils/junction/getSourceJoinColumnName';
 import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
+import { extractTargetRecordsFromJunction } from '@/object-record/record-field/ui/utils/junction/extractTargetRecordsFromJunction';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { useMultipleRecordPickerPerformSearch } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
@@ -316,6 +317,15 @@ export const RelationOneToManyFieldInput = () => {
       ? junctionTargetObjectMetadata.id
       : relationObjectMetadataItem.id;
 
+  const selectedJunctionTargetRecordIds =
+    isJunctionRelation && isDefined(junctionConfig) && Array.isArray(fieldValue)
+      ? extractTargetRecordsFromJunction({
+          junctionRecords: fieldValue,
+          targetFields: junctionConfig.targetFields,
+          objectMetadataItems,
+        }).map((record) => record.recordId)
+      : undefined;
+
   const handleChange = (morphItem: Parameters<typeof updateRelation>[0]) => {
     if (isRelationFromActivityTargets) {
       updateActivityTargetFromCell({
@@ -353,6 +363,7 @@ export const RelationOneToManyFieldInput = () => {
         onChange={handleChange}
         onClickOutside={handleSubmit}
         onSubmit={handleSubmit}
+        selectedRecordIds={selectedJunctionTargetRecordIds}
       />
     );
   }

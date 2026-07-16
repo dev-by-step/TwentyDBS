@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import {
   DEFAULT_INTERNAL_ENTITY_SEEDS,
   INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME,
@@ -18,6 +19,11 @@ export class InternalEntityConfigurationService {
   private readonly logger = new Logger(InternalEntityConfigurationService.name);
   private cachedInternalEntitySeeds: InternalEntitySeed[] | null = null;
 
+  constructor(
+    @Optional()
+    private readonly twentyConfigService?: TwentyConfigService,
+  ) {}
+
   getInternalEntitySeeds(): InternalEntitySeed[] {
     if (isDefined(this.cachedInternalEntitySeeds)) {
       return cloneInternalEntitySeeds(this.cachedInternalEntitySeeds);
@@ -29,18 +35,28 @@ export class InternalEntityConfigurationService {
   }
 
   resolveInternalEntityId(entityName: string | null): string | null {
-    return resolveInternalEntitySeedId(entityName, this.getInternalEntitySeeds());
+    return resolveInternalEntitySeedId(
+      entityName,
+      this.getInternalEntitySeeds(),
+    );
   }
 
   private loadInternalEntitySeeds(): InternalEntitySeed[] {
-    const rawInternalEntitySeeds = process.env[INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME];
+    const rawInternalEntitySeeds = this.getRawInternalEntitySeeds();
 
-    if (!isDefined(rawInternalEntitySeeds) || rawInternalEntitySeeds.length === 0) {
+    if (
+      !isDefined(rawInternalEntitySeeds) ||
+      (typeof rawInternalEntitySeeds === 'string' &&
+        rawInternalEntitySeeds.trim().length === 0)
+    ) {
       return cloneInternalEntitySeeds(DEFAULT_INTERNAL_ENTITY_SEEDS);
     }
 
     try {
-      const parsedInternalEntitySeeds = JSON.parse(rawInternalEntitySeeds);
+      const parsedInternalEntitySeeds =
+        typeof rawInternalEntitySeeds === 'string'
+          ? JSON.parse(rawInternalEntitySeeds)
+          : rawInternalEntitySeeds;
 
       return validateInternalEntitySeedsOrThrow(parsedInternalEntitySeeds);
     } catch (error) {
@@ -55,5 +71,12 @@ export class InternalEntityConfigurationService {
         `${INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME} invalide: ${errorMessage}`,
       );
     }
+  }
+
+  private getRawInternalEntitySeeds(): unknown {
+    return (
+      this.twentyConfigService?.get('INTERNAL_ENTITY_SEEDS') ??
+      process.env[INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME]
+    );
   }
 }

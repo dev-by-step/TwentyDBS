@@ -131,4 +131,42 @@ describe('findJunctionRecordByTargetId', () => {
     });
     expect(companyResult?.id).toBe('junction-1');
   });
+
+  it('should find junction record by join column when target object is not resolved', () => {
+    const junctionRecords = [
+      createMockJunctionRecord('junction-1', {
+        internalEntityId: 'entity-1',
+      }),
+      createMockJunctionRecord('junction-2', {
+        internalEntityId: 'entity-2',
+      }),
+    ];
+
+    const result = findJunctionRecordByTargetId({
+      junctionRecords,
+      targetRecordId: 'entity-2',
+      targetFieldName: 'internalEntity',
+      targetJoinColumnName: 'internalEntityId',
+    });
+
+    expect(result?.id).toBe('junction-2');
+  });
+
+  it('should prefer resolved target object over join column', () => {
+    const junctionRecords = [
+      createMockJunctionRecord('junction-1', {
+        internalEntity: { id: 'entity-1', name: 'Entity 1' },
+        internalEntityId: 'entity-1',
+      }),
+    ];
+
+    const result = findJunctionRecordByTargetId({
+      junctionRecords,
+      targetRecordId: 'entity-1',
+      targetFieldName: 'internalEntity',
+      targetJoinColumnName: 'internalEntityId',
+    });
+
+    expect(result?.id).toBe('junction-1');
+  });
 });

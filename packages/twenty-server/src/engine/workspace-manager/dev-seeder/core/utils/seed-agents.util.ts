@@ -1,5 +1,7 @@
 import { type QueryRunner } from 'typeorm';
 
+import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
+
 const agentChatThreadTableName = 'agentChatThread';
 
 export const AGENT_DATA_SEED_IDS = {
@@ -38,7 +40,10 @@ const seedChatThreads = async ({
       {
         id: AGENT_CHAT_THREAD_DATA_SEED_IDS.DEFAULT_THREAD,
         workspaceId,
-        userWorkspaceId: '',
+        // userWorkspaceId is NOT NULL: must reference a real seeded
+        // userWorkspace row (owner of the default chat thread), not an
+        // empty string.
+        userWorkspaceId: USER_WORKSPACE_DATA_SEED_IDS.JONY,
         createdAt: now,
         updatedAt: now,
       },

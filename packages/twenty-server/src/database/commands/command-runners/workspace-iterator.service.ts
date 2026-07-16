@@ -112,6 +112,12 @@ export class WorkspaceIteratorService {
         error.stack,
       );
 
+      if (error && typeof error === 'object' && 'failedWorkspaceMigrationBuildResult' in error) {
+        this.logger.error(
+          `Migration build failed: ${JSON.stringify((error as any).failedWorkspaceMigrationBuildResult, null, 2)}`
+        );
+      }
+
       if (error instanceof WorkspaceMigrationRunnerException && error.errors) {
         for (const [label, innerError] of Object.entries(error.errors)) {
           if (!isDefined(innerError)) continue;

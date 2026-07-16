@@ -1,11 +1,13 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
+import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { OnboardingResolver } from 'src/engine/core-modules/onboarding/onboarding.resolver';
 import { OnboardingService } from 'src/engine/core-modules/onboarding/onboarding.service';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 
 describe('OnboardingResolver', () => {
   let resolver: OnboardingResolver;
@@ -34,8 +36,17 @@ describe('OnboardingResolver', () => {
   describe('skipInviteTeamOnboardingStep', () => {
     const workspace = { id: 'workspace-id' } as WorkspaceEntity;
 
-    it('advances the workspace past the invite-team step', async () => {
-      const result = await resolver.skipInviteTeamOnboardingStep(workspace);
+    it('advances the workspace past the invite-team step for a superadmin', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'aline@weknow.dev',
+        canAccessFullAdminPanel: true,
+      } as AuthContextUser;
+
+      const result = await resolver.skipInviteTeamOnboardingStep(
+        user,
+        workspace,
+      );
 
       expect(onboardingService.advanceFromInviteTeamStep).toHaveBeenCalledWith({
         workspaceId: workspace.id,
@@ -43,7 +54,23 @@ describe('OnboardingResolver', () => {
       expect(result.success).toBe(true);
     });
 
-    it('is guarded by NoPermissionGuard so non-admins can skip without WORKSPACE_MEMBERS perm', () => {
+    it('rejects a regular user before mutating workspace onboarding', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'member@weknow.dev',
+        canAccessFullAdminPanel: false,
+      } as AuthContextUser;
+
+      await expect(
+        resolver.skipInviteTeamOnboardingStep(user, workspace),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(
+        onboardingService.advanceFromInviteTeamStep,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('keeps the explicit NoPermissionGuard on the resolver mutation', () => {
       const guards: unknown[] =
         Reflect.getMetadata(
           GUARDS_METADATA,

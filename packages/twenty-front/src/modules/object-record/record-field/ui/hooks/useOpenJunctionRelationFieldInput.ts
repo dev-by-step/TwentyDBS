@@ -122,6 +122,7 @@ export const useOpenJunctionRelationFieldInput = () => {
         forceSearchFilter: '',
         forceSearchableObjectMetadataItems: searchableObjectMetadataItems,
         forcePickableMorphItems: pickableMorphItems,
+        replacePickableMorphItems: true,
       });
 
       pushFocusItemToFocusStack({

@@ -21,13 +21,13 @@ import {
   PermissionsExceptionCode,
   PermissionsExceptionMessage,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
-import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
-import { ENTITY_MANAGER_ROLE_LABEL } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-access.constants';
+import { extractRelationTargetId } from 'src/modules/internal-entity/query-hooks/utils/extract-relation-target-id.util';
+import { InternalEntityAuditLoggerService } from 'src/modules/internal-entity/services/internal-entity-audit-logger.service';
+import { InternalEntityRoleService } from 'src/modules/internal-entity/services/internal-entity-role.service';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 const SUPPORTED_CALENDAR_MUTATION_OBJECT_NAMES = [
@@ -44,7 +44,6 @@ const SUPPORTED_CALENDAR_MUTATION_OBJECT_NAME_SET = new Set<string>(
 export class CalendarEventMutationPermissionService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly userRoleService: UserRoleService,
     @InjectRepository(CalendarChannelEntity)
     private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
     @InjectRepository(ConnectedAccountEntity)
@@ -54,6 +53,8 @@ export class CalendarEventMutationPermissionService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
+    private readonly internalEntityAuditLoggerService: InternalEntityAuditLoggerService,
+    private readonly internalEntityRoleService: InternalEntityRoleService,
   ) {}
 
   async validateCreatePayload(
@@ -70,8 +71,9 @@ export class CalendarEventMutationPermissionService {
     }
 
     if (objectName === 'calendarChannelEventAssociation') {
-      const calendarChannelId = this.extractStringValue(
+      const calendarChannelId = extractRelationTargetId(
         payload.data,
+        'calendarChannel',
         'calendarChannelId',
       );
 
@@ -80,6 +82,7 @@ export class CalendarEventMutationPermissionService {
           authContext,
           [calendarChannelId],
           msg`Only the entity manager or the platform administrator can create this calendar link.`,
+          'calendarChannelEventAssociation',
         );
       }
 
@@ -93,8 +96,9 @@ export class CalendarEventMutationPermissionService {
     }
 
     if (objectName === 'calendarEventParticipant') {
-      const calendarEventId = this.extractStringValue(
+      const calendarEventId = extractRelationTargetId(
         payload.data,
+        'calendarEvent',
         'calendarEventId',
       );
 
@@ -122,10 +126,57 @@ export class CalendarEventMutationPermissionService {
       return payload;
     }
 
-    for (const data of payload.data) {
-      await this.validateCreatePayload(authContext, objectName, {
-        data,
-      });
+    if (objectName === 'calendarChannelEventAssociation') {
+      const calendarChannelIds = [
+        ...new Set(
+          payload.data
+            .map((data) =>
+              extractRelationTargetId(
+                data,
+                'calendarChannel',
+                'calendarChannelId',
+              ),
+            )
+            .filter(isDefined),
+        ),
+      ];
+
+      if (calendarChannelIds.length > 0) {
+        await this.assertCalendarChannelMutationAllowed(
+          authContext,
+          calendarChannelIds,
+          msg`Only the entity manager or the platform administrator can create this calendar link.`,
+          'calendarChannelEventAssociation',
+        );
+      }
+
+      return payload;
+    }
+
+    if (objectName === 'calendarEvent') {
+      await this.assertCalendarRecordCreationAllowed(authContext);
+
+      return payload;
+    }
+
+    if (objectName === 'calendarEventParticipant') {
+      const calendarEventIds = [
+        ...new Set(
+          payload.data
+            .map((data) =>
+              extractRelationTargetId(data, 'calendarEvent', 'calendarEventId'),
+            )
+            .filter(isDefined),
+        ),
+      ];
+
+      await Promise.all(
+        calendarEventIds.map((calendarEventId) =>
+          this.assertCalendarEventMutationAllowed(authContext, calendarEventId),
+        ),
+      );
+
+      return payload;
     }
 
     return payload;
@@ -175,6 +226,11 @@ export class CalendarEventMutationPermissionService {
       if (!isDefined(calendarChannelId)) {
         this.throwPermissionDenied(
           msg`Only the entity manager or the platform administrator can modify this calendar link.`,
+          {
+            authContext,
+            objectName: 'calendarChannelEventAssociation',
+            reason: 'missing-calendar-channel-id',
+          },
         );
       }
 
@@ -182,6 +238,7 @@ export class CalendarEventMutationPermissionService {
         authContext,
         [calendarChannelId],
         msg`Only the entity manager or the platform administrator can modify this calendar link.`,
+        'calendarChannelEventAssociation',
       );
 
       return;
@@ -211,10 +268,20 @@ export class CalendarEventMutationPermissionService {
     if (!isDefined(calendarEventId)) {
       this.throwPermissionDenied(
         msg`Only the entity manager or the platform administrator can modify this event participant.`,
+        {
+          authContext,
+          objectName: 'calendarEventParticipant',
+          recordId,
+          reason: 'missing-calendar-event-id',
+        },
       );
     }
 
-    await this.assertCalendarEventMutationAllowed(authContext, calendarEventId);
+    await this.assertCalendarEventMutationAllowed(
+      authContext,
+      calendarEventId,
+      recordId,
+    );
   }
 
   async assertBulkMutationAllowed(
@@ -231,13 +298,25 @@ export class CalendarEventMutationPermissionService {
 
     this.throwPermissionDenied(
       msg`Bulk calendar mutations are disabled for scoped calendar records.`,
+      {
+        authContext,
+        objectName,
+        reason: 'bulk-calendar-mutation-disabled',
+      },
     );
   }
 
   private async assertCalendarEventMutationAllowed(
     authContext: UserWorkspaceAuthContext,
     calendarEventId: string,
+    recordId?: string,
   ): Promise<void> {
+    const auditContext = {
+      authContext,
+      objectName: 'calendarEvent' as const,
+      recordId: recordId ?? calendarEventId,
+    };
+
     const { calendarEvent, associations } =
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
@@ -271,6 +350,10 @@ export class CalendarEventMutationPermissionService {
     if (!isDefined(calendarEvent)) {
       this.throwPermissionDenied(
         msg`Only the entity manager or the platform administrator can modify this event.`,
+        {
+          ...auditContext,
+          reason: 'calendar-event-not-found',
+        },
       );
     }
 
@@ -288,12 +371,18 @@ export class CalendarEventMutationPermissionService {
     if (calendarChannelIds.length === 0) {
       this.throwPermissionDenied(
         msg`Only the entity manager or the platform administrator can modify this event.`,
+        {
+          ...auditContext,
+          reason: 'event-has-no-channel-association',
+        },
       );
     }
 
     await this.assertCalendarChannelMutationAllowed(
       authContext,
       calendarChannelIds,
+      msg`Only the entity manager or the platform administrator can modify this event.`,
+      'calendarEvent',
     );
   }
 
@@ -301,13 +390,26 @@ export class CalendarEventMutationPermissionService {
     authContext: UserWorkspaceAuthContext,
     calendarChannelIds: string[],
     permissionDeniedMessage = msg`Only the entity manager or the platform administrator can modify this event.`,
+    objectName: string,
   ): Promise<void> {
+    const auditContext = {
+      authContext,
+      objectName,
+      recordId: calendarChannelIds.join(','),
+    };
+
     if (calendarChannelIds.length === 0) {
-      this.throwPermissionDenied(permissionDeniedMessage);
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'empty-calendar-channel-ids',
+      });
     }
 
-    if (!(await this.canManageScopedCalendarRecords(authContext))) {
-      this.throwPermissionDenied(permissionDeniedMessage);
+    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'not-entity-manager-nor-admin',
+      });
     }
 
     const calendarChannels = await this.calendarChannelRepository.find({
@@ -319,7 +421,10 @@ export class CalendarEventMutationPermissionService {
     });
 
     if (calendarChannels.length !== calendarChannelIds.length) {
-      this.throwPermissionDenied(permissionDeniedMessage);
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'calendar-channel-not-found',
+      });
     }
 
     if (
@@ -327,7 +432,10 @@ export class CalendarEventMutationPermissionService {
         (calendarChannel) => !isDefined(calendarChannel.connectedAccountId),
       )
     ) {
-      this.throwPermissionDenied(permissionDeniedMessage);
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'calendar-channel-disconnected',
+      });
     }
 
     const connectedAccountIds = [
@@ -349,7 +457,10 @@ export class CalendarEventMutationPermissionService {
         : [];
 
     if (connectedAccounts.length !== connectedAccountIds.length) {
-      this.throwPermissionDenied(permissionDeniedMessage);
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'connected-account-not-found',
+      });
     }
 
     const ownerEntityIds = await this.resolveOwnerEntityIds(
@@ -367,6 +478,10 @@ export class CalendarEventMutationPermissionService {
     if (entityIds.length === 0) {
       this.throwPermissionDenied(
         msg`Your profile is not attached to an internal entity.`,
+        {
+          ...auditContext,
+          reason: 'no-internal-entity-attached',
+        },
       );
     }
 
@@ -374,15 +489,23 @@ export class CalendarEventMutationPermissionService {
       return;
     }
 
-    this.throwPermissionDenied(permissionDeniedMessage);
+    this.throwPermissionDenied(permissionDeniedMessage, {
+      ...auditContext,
+      reason: 'calendar-channel-owner-entity-mismatch',
+    });
   }
 
   private async assertCalendarRecordCreationAllowed(
     authContext: UserWorkspaceAuthContext,
   ): Promise<void> {
-    if (!(await this.canManageScopedCalendarRecords(authContext))) {
+    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
       this.throwPermissionDenied(
         msg`Only the entity manager or the platform administrator can create this event.`,
+        {
+          authContext,
+          objectName: 'calendarEvent',
+          reason: 'create-event-not-manager',
+        },
       );
     }
 
@@ -397,56 +520,13 @@ export class CalendarEventMutationPermissionService {
     if (entityIds.length === 0) {
       this.throwPermissionDenied(
         msg`Your profile is not attached to an internal entity.`,
+        {
+          authContext,
+          objectName: 'calendarEvent',
+          reason: 'create-event-no-internal-entity',
+        },
       );
     }
-  }
-
-  private async isPlatformAdmin(
-    authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    if (authContext.user.canAccessFullAdminPanel) {
-      return true;
-    }
-
-    const roles = await this.getUserWorkspaceRoles(authContext);
-
-    return roles.some(
-      (role) =>
-        role.universalIdentifier === STANDARD_ROLE.admin.universalIdentifier,
-    );
-  }
-
-  private async canManageScopedCalendarRecords(
-    authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    if (await this.isPlatformAdmin(authContext)) {
-      return true;
-    }
-
-    return this.isEntityManager(authContext);
-  }
-
-  private async isEntityManager(
-    authContext: UserWorkspaceAuthContext,
-  ): Promise<boolean> {
-    const roles = await this.getUserWorkspaceRoles(authContext);
-
-    return roles.some(
-      (role) =>
-        role.universalIdentifier ===
-          STANDARD_ROLE.entityManager.universalIdentifier ||
-        role.label === ENTITY_MANAGER_ROLE_LABEL,
-    );
-  }
-
-  private async getUserWorkspaceRoles(authContext: UserWorkspaceAuthContext) {
-    const rolesByUserWorkspace =
-      await this.userRoleService.getRolesByUserWorkspaces({
-        userWorkspaceIds: [authContext.userWorkspaceId],
-        workspaceId: authContext.workspace.id,
-      });
-
-    return rolesByUserWorkspace.get(authContext.userWorkspaceId) ?? [];
   }
 
   private async resolveOwnerEntityIds(
@@ -581,7 +661,24 @@ export class CalendarEventMutationPermissionService {
 
   private throwPermissionDenied(
     userFriendlyMessage?: ReturnType<typeof msg>,
+    auditContext?: {
+      authContext: UserWorkspaceAuthContext;
+      objectName: string;
+      reason: string;
+      recordId?: string;
+    },
   ): never {
+    if (auditContext != null) {
+      this.internalEntityAuditLoggerService.logPermissionDenied({
+        workspaceId: auditContext.authContext.workspace.id,
+        userId: auditContext.authContext.user.id,
+        workspaceMemberId: auditContext.authContext.workspaceMemberId,
+        objectName: auditContext.objectName,
+        recordId: auditContext.recordId,
+        reason: auditContext.reason,
+      });
+    }
+
     throw new PermissionsException(
       PermissionsExceptionMessage.PERMISSION_DENIED,
       PermissionsExceptionCode.PERMISSION_DENIED,

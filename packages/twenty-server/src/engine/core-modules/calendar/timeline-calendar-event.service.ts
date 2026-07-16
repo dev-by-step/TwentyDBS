@@ -80,12 +80,23 @@ export class TimelineCalendarEventService {
             'calendarEvent',
           );
 
-        const paginatedIds = await calendarEventRepository.find({
-          where: {
-            calendarEventParticipants: {
-              personId: Any(personIds),
-            },
+        const where = {
+          calendarEventParticipants: {
+            personId: Any(personIds),
           },
+        };
+        const totalNumberOfCalendarEvents = await calendarEventRepository.count(
+          {
+            where,
+          },
+        );
+
+        if (totalNumberOfCalendarEvents === 0) {
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
+        }
+
+        const paginatedIds = await calendarEventRepository.find({
+          where,
           select: { id: true, startsAt: true },
           skip: offset,
           take: pageSize,
@@ -95,7 +106,10 @@ export class TimelineCalendarEventService {
         const ids = paginatedIds.map(({ id }) => id);
 
         if (ids.length === 0) {
-          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
+          return {
+            totalNumberOfCalendarEvents,
+            timelineCalendarEvents: [],
+          };
         }
 
         const timelineCalendarEvents =
@@ -107,7 +121,7 @@ export class TimelineCalendarEventService {
           });
 
         return {
-          totalNumberOfCalendarEvents: timelineCalendarEvents.length,
+          totalNumberOfCalendarEvents,
           timelineCalendarEvents,
         };
       },
@@ -146,38 +160,42 @@ export class TimelineCalendarEventService {
 
         const dateWhere = this.buildDateWhereClause(startDate, endDate);
 
-        const allMatchingIds = await calendarEventRepository.find({
-          where: dateWhere,
-          select: { id: true },
-          order: { startsAt: 'DESC' },
-        });
-
-        const ids = allMatchingIds.map(({ id }) => id);
-
-        if (ids.length === 0) {
-          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
+        if (!includeMaskedEvents) {
+          return this.getUnmaskedGroupCalendarEventsPage({
+            calendarEventRepository,
+            currentWorkspaceMemberId,
+            dateWhere,
+            page,
+            pageSize,
+            workspaceId,
+          });
         }
 
-        const timelineCalendarEvents = (
-          await this.buildTimelineCalendarEventsFromIds({
-            calendarEventRepository,
-            ids,
+        const [events, totalNumberOfCalendarEvents] =
+          await calendarEventRepository.findAndCount({
+            where: dateWhere,
+            relations: {
+              calendarEventParticipants: {
+                person: true,
+                workspaceMember: true,
+              },
+              calendarChannelEventAssociations: true,
+            },
+            order: { startsAt: 'DESC' },
+            skip: offset,
+            take: pageSize,
+          });
+
+        const timelineCalendarEvents =
+          await this.buildTimelineCalendarEventsFromEvents({
+            events,
             currentWorkspaceMemberId,
             workspaceId,
-          })
-        ).filter(
-          (timelineCalendarEvent) =>
-            includeMaskedEvents ||
-            timelineCalendarEvent.visibility !==
-              CalendarChannelVisibility.METADATA,
-        );
+          });
 
         return {
-          totalNumberOfCalendarEvents: timelineCalendarEvents.length,
-          timelineCalendarEvents: timelineCalendarEvents.slice(
-            offset,
-            offset + pageSize,
-          ),
+          totalNumberOfCalendarEvents,
+          timelineCalendarEvents,
         };
       },
       authContext,
@@ -297,6 +315,83 @@ export class TimelineCalendarEventService {
     return {};
   }
 
+  private async getUnmaskedGroupCalendarEventsPage({
+    calendarEventRepository,
+    currentWorkspaceMemberId,
+    dateWhere,
+    page,
+    pageSize,
+    workspaceId,
+  }: {
+    calendarEventRepository: Repository<CalendarEventWorkspaceEntity>;
+    currentWorkspaceMemberId: string;
+    dateWhere: FindOptionsWhere<CalendarEventWorkspaceEntity>;
+    page: number;
+    pageSize: number;
+    workspaceId: string;
+  }): Promise<TimelineCalendarEventsWithTotalDTO> {
+    const requestedOffset = (page - 1) * pageSize;
+    const batchSize = Math.max(pageSize * 2, 50);
+    const timelineCalendarEvents: TimelineCalendarEventDTO[] = [];
+    let totalNumberOfCalendarEvents = 0;
+    let fetchedEventsCount = 0;
+
+    for (;;) {
+      const events = await calendarEventRepository.find({
+        where: dateWhere,
+        relations: {
+          calendarEventParticipants: { person: true, workspaceMember: true },
+          calendarChannelEventAssociations: true,
+        },
+        order: { startsAt: 'DESC' },
+        skip: fetchedEventsCount,
+        take: batchSize,
+      });
+
+      fetchedEventsCount += events.length;
+
+      if (events.length === 0) {
+        break;
+      }
+
+      const batchTimelineCalendarEvents =
+        await this.buildTimelineCalendarEventsFromEvents({
+          events,
+          currentWorkspaceMemberId,
+          workspaceId,
+        });
+
+      const unmaskedBatchEvents = batchTimelineCalendarEvents.filter(
+        (timelineCalendarEvent) =>
+          timelineCalendarEvent.visibility !==
+          CalendarChannelVisibility.METADATA,
+      );
+
+      for (const timelineCalendarEvent of unmaskedBatchEvents) {
+        if (
+          totalNumberOfCalendarEvents >= requestedOffset &&
+          timelineCalendarEvents.length < pageSize
+        ) {
+          timelineCalendarEvents.push(timelineCalendarEvent);
+        }
+
+        totalNumberOfCalendarEvents += 1;
+      }
+
+      if (
+        events.length < batchSize ||
+        timelineCalendarEvents.length === pageSize
+      ) {
+        break;
+      }
+    }
+
+    return {
+      totalNumberOfCalendarEvents,
+      timelineCalendarEvents,
+    };
+  }
+
   private async buildTimelineCalendarEventsFromIds({
     calendarEventRepository,
     ids,
@@ -316,6 +411,25 @@ export class TimelineCalendarEventService {
       },
     });
 
+    return this.buildTimelineCalendarEventsFromEvents({
+      events,
+      currentWorkspaceMemberId,
+      workspaceId,
+      sortByIds: ids,
+    });
+  }
+
+  private async buildTimelineCalendarEventsFromEvents({
+    events,
+    currentWorkspaceMemberId,
+    workspaceId,
+    sortByIds,
+  }: {
+    events: CalendarEventWorkspaceEntity[];
+    currentWorkspaceMemberId: string;
+    workspaceId: string;
+    sortByIds?: string[];
+  }): Promise<TimelineCalendarEventDTO[]> {
     const allCalendarChannelIds = [
       ...new Set(
         events.flatMap((event) =>
@@ -346,70 +460,69 @@ export class TimelineCalendarEventService {
         currentWorkspaceMemberId,
       });
 
-    return events
-      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
-      .map((event) => {
-        const participants = event.calendarEventParticipants.map((p) => ({
-          calendarEventId: event.id,
-          personId: p.personId ?? null,
-          workspaceMemberId: p.workspaceMemberId ?? null,
-          firstName:
-            p.person?.name?.firstName ||
-            p.workspaceMember?.name.firstName ||
-            '',
-          lastName:
-            p.person?.name?.lastName || p.workspaceMember?.name.lastName || '',
-          displayName:
-            p.person?.name?.firstName ||
-            p.person?.name?.lastName ||
-            p.workspaceMember?.name.firstName ||
-            p.workspaceMember?.name.lastName ||
-            p.displayName ||
-            p.handle ||
-            '',
-          avatarUrl: p.person?.avatarUrl || p.workspaceMember?.avatarUrl || '',
-          handle: p.handle ?? '',
-        }));
+    const sortedEvents = sortByIds
+      ? events.sort((a, b) => sortByIds.indexOf(a.id) - sortByIds.indexOf(b.id))
+      : events;
 
-        const shouldMask = calendarEventMaskMap.get(event.id) ?? false;
+    return sortedEvents.map((event) => {
+      const participants = event.calendarEventParticipants.map((p) => ({
+        calendarEventId: event.id,
+        personId: p.personId ?? null,
+        workspaceMemberId: p.workspaceMemberId ?? null,
+        firstName:
+          p.person?.name?.firstName || p.workspaceMember?.name.firstName || '',
+        lastName:
+          p.person?.name?.lastName || p.workspaceMember?.name.lastName || '',
+        displayName:
+          p.person?.name?.firstName ||
+          p.person?.name?.lastName ||
+          p.workspaceMember?.name.firstName ||
+          p.workspaceMember?.name.lastName ||
+          p.displayName ||
+          p.handle ||
+          '',
+        avatarUrl: p.person?.avatarUrl || p.workspaceMember?.avatarUrl || '',
+        handle: p.handle ?? '',
+      }));
 
-        const visibility = shouldMask
-          ? CalendarChannelVisibility.METADATA
-          : CalendarChannelVisibility.SHARE_EVERYTHING;
-        const eventEntityBadges =
-          calendarEventEntityBadgeMap.get(event.id) ?? [];
-        const primaryEventEntityBadge = eventEntityBadges[0] ?? null;
+      const shouldMask = calendarEventMaskMap.get(event.id) ?? false;
 
-        return {
-          ...omit(event, [
-            'calendarEventParticipants',
-            'calendarChannelEventAssociations',
-          ]),
-          title:
-            visibility === CalendarChannelVisibility.METADATA
-              ? FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED
-              : (event.title ?? ''),
-          description:
-            visibility === CalendarChannelVisibility.METADATA
-              ? null
-              : (event.description ?? null),
-          startsAt: event.startsAt as unknown as Date,
-          endsAt: event.endsAt as unknown as Date,
-          participants,
-          visibility,
-          location: event.location ?? null,
-          conferenceSolution: event.conferenceSolution ?? null,
-          conferenceLink: null,
-          entityColor: primaryEventEntityBadge?.color ?? null,
-          entityName:
-            eventEntityBadges
-              .map((badge) => badge.name)
-              .filter(isDefined)
-              .join(', ') || null,
-          ownerEntityId: primaryEventEntityBadge?.id ?? null,
-          responsibleEntities: eventEntityBadges,
-        };
-      });
+      const visibility = shouldMask
+        ? CalendarChannelVisibility.METADATA
+        : CalendarChannelVisibility.SHARE_EVERYTHING;
+      const eventEntityBadges = calendarEventEntityBadgeMap.get(event.id) ?? [];
+      const primaryEventEntityBadge = eventEntityBadges[0] ?? null;
+
+      return {
+        ...omit(event, [
+          'calendarEventParticipants',
+          'calendarChannelEventAssociations',
+        ]),
+        title:
+          visibility === CalendarChannelVisibility.METADATA
+            ? FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED
+            : (event.title ?? ''),
+        description:
+          visibility === CalendarChannelVisibility.METADATA
+            ? null
+            : (event.description ?? null),
+        startsAt: event.startsAt as unknown as Date,
+        endsAt: event.endsAt as unknown as Date,
+        participants,
+        visibility,
+        location: event.location ?? null,
+        conferenceSolution: event.conferenceSolution ?? null,
+        conferenceLink: null,
+        entityColor: primaryEventEntityBadge?.color ?? null,
+        entityName:
+          eventEntityBadges
+            .map((badge) => badge.name)
+            .filter(isDefined)
+            .join(', ') || null,
+        ownerEntityId: primaryEventEntityBadge?.id ?? null,
+        responsibleEntities: eventEntityBadges,
+      };
+    });
   }
 
   private async buildCalendarEventEntityBadgeMap({

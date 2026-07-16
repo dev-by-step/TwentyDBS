@@ -38,6 +38,15 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => (
   </MemoryRouter>
 );
 
+type ApolloCacheWithFieldPolicies = {
+  policies: {
+    getFieldPolicy: (
+      typename: string,
+      fieldName: string,
+    ) => { merge?: unknown } | undefined;
+  };
+};
+
 describe('useApolloFactory', () => {
   it('should work as expected', () => {
     const { result } = renderHook(() => useApolloFactory(), {
@@ -50,6 +59,14 @@ describe('useApolloFactory', () => {
     expect(res).toHaveProperty('link');
     expect(res).toHaveProperty('cache');
     expect(res).toHaveProperty('query');
+    const cache = res.cache as unknown as ApolloCacheWithFieldPolicies;
+
+    expect(cache.policies.getFieldPolicy('Query', 'companies')?.merge).toEqual(
+      expect.any(Function),
+    );
+    expect(
+      cache.policies.getFieldPolicy('Query', 'opportunities')?.merge,
+    ).toEqual(expect.any(Function));
   });
 
   it('should navigate to /welcome on unauthenticated error', async () => {

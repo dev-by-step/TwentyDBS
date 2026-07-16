@@ -13,7 +13,6 @@ import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { CoreEntityCacheService } from 'src/engine/core-entity-cache/services/core-entity-cache.service';
 import { ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
-import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
@@ -320,7 +319,10 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
   }
 
   async activateWorkspace(
-    user: AuthContextUser,
+    user: Pick<
+      UserEntity,
+      'id' | 'firstName' | 'lastName' | 'email' | 'locale'
+    >,
     workspace: WorkspaceEntity,
     data: ActivateWorkspaceInput,
   ) {

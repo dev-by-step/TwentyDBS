@@ -42,7 +42,7 @@ describe('CalendarChannelEntityAccessService', () => {
       workspaceMemberId: 'workspace-member-id',
       fallbackEntityId: 'entity-a',
       canAccessFullAdminPanel: false,
-      requestedVisibleInternalEntityIds: [' entity-a ', 'entity-a', 'entity-b'],
+      requestedVisibleInternalEntityIds: [' ENTITY-A ', 'entity-a', 'ENTITY-B'],
       shouldDefaultToPrimaryEntity: true,
     });
 

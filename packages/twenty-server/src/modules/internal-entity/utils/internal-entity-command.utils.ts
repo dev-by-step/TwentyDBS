@@ -2,7 +2,6 @@ import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
-import { DEFAULT_INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
 
 // Internal entity CLI commands are admin operations and intentionally bypass workspace user permissions.
 export const INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS = {
@@ -60,20 +59,4 @@ export const resolveObjectTableNameOrThrow = async ({
     nameSingular: objectMetadata.nameSingular,
     isCustom: objectMetadata.isCustom,
   });
-};
-
-export const resolveInternalEntitySeedId = (
-  entityName: string | null,
-): string | null => {
-  if (!isDefined(entityName) || entityName.length === 0) {
-    return null;
-  }
-
-  return (
-    DEFAULT_INTERNAL_ENTITY_SEEDS.find(
-      (internalEntitySeed) =>
-        internalEntitySeed.name === entityName ||
-        internalEntitySeed.aliases?.includes(entityName) === true,
-    )?.id ?? null
-  );
 };

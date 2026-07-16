@@ -14,6 +14,8 @@ import {
 } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
+import { type InternalEntityAuditLoggerService } from 'src/modules/internal-entity/services/internal-entity-audit-logger.service';
+import { type InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
 import {
   type ImportCsvOpportunitiesParserService,
   OpportunityCsvNotFoundError,
@@ -27,25 +29,30 @@ type MockLogger = {
 };
 
 type InitInternalEntitiesCommandInternals = {
-  seedInternalEntities: (
-    dataSource: GlobalWorkspaceDataSource,
-    internalEntitySqlTable: string,
-    workspaceMemberEntityMembershipSqlTable: string,
-    workspaceId: string,
-  ) => Promise<void>;
+  seedInternalEntities: (args: {
+    dataSource: GlobalWorkspaceDataSource;
+    internalEntitySqlTable: string;
+    opportunitySqlTable: string;
+    personEntityMembershipSqlTable: string;
+    companyEntityMembershipSqlTable: string;
+    workspaceMemberEntityMembershipSqlTable: string;
+    calendarEventEntityAudienceSqlTable: string;
+    workspaceId: string;
+  }) => Promise<void>;
   backfillOpportunities: (
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
   ) => Promise<boolean>;
-  backfillOpportunitiesFromWorkspaceMembers: (
-    dataSource: GlobalWorkspaceDataSource,
-    opportunitySqlTable: string,
-    workspaceMemberSqlTable: string,
-  ) => Promise<void>;
   backfillCompanyMembershipsFromOpportunities: (
     dataSource: GlobalWorkspaceDataSource,
     opportunitySqlTable: string,
     companyEntityMembershipSqlTable: string,
+  ) => Promise<void>;
+  backfillWorkspaceMemberMembershipsFromUsers: (
+    dataSource: GlobalWorkspaceDataSource,
+    internalEntitySqlTable: string,
+    workspaceMemberSqlTable: string,
+    workspaceMemberEntityMembershipSqlTable: string,
   ) => Promise<void>;
   backfillPersonMembershipsFromCompanies: (
     dataSource: GlobalWorkspaceDataSource,
@@ -96,6 +103,19 @@ describe('InitInternalEntitiesCommand', () => {
     const dataSource = {
       query: jest.fn().mockResolvedValue([{ id: opportunityId }]),
     };
+    const internalEntityConfigurationService = {
+      getInternalEntitySeeds: jest
+        .fn()
+        .mockReturnValue(Object.values(INTERNAL_ENTITY_SEEDS)),
+      resolveInternalEntityId: jest.fn(
+        (entityName: string | null) =>
+          INTERNAL_ENTITY_SEEDS[entityName ?? '']?.id ?? null,
+      ),
+    };
+    const internalEntityAuditLoggerService = {
+      logInternalEntityMerge: jest.fn(),
+    };
+
     const command = new InitInternalEntitiesCommand(
       {} as WorkspaceIteratorService,
       {} as ObjectMetadataService,
@@ -103,6 +123,8 @@ describe('InitInternalEntitiesCommand', () => {
       {} as WorkspaceManyOrAllFlatEntityMapsCacheService,
       importCsvOpportunitiesParserService as unknown as ImportCsvOpportunitiesParserService,
       {} as RoleService,
+      internalEntityConfigurationService as unknown as InternalEntityConfigurationService,
+      internalEntityAuditLoggerService as unknown as InternalEntityAuditLoggerService,
     );
     const logger = setCommandLogger(command);
 
@@ -119,30 +141,39 @@ describe('InitInternalEntitiesCommand', () => {
     };
   };
 
-  it('should normalize duplicate internal entities before seeding them', async () => {
+  it('should seed internal entities without any repoint or delete query when there is no duplicate', async () => {
     const { commandInternals, dataSource, dataSourceMock, workspaceId } =
       buildCommandContext();
 
-    await commandInternals.seedInternalEntities(
+    dataSourceMock.query.mockResolvedValueOnce([]);
+
+    await commandInternals.seedInternalEntities({
       dataSource,
-      '"workspace_abc"."internalEntity"',
-      '"workspace_abc"."workspaceMemberEntityMembership"',
+      internalEntitySqlTable: '"workspace_abc"."internalEntity"',
+      opportunitySqlTable: '"workspace_abc"."opportunity"',
+      personEntityMembershipSqlTable:
+        '"workspace_abc"."personEntityMembership"',
+      companyEntityMembershipSqlTable:
+        '"workspace_abc"."companyEntityMembership"',
+      workspaceMemberEntityMembershipSqlTable:
+        '"workspace_abc"."workspaceMemberEntityMembership"',
+      calendarEventEntityAudienceSqlTable:
+        '"workspace_abc"."calendarEventEntityAudience"',
       workspaceId,
-    );
+    });
 
-    expect(dataSourceMock.query).toHaveBeenCalledTimes(3);
+    // Duplicate lookup + final upsert only: no repoint, no delete.
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
 
-    const [membershipUpdateQuery, membershipUpdateParameters] =
+    const [duplicateLookupQuery, duplicateLookupParameters] =
       dataSourceMock.query.mock.calls[0];
 
-    expect(membershipUpdateQuery).toContain(
-      'UPDATE "workspace_abc"."workspaceMemberEntityMembership"',
+    expect(duplicateLookupQuery).toContain(
+      'FROM "workspace_abc"."internalEntity"',
     );
-    expect(membershipUpdateQuery).toContain('duplicate_entity_ids');
-    expect(membershipUpdateQuery).toContain(
-      'SET "internalEntityId" = duplicate_entity_ids.canonical_id',
-    );
-    expect(membershipUpdateParameters).toEqual(
+    expect(duplicateLookupQuery).toContain('AS "duplicateId"');
+    expect(duplicateLookupQuery).toContain('AS "canonicalId"');
+    expect(duplicateLookupParameters).toEqual(
       expect.arrayContaining([
         INTERNAL_ENTITY_SEEDS.WEKNOW.id,
         INTERNAL_ENTITY_SEEDS.WEKNOW.name,
@@ -150,17 +181,8 @@ describe('InitInternalEntitiesCommand', () => {
       ]),
     );
 
-    const [duplicateDeleteQuery, duplicateDeleteParameters] =
-      dataSourceMock.query.mock.calls[1];
-
-    expect(duplicateDeleteQuery).toContain(
-      'DELETE FROM "workspace_abc"."internalEntity"',
-    );
-    expect(duplicateDeleteQuery).toContain('duplicate_entity_ids');
-    expect(duplicateDeleteParameters).toEqual(membershipUpdateParameters);
-
     const [query, parameters, queryRunner, options] =
-      dataSourceMock.query.mock.calls[2];
+      dataSourceMock.query.mock.calls[1];
 
     expect(query).toContain('INSERT INTO "workspace_abc"."internalEntity"');
     expect(query).toContain('ON CONFLICT ("id") DO UPDATE');
@@ -178,6 +200,92 @@ describe('InitInternalEntitiesCommand', () => {
     );
     expect(queryRunner).toBeUndefined();
     expect(options).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+  });
+
+  it('should repoint every entity reference to the canonical entity before deleting a duplicate', async () => {
+    const { commandInternals, dataSource, dataSourceMock, workspaceId } =
+      buildCommandContext();
+    const duplicateId = faker.string.uuid();
+    const canonicalId = INTERNAL_ENTITY_SEEDS.WEKNOW.id;
+
+    dataSourceMock.query.mockResolvedValueOnce([{ duplicateId, canonicalId }]);
+
+    await commandInternals.seedInternalEntities({
+      dataSource,
+      internalEntitySqlTable: '"workspace_abc"."internalEntity"',
+      opportunitySqlTable: '"workspace_abc"."opportunity"',
+      personEntityMembershipSqlTable:
+        '"workspace_abc"."personEntityMembership"',
+      companyEntityMembershipSqlTable:
+        '"workspace_abc"."companyEntityMembership"',
+      workspaceMemberEntityMembershipSqlTable:
+        '"workspace_abc"."workspaceMemberEntityMembership"',
+      calendarEventEntityAudienceSqlTable:
+        '"workspace_abc"."calendarEventEntityAudience"',
+      workspaceId,
+    });
+
+    const calls = dataSourceMock.query.mock.calls as Array<[string, unknown[]]>;
+
+    // Lookup, opportunity repoint, 4 junction tables x (dedupe delete +
+    // repoint update), calendarChannel repoint, duplicate delete, final
+    // upsert.
+    expect(calls).toHaveLength(1 + 1 + 4 * 2 + 1 + 1 + 1);
+
+    const opportunityRepoint = calls.find(
+      ([query]) =>
+        query.includes('UPDATE "workspace_abc"."opportunity"') &&
+        query.includes('SET "internalEntityId" = $1'),
+    );
+
+    expect(opportunityRepoint?.[1]).toEqual([canonicalId, duplicateId]);
+
+    for (const [table, sourceColumn] of [
+      ['personEntityMembership', 'personId'],
+      ['companyEntityMembership', 'companyId'],
+      ['workspaceMemberEntityMembership', 'workspaceMemberId'],
+      ['calendarEventEntityAudience', 'calendarEventId'],
+    ]) {
+      const dedupeDelete = calls.find(
+        ([query]) =>
+          query.includes(`DELETE FROM "workspace_abc"."${table}"`) &&
+          query.includes(`"${sourceColumn}"`),
+      );
+
+      expect(dedupeDelete?.[1]).toEqual([duplicateId, canonicalId]);
+
+      const repointUpdate = calls.find(
+        ([query]) =>
+          query.includes(`UPDATE "workspace_abc"."${table}"`) &&
+          query.includes('SET "internalEntityId" = $1'),
+      );
+
+      expect(repointUpdate?.[1]).toEqual([canonicalId, duplicateId]);
+    }
+
+    const calendarChannelRepoint = calls.find(([query]) =>
+      query.includes('UPDATE core."calendarChannel"'),
+    );
+
+    expect(calendarChannelRepoint?.[1]).toEqual([
+      duplicateId,
+      canonicalId,
+      workspaceId,
+    ]);
+
+    const duplicateDelete = calls.find(
+      ([query]) =>
+        query.includes('DELETE FROM "workspace_abc"."internalEntity"') &&
+        query.includes('ANY($1::uuid[])'),
+    );
+
+    expect(duplicateDelete?.[1]).toEqual([[duplicateId]]);
+
+    const finalUpsert = calls.find(([query]) =>
+      query.includes('INSERT INTO "workspace_abc"."internalEntity"'),
+    );
+
+    expect(finalUpsert).toBeDefined();
   });
 
   it('should backfill opportunities in one batch and skip unknown entities', async () => {
@@ -205,6 +313,8 @@ describe('InitInternalEntitiesCommand', () => {
     expect(query).toContain(
       'UPDATE "workspace_abc"."opportunity" AS opportunity',
     );
+    expect(query).toContain('AND opportunity."internalEntityId" IS NULL');
+    expect(query).not.toContain('IS DISTINCT FROM');
     expect(query).toContain(
       'FROM (VALUES ($1::uuid, $2::uuid)) AS csv_values(id, internal_entity_id)',
     );
@@ -265,15 +375,19 @@ describe('InitInternalEntitiesCommand', () => {
     );
   });
 
-  it('should backfill remaining opportunities from workspace member entities', async () => {
-    const { commandInternals, dataSource, dataSourceMock, logger } =
-      buildCommandContext();
+  it('should preserve manually reassigned CSV opportunities', async () => {
+    const opportunityRow = buildCsvOpportunityRow({
+      entityName: 'WEKNOW',
+    });
+    const { commandInternals, dataSource, dataSourceMock } =
+      buildCommandContext([opportunityRow]);
 
-    await commandInternals.backfillOpportunitiesFromWorkspaceMembers(
-      dataSource,
-      '"workspace_abc"."opportunity"',
-      '"workspace_abc"."workspaceMember"',
-    );
+    await expect(
+      commandInternals.backfillOpportunities(
+        dataSource,
+        '"workspace_abc"."opportunity"',
+      ),
+    ).resolves.toBe(true);
 
     expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
 
@@ -283,19 +397,16 @@ describe('InitInternalEntitiesCommand', () => {
     expect(query).toContain(
       'UPDATE "workspace_abc"."opportunity" AS opportunity',
     );
-    expect(query).toContain(
-      'LEFT JOIN "workspace_abc"."workspaceMember" created_by_member',
-    );
-    expect(query).toContain('LEFT JOIN core."user" created_by_user');
-    expect(query).toContain(
-      'COALESCE(created_by_user."entityId", owner_user."entityId")',
-    );
-    expect(parameters).toStrictEqual([]);
+    expect(query).toContain('AND opportunity."internalEntityId" IS NULL');
+    expect(query).not.toContain('IS DISTINCT FROM');
+    expect(query).not.toContain('created_by_user');
+    expect(query).not.toContain('owner_user');
+    expect(parameters).toStrictEqual([
+      opportunityRow.id,
+      INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+    ]);
     expect(queryRunner).toBeUndefined();
     expect(options).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
-    expect(logger.log).toHaveBeenCalledWith(
-      '1 opportunité(s) rattachée(s) via les membres du workspace',
-    );
   });
 
   it('should warn instead of failing when opportunities remain without the optional CSV', async () => {
@@ -381,6 +492,71 @@ describe('InitInternalEntitiesCommand', () => {
     expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
     expect(logger.log).toHaveBeenCalledWith(
       '1 membership(s) candidat(s) traité(s) pour Company <- Opportunity',
+    );
+  });
+
+  it('should backfill all internal entities for full admin workspace members', async () => {
+    const { commandInternals, dataSource, dataSourceMock, logger } =
+      buildCommandContext();
+    const workspaceMemberId = faker.string.uuid();
+
+    dataSourceMock.query
+      .mockResolvedValueOnce([
+        {
+          recordId: workspaceMemberId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        },
+        {
+          recordId: workspaceMemberId,
+          internalEntityId: INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await commandInternals.backfillWorkspaceMemberMembershipsFromUsers(
+      dataSource,
+      '"workspace_abc"."internalEntity"',
+      '"workspace_abc"."workspaceMember"',
+      '"workspace_abc"."workspaceMemberEntityMembership"',
+    );
+
+    expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+
+    const [selectQuery, selectParameters, selectQueryRunner, selectOptions] =
+      dataSourceMock.query.mock.calls[0];
+
+    expect(selectQuery).toContain('INNER JOIN LATERAL');
+    expect(selectQuery).toContain('SELECT core_user."entityId"');
+    expect(selectQuery).toContain(
+      'FROM "workspace_abc"."internalEntity" internal_entity',
+    );
+    expect(selectQuery).toContain(
+      'core_user."canAccessFullAdminPanel" IS TRUE',
+    );
+    expect(selectQuery).toContain('internal_entity."deletedAt" IS NULL');
+    expect(selectParameters).toStrictEqual([]);
+    expect(selectQueryRunner).toBeUndefined();
+    expect(selectOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+
+    const [insertQuery, insertParameters, insertQueryRunner, insertOptions] =
+      dataSourceMock.query.mock.calls[1];
+
+    expect(insertQuery).toContain(
+      'INSERT INTO "workspace_abc"."workspaceMemberEntityMembership"',
+    );
+    expect(insertQuery).toContain('"workspaceMemberId"');
+    expect(insertParameters).toHaveLength(6);
+    expect(insertParameters).toEqual(
+      expect.arrayContaining([
+        workspaceMemberId,
+        INTERNAL_ENTITY_SEEDS.WEKNOW.id,
+        INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id,
+      ]),
+    );
+    expect(insertQueryRunner).toBeUndefined();
+    expect(insertOptions).toBe(INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS);
+    expect(logger.log).toHaveBeenCalledWith(
+      '2 membership(s) candidat(s) traité(s) pour Workspace Member <- User',
     );
   });
 

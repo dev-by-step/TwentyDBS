@@ -187,6 +187,71 @@ describe('extractTargetRecordsFromJunction', () => {
       expect(result).toHaveLength(1);
       expect(result[0].recordId).toBe('company-1');
     });
+
+    it('should extract target record from join column when target object is not resolved', () => {
+      const junctionRecords = [
+        createMockJunctionRecord('junction-1', {
+          companyId: 'company-1',
+        }),
+      ];
+
+      const result = extractTargetRecordsFromJunction({
+        junctionRecords,
+        targetFields: [mockTargetField],
+        objectMetadataItems: mockObjectMetadataItems,
+      });
+
+      expect(result).toEqual([
+        { recordId: 'company-1', objectMetadataId: 'company-metadata-id' },
+      ]);
+    });
+
+    it('should include a typed fallback record from join column when includeRecord is true', () => {
+      const junctionRecords = [
+        createMockJunctionRecord('junction-1', {
+          companyId: 'company-1',
+        }),
+      ];
+
+      const result = extractTargetRecordsFromJunction({
+        junctionRecords,
+        targetFields: [mockTargetField],
+        objectMetadataItems: mockObjectMetadataItems,
+        includeRecord: true,
+      });
+
+      expect(result).toEqual([
+        {
+          recordId: 'company-1',
+          objectMetadataId: 'company-metadata-id',
+          record: { id: 'company-1', __typename: 'Company' },
+        },
+      ]);
+    });
+
+    it('should prefer resolved target object over join column', () => {
+      const junctionRecords = [
+        createMockJunctionRecord('junction-1', {
+          company: { id: 'company-1', name: 'Acme Corp' },
+          companyId: 'different-id',
+        }),
+      ];
+
+      const result = extractTargetRecordsFromJunction({
+        junctionRecords,
+        targetFields: [mockTargetField],
+        objectMetadataItems: mockObjectMetadataItems,
+        includeRecord: true,
+      });
+
+      expect(result).toEqual([
+        {
+          recordId: 'company-1',
+          objectMetadataId: 'company-metadata-id',
+          record: { id: 'company-1', name: 'Acme Corp' },
+        },
+      ]);
+    });
   });
 
   describe('with multiple target fields (multiple regular relations)', () => {

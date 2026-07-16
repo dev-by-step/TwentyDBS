@@ -8,10 +8,5 @@ export const buildCsvOpportunityRow = (
   id: faker.string.uuid(),
   name: faker.commerce.productName(),
   entityName: 'WEKNOW',
-  amount: faker.number.int({ min: 100, max: 100_000 }),
-  currency: 'EUR',
-  companyId: null,
-  personId: null,
-  stage: 'NEW',
   ...overrides,
 });

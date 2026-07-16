@@ -93,6 +93,7 @@ export const useOpenRelationFromManyFieldInput = () => {
         forceSearchFilter: '',
         forceSearchableObjectMetadataItems: [objectMetadataItem],
         forcePickableMorphItems: pickableMorphItems,
+        replacePickableMorphItems: true,
       });
 
       pushFocusItemToFocusStack({

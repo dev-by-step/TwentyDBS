@@ -53,6 +53,16 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       uri: `${REACT_APP_SERVER_BASE_URL}/graphql`,
       cache: new InMemoryCache({
         typePolicies: {
+          Query: {
+            fields: {
+              companies: {
+                merge: false,
+              },
+              opportunities: {
+                merge: false,
+              },
+            },
+          },
           RemoteTable: {
             keyFields: ['name'],
           },

@@ -1,5 +1,6 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { getObjectTypename } from '@/object-record/cache/utils/getObjectTypename';
 import { isObjectWithId } from '@/object-record/record-field/ui/utils/junction/isObjectWithId';
 import { type ExtractedTargetRecord } from '@/object-record/record-field/ui/utils/junction/types/ExtractedTargetRecord';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -17,19 +18,37 @@ const tryExtractFromField = (
   junctionRecord: ObjectRecord,
   fieldName: string,
   objectMetadataId: string,
+  objectMetadataNameSingular: string,
   includeRecord: boolean,
 ): ExtractedTargetRecord | null => {
   const targetObject = junctionRecord[fieldName];
 
-  if (!isObjectWithId(targetObject)) {
-    return null;
+  if (isObjectWithId(targetObject)) {
+    return {
+      recordId: targetObject.id,
+      objectMetadataId,
+      ...(includeRecord && { record: targetObject }),
+    };
   }
 
-  return {
-    recordId: targetObject.id,
-    objectMetadataId,
-    ...(includeRecord && { record: targetObject }),
-  };
+  // Fallback for junction records loaded without the nested relation object
+  // (e.g. after a refetch that only populated the join column).
+  const joinColumnValue = junctionRecord[`${fieldName}Id`];
+
+  if (typeof joinColumnValue === 'string' && joinColumnValue.length > 0) {
+    return {
+      recordId: joinColumnValue,
+      objectMetadataId,
+      ...(includeRecord && {
+        record: {
+          id: joinColumnValue,
+          __typename: getObjectTypename(objectMetadataNameSingular),
+        },
+      }),
+    };
+  }
+
+  return null;
 };
 
 const extractFromTargetFields = (
@@ -61,6 +80,7 @@ const extractFromTargetFields = (
         junctionRecord,
         targetField.name,
         targetObjectMetadata.id,
+        targetObjectMetadata.nameSingular,
         includeRecord,
       );
       if (isDefined(result)) {
@@ -103,6 +123,7 @@ const extractFromMorphRelationField = (
         junctionRecord,
         computedFieldName,
         targetObjectMetadata.id,
+        targetObjectMetadata.nameSingular,
         includeRecord,
       );
       if (isDefined(result)) {

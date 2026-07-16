@@ -193,4 +193,27 @@ describe('WorkspaceMemberInternalEntityService', () => {
 
     expect(result).toEqual(['entity-a']);
   });
+
+  it('should cache resolved member contexts to avoid repeated membership queries', async () => {
+    mockObjectMetadataService.findOneWithinWorkspace.mockResolvedValue({
+      id: 'object-metadata-id',
+    });
+    mockMembershipRepository.find.mockResolvedValue([
+      {
+        workspaceMemberId: 'workspace-member-1',
+        internalEntityId: 'entity-a',
+      },
+    ]);
+
+    await service.resolveContext({
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-1',
+    });
+    await service.resolveContext({
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-1',
+    });
+
+    expect(mockMembershipRepository.find).toHaveBeenCalledTimes(1);
+  });
 });

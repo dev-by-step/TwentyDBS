@@ -12,11 +12,6 @@ export type CsvOpportunityRow = {
   id: string;
   name: string;
   entityName: string | null;
-  amount: number;
-  currency: string;
-  companyId: string | null;
-  personId: string | null;
-  stage: string;
 };
 
 type RawCsvOpportunityRow = Record<string, string | undefined>;
@@ -70,7 +65,7 @@ export class ImportCsvOpportunitiesParserService {
       throw new Error(`CSV vide ou invalide: ${csvPath}`);
     }
 
-    const missingRequiredHeaders = ['Id', 'Nom', 'Société', 'Étape'].filter(
+    const missingRequiredHeaders = ['Id', 'Nom', 'Société'].filter(
       (header) => !headers.includes(header),
     );
 
@@ -107,18 +102,10 @@ export class ImportCsvOpportunitiesParserService {
         `Id ligne ${rowNumber}`,
       ),
       name: this.getRequiredCsvValue(row, 'Nom', rowNumber),
-      entityName: this.parseEntityFromCompany(row.Société ?? ''),
-      amount: parseInt(row['Montant / Amount'] ?? '0', 10) || 0,
-      currency: row['Montant / Currency']?.trim() ?? 'EUR',
-      companyId: this.validateUuidOptional(
-        this.getOptionalCsvValue(row, 'Entreprise Id'),
-        `Entreprise Id ligne ${rowNumber}`,
+      entityName: this.parseEntityName(
+        this.getRequiredCsvValue(row, 'Société', rowNumber),
+        rowNumber,
       ),
-      personId: this.validateUuidOptional(
-        this.getOptionalCsvValue(row, 'Point de contact Id'),
-        `Point de contact Id ligne ${rowNumber}`,
-      ),
-      stage: this.getRequiredCsvValue(row, 'Étape', rowNumber),
     };
   }
 
@@ -138,48 +125,38 @@ export class ImportCsvOpportunitiesParserService {
     return value;
   }
 
-  private getOptionalCsvValue(
-    row: RawCsvOpportunityRow,
-    header: string,
-  ): string | undefined {
-    const value = row[header]?.trim();
+  private parseEntityName(value: string, rowNumber: number): string | null {
+    if (value.length === 0) {
+      return null;
+    }
 
-    return isDefined(value) && value.length > 0 ? value : undefined;
-  }
-
-  private parseEntityFromCompany(value: string): string | null {
-    if (!value) return null;
+    let parsed: unknown;
 
     try {
-      const parsed = JSON.parse(value);
-
-      if (
-        Array.isArray(parsed) &&
-        parsed.length > 0 &&
-        typeof parsed[0] === 'string'
-      ) {
-        const entityName = parsed[0].trim();
-
-        return entityName.length > 0 ? entityName : null;
-      }
+      parsed = JSON.parse(value);
     } catch (error) {
-      this.logger.debug(
-        `Erreur parsing JSON pour Société: ${value} (${this.formatErrorMessage(
-          error,
-        )})`,
+      throw new Error(
+        `Société ligne ${rowNumber} doit être un tableau JSON valide, reçu: ${value} (${
+          error instanceof Error ? error.message : String(error)
+        })`,
       );
     }
 
-    return null;
-  }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error(
+        `Société ligne ${rowNumber} doit être un tableau JSON non vide, reçu: ${value}`,
+      );
+    }
 
-  private validateUuidOptional(
-    value: string | undefined,
-    fieldName: string,
-  ): string | null {
-    if (!isDefined(value)) return null;
+    const firstEntry = parsed[0];
 
-    return validateUuidOrThrow(value, fieldName);
+    if (typeof firstEntry !== 'string' || firstEntry.trim().length === 0) {
+      throw new Error(
+        `Société ligne ${rowNumber} doit contenir une chaîne non vide en première position, reçu: ${value}`,
+      );
+    }
+
+    return firstEntry.trim();
   }
 
   private assertUniqueOpportunityIds(rows: CsvOpportunityRow[]): void {

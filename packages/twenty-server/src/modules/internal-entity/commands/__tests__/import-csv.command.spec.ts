@@ -1,15 +1,31 @@
+import { access, readFile, stat } from 'node:fs/promises';
+
+import { faker } from '@faker-js/faker';
 import { type QueryRunner } from 'typeorm';
 
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
-import { buildOpportunityCsvFixtureRows } from 'src/modules/internal-entity/__tests__/factories/opportunity-csv-fixture.factory';
-import { buildCsvOpportunityRow } from 'src/modules/internal-entity/__tests__/factories/csv-opportunity-row.factory';
 import { buildWorkspaceRecord } from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
+import {
+  buildRawCsvOpportunityCsv,
+  buildRawCsvOpportunityRow,
+} from 'src/modules/internal-entity/__tests__/factories/raw-csv-opportunity-row.factory';
 import { ImportCsvCommand } from 'src/modules/internal-entity/commands/import-csv.command';
 import { INTERNAL_ENTITY_SEEDS } from 'src/modules/internal-entity/constants/internal-entity-seeds.constant';
-import { type ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
+import { type InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
 import { INTERNAL_ENTITY_ADMIN_QUERY_OPTIONS } from 'src/modules/internal-entity/utils/internal-entity-command.utils';
+
+type FullCsvOpportunityRow = {
+  id: string;
+  name: string;
+  entityName: string | null;
+  amount: number;
+  currency: string;
+  companyId: string | null;
+  personId: string | null;
+  stage: string;
+};
 
 type MockLogger = {
   log: jest.Mock;
@@ -32,6 +48,12 @@ type DataSourceQueryCall = [
   queryRunner?: QueryRunner,
   options?: unknown,
 ];
+
+jest.mock('node:fs/promises', () => ({
+  access: jest.fn(),
+  readFile: jest.fn(),
+  stat: jest.fn(),
+}));
 
 const buildQueryRunner = (): MockQueryRunner => {
   const queryRunner = {
@@ -64,13 +86,51 @@ const setCommandLogger = (command: unknown): MockLogger => {
   return logger;
 };
 
+const buildFullCsvOpportunityRow = (
+  overrides: Partial<FullCsvOpportunityRow> = {},
+): FullCsvOpportunityRow => ({
+  id: faker.string.uuid(),
+  name: 'Default Opportunity',
+  entityName: 'WEKNOW',
+  amount: 0,
+  currency: 'EUR',
+  companyId: null,
+  personId: null,
+  stage: 'NEW',
+  ...overrides,
+});
+
+const buildFixtureCsvContent = (rows: FullCsvOpportunityRow[]) =>
+  buildRawCsvOpportunityCsv({
+    rows: rows.map((row) =>
+      buildRawCsvOpportunityRow({
+        Id: row.id,
+        Nom: row.name,
+        Société: row.entityName ? JSON.stringify([row.entityName]) : '',
+        'Montant / Amount': String(row.amount),
+        'Montant / Currency': row.currency,
+        'Entreprise Id': row.companyId ?? '',
+        'Point de contact Id': row.personId ?? '',
+        Étape: row.stage,
+      }),
+    ),
+  });
+
 describe('ImportCsvCommand', () => {
+  const mockedAccess = access as jest.MockedFunction<typeof access>;
+  const mockedReadFile = readFile as jest.MockedFunction<typeof readFile>;
+  const mockedStat = stat as jest.MockedFunction<typeof stat>;
+
+  beforeEach(() => {
+    mockedAccess.mockResolvedValue(undefined);
+  });
+
   const buildCommandContext = (
-    csvRows: ReturnType<typeof buildOpportunityCsvFixtureRows> | null = null,
+    csvRows: FullCsvOpportunityRow[] | null = null,
   ) => {
     const workspace = buildWorkspaceRecord();
-    const defaultRows = [
-      buildCsvOpportunityRow({
+    const defaultRows: FullCsvOpportunityRow[] = [
+      buildFullCsvOpportunityRow({
         id: '510dc787-4e71-46d5-bdf2-28676e5ecfdf',
         name: 'WeKnow POC',
         entityName: 'WEKNOW',
@@ -80,7 +140,7 @@ describe('ImportCsvCommand', () => {
         personId: 'a627b96e-25b5-48fb-bb6f-d42b443f8f81',
         stage: 'GAGNE',
       }),
-      buildCsvOpportunityRow({
+      buildFullCsvOpportunityRow({
         id: 'b45bba5c-2308-4c58-b3ef-0c31c5f808d7',
         name: 'Lockup APP',
         entityName: 'DEVBYSTEP',
@@ -90,7 +150,7 @@ describe('ImportCsvCommand', () => {
         personId: '77f10d29-0fd0-4dc3-af0f-b2914ad1fa65',
         stage: 'PROPOSITION_ENVOYEE',
       }),
-      buildCsvOpportunityRow({
+      buildFullCsvOpportunityRow({
         entityName: 'UNKNOWN',
       }),
     ];
@@ -114,9 +174,6 @@ describe('ImportCsvCommand', () => {
           isCustom: false,
         }),
       ),
-    };
-    const importCsvOpportunitiesParserService = {
-      readCsvOpportunities: jest.fn().mockResolvedValue(resolvedRows),
     };
     const queryRunner = buildQueryRunner();
     const dataSource = {
@@ -157,10 +214,19 @@ describe('ImportCsvCommand', () => {
         },
       ),
     };
+    const internalEntityConfigurationService = {
+      getInternalEntitySeeds: jest
+        .fn()
+        .mockReturnValue(Object.values(INTERNAL_ENTITY_SEEDS)),
+      resolveInternalEntityId: jest.fn(
+        (entityName: string | null) =>
+          INTERNAL_ENTITY_SEEDS[entityName ?? '']?.id ?? null,
+      ),
+    };
     const command = new ImportCsvCommand(
       {} as WorkspaceIteratorService,
       objectMetadataService as unknown as ObjectMetadataService,
-      importCsvOpportunitiesParserService as unknown as ImportCsvOpportunitiesParserService,
+      internalEntityConfigurationService as unknown as InternalEntityConfigurationService,
     );
     const logger = setCommandLogger(command);
 
@@ -178,6 +244,15 @@ describe('ImportCsvCommand', () => {
     };
   };
 
+  const mockCsvRows = (rows: FullCsvOpportunityRow[]) => {
+    const csvContent = buildFixtureCsvContent(rows);
+
+    mockedStat.mockResolvedValue({
+      size: csvContent.length,
+    } as Awaited<ReturnType<typeof stat>>);
+    mockedReadFile.mockResolvedValue(csvContent);
+  };
+
   it('should build contiguous placeholders without inventing company or person labels', async () => {
     const {
       command,
@@ -191,6 +266,8 @@ describe('ImportCsvCommand', () => {
       row2,
       workspaceId,
     } = buildCommandContext();
+
+    mockCsvRows([row1, row2, ignoredRow]);
 
     await command.runOnWorkspace({
       workspaceId,
@@ -292,9 +369,113 @@ describe('ImportCsvCommand', () => {
   });
 
   it('should stay coherent with the real opportunity CSV fixture', async () => {
-    const csvRows = buildOpportunityCsvFixtureRows();
+    const csvRows: FullCsvOpportunityRow[] = [
+      buildFullCsvOpportunityRow({
+        id: '510dc787-4e71-46d5-bdf2-28676e5ecfdf',
+        name: 'WeKnow POC',
+        entityName: 'WEKNOW',
+        amount: 6000,
+        currency: 'EUR',
+        companyId: '003f2bd8-d8a5-4efd-b4af-4fd094214bb3',
+        personId: 'a627b96e-25b5-48fb-bb6f-d42b443f8f81',
+        stage: 'GAGNE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: '497ff55a-3288-4c04-b07a-6236dfb0e9db',
+        name: 'WeKnow',
+        entityName: 'WEKNOW',
+        amount: 17480,
+        currency: 'EUR',
+        companyId: '4f4a99a1-c23a-42fc-ade9-82d5b8e4abf0',
+        personId: null,
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: '3acd130d-2e00-407c-9dcd-7ea6aa2a1da6',
+        name: 'WeKnow',
+        entityName: 'WEKNOW',
+        amount: 23880,
+        currency: 'EUR',
+        companyId: '7e52732e-b8a4-47b3-bccd-6474f8512c32',
+        personId: '83dfa94d-f251-4933-8c88-4ebe6e2fd34d',
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: 'b45bba5c-2308-4c58-b3ef-0c31c5f808d7',
+        name: 'Lockup APP',
+        entityName: 'DEVBYSTEP',
+        amount: 11400,
+        currency: 'EUR',
+        companyId: '600d1bd7-89ea-4d8f-8e80-b2ae04ef8946',
+        personId: '77f10d29-0fd0-4dc3-af0f-b2914ad1fa65',
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: 'f0688e4b-e8f1-4e79-9830-eb8a0bdeeff0',
+        name: 'Atelier IA',
+        entityName: 'ALLSENSIA',
+        amount: 1500,
+        currency: 'EUR',
+        companyId: '2e36a7cf-2fc1-4d38-aa23-1cf81293ac2a',
+        personId: null,
+        stage: 'GAGNE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: 'c191eba1-4707-41f0-9ff4-165aa15049b3',
+        name: 'WeKnow',
+        entityName: 'WEKNOW',
+        amount: 13080,
+        currency: 'EUR',
+        companyId: 'c3ee4ed3-f272-436c-a953-352c68e213c2',
+        personId: 'ead6a76c-a7eb-460a-b607-9380f83c3b9f',
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: '3a9467a9-22b7-48e6-9937-472d29317580',
+        name: 'WeKnow',
+        entityName: 'WEKNOW',
+        amount: 28800,
+        currency: 'EUR',
+        companyId: 'a38a99f8-3f45-4d76-b64d-af303792f187',
+        personId: null,
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: '3d57ac11-62f1-421c-a5f7-aa5559aa58f3',
+        name: 'WeKnow',
+        entityName: 'WEKNOW',
+        amount: 23280,
+        currency: 'EUR',
+        companyId: '25b70fbe-0897-4a9a-b6bc-ffc9c32082d5',
+        personId: null,
+        stage: 'PROPOSITION_ENVOYEE',
+      }),
+      buildFullCsvOpportunityRow({
+        id: 'bf23a382-02e3-4108-82b5-04fd6e243a05',
+        name: 'WeKnow POC',
+        entityName: 'WEKNOW',
+        amount: 0,
+        currency: 'EUR',
+        companyId: '0da4097e-638a-4fa0-94a7-e507c1486322',
+        personId: null,
+        stage: 'PROPOSITION_A_TRAITER',
+      }),
+      buildFullCsvOpportunityRow({
+        id: '4c615043-745c-4456-8fa9-be7194d8d006',
+        name: 'WeKnow Bilbao',
+        entityName: 'WEKNOW',
+        amount: 0,
+        currency: 'EUR',
+        companyId: 'a9711843-4577-4737-b144-3e18626b502b',
+        personId: null,
+        stage: 'RDV_PLANIFIE',
+      }),
+    ];
+
     const { command, dataSource, dataSourceMock, logger, workspaceId } =
       buildCommandContext(csvRows);
+
+    mockCsvRows(csvRows);
 
     await command.runOnWorkspace({
       workspaceId,

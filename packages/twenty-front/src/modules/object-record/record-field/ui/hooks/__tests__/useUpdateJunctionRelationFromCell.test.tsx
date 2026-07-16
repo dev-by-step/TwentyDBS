@@ -380,4 +380,141 @@ describe('useUpdateJunctionRelationFromCell', () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  it('should delete the junction record when target object is not resolved (join column only)', async () => {
+    const store = createStore();
+    const deferredDelete = createDeferred<void>();
+
+    mockDeleteJunctionRecord.mockReturnValueOnce(deferredDelete.promise);
+
+    const junctionRecordId = 'existing-junction-id';
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [
+        {
+          id: junctionRecordId,
+          __typename: 'PersonInternalEntity',
+          personId: recordId,
+          internalEntityId: targetRecordId,
+        },
+      ],
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
+
+    let updatePromise: Promise<void> | undefined;
+
+    act(() => {
+      updatePromise = result.current.updateJunctionRelationFromCell({
+        morphItem: {
+          recordId: targetRecordId,
+          objectMetadataId: 'internal-entity-metadata-id',
+          isSelected: false,
+          isMatchingSearchFilter: true,
+        } as any,
+      });
+    });
+
+    expect(mockDeleteJunctionRecord).toHaveBeenCalledWith(junctionRecordId);
+
+    expect(
+      store.get(recordStoreFamilyState.atomFamily(recordId)),
+    ).toMatchObject({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [
+        {
+          id: junctionRecordId,
+          __typename: 'PersonInternalEntity',
+          personId: recordId,
+          internalEntityId: targetRecordId,
+        },
+      ],
+    });
+
+    await act(async () => {
+      deferredDelete.resolve(undefined);
+      await updatePromise;
+    });
+
+    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [],
+    });
+  });
+
+  it('should keep the source record unchanged when the junction deletion fails', async () => {
+    const store = createStore();
+    const mutationError = new Error('delete junction failed');
+    const junctionRecordId = 'existing-junction-id';
+    const existingRecord = {
+      id: junctionRecordId,
+      __typename: 'PersonInternalEntity',
+      personId: recordId,
+      internalEntityId: targetRecordId,
+    };
+
+    mockDeleteJunctionRecord.mockRejectedValueOnce(mutationError);
+
+    store.set(recordStoreFamilyState.atomFamily(recordId), {
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [existingRecord],
+    });
+
+    const { result } = renderHook(
+      () =>
+        useUpdateJunctionRelationFromCell({
+          fieldMetadataItem: { settings: {} } as any,
+          fieldDefinition: {
+            metadata: {
+              fieldName,
+              objectMetadataNameSingular: 'person',
+              relationObjectMetadataId: 'junction-metadata-id',
+              relationObjectMetadataNameSingular: 'personInternalEntity',
+            },
+          } as any,
+          recordId,
+        }),
+      { wrapper: getWrapper(store) },
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.updateJunctionRelationFromCell({
+          morphItem: {
+            recordId: targetRecordId,
+            objectMetadataId: 'internal-entity-metadata-id',
+            isSelected: false,
+            isMatchingSearchFilter: true,
+          } as any,
+        }),
+      ).rejects.toThrow('delete junction failed');
+    });
+
+    expect(mockDeleteJunctionRecord).toHaveBeenCalledWith(junctionRecordId);
+    expect(store.get(recordStoreFamilyState.atomFamily(recordId))).toEqual({
+      id: recordId,
+      __typename: 'Person',
+      [fieldName]: [existingRecord],
+    });
+  });
 });

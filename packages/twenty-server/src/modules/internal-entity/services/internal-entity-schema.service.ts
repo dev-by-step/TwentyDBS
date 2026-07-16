@@ -54,8 +54,8 @@ export class InternalEntitySchemaService {
       workspaceId,
       nameSingular: 'internalEntity',
       namePlural: 'internalEntities',
-      labelSingular: 'Internal Entity',
-      labelPlural: 'Internal Entities',
+      labelSingular: 'Entité interne',
+      labelPlural: 'Entités internes',
       icon: 'IconBuilding',
     });
 
@@ -161,7 +161,7 @@ export class InternalEntitySchemaService {
       workspaceId,
       objectMetadataId: personMetadata.id,
       name: 'internalEntities',
-      label: 'Internal Entities',
+      label: 'Entités internes',
       icon: 'IconBuilding',
       relationType: RelationType.ONE_TO_MANY,
       targetFieldLabel: 'Person',
@@ -185,7 +185,7 @@ export class InternalEntitySchemaService {
       workspaceId,
       objectMetadataId: companyMetadata.id,
       name: 'internalEntities',
-      label: 'Internal Entities',
+      label: 'Entités internes',
       icon: 'IconBuilding',
       relationType: RelationType.ONE_TO_MANY,
       targetFieldLabel: 'Company',
@@ -209,7 +209,7 @@ export class InternalEntitySchemaService {
       workspaceId,
       objectMetadataId: workspaceMemberMetadata.id,
       name: 'internalEntities',
-      label: 'Internal Entities',
+      label: 'Entités internes',
       icon: 'IconBuilding',
       relationType: RelationType.ONE_TO_MANY,
       targetFieldLabel: 'Workspace Member',
@@ -415,7 +415,7 @@ export class InternalEntitySchemaService {
       workspaceId,
       objectMetadataId: opportunityMetadata.id,
       name: 'internalEntity',
-      label: 'Internal Entity',
+      label: 'Entité interne',
       icon: 'IconBuilding',
       relationType: RelationType.MANY_TO_ONE,
       targetFieldLabel: 'Opportunities',
@@ -559,6 +559,24 @@ export class InternalEntitySchemaService {
     );
 
     if (isDefined(existing)) {
+      if (
+        existing.labelSingular !== labelSingular ||
+        existing.labelPlural !== labelPlural ||
+        existing.icon !== icon
+      ) {
+        return this.objectMetadataService.updateOneObject({
+          updateObjectInput: {
+            id: existing.id,
+            update: {
+              labelSingular,
+              labelPlural,
+              icon,
+            },
+          },
+          workspaceId,
+        });
+      }
+
       return existing;
     }
 
@@ -625,6 +643,18 @@ export class InternalEntitySchemaService {
     );
 
     if (isDefined(existing)) {
+      if (existing.label !== label || existing.icon !== icon) {
+        await this.fieldMetadataService.updateOneField({
+          updateFieldInput: {
+            id: existing.id,
+            label,
+            icon,
+          },
+          workspaceId,
+          isSystemBuild: true,
+        });
+      }
+
       return;
     }
 
@@ -675,6 +705,17 @@ export class InternalEntitySchemaService {
     );
 
     if (isDefined(existing)) {
+      if (existing.label !== label || existing.icon !== icon) {
+        await this.fieldMetadataService.updateOneField({
+          updateFieldInput: {
+            id: existing.id,
+            label,
+            icon,
+          },
+          workspaceId,
+        });
+      }
+
       return;
     }
 

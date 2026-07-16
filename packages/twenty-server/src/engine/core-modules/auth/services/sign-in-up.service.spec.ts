@@ -1,11 +1,11 @@
-import {
-  AuthException,
-  AuthExceptionCode,
-} from 'src/engine/core-modules/auth/auth.exception';
+import { AuthExceptionCode } from 'src/engine/core-modules/auth/auth.exception';
 import { type SignInUpNewUserPayload } from 'src/engine/core-modules/auth/types/signInUp.type';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 
 import { SignInUpService } from './sign-in-up.service';
+
+const BOOTSTRAP_ADMIN_EMAILS_FOR_TESTS = 'aline@weknow.dev,aline@devbystep.fr';
+const originalBootstrapAdminEmails = process.env.BOOTSTRAP_ADMIN_EMAILS;
 
 const mockPartialUserPayload: SignInUpNewUserPayload = {
   email: 'first.user@weknow.dev',
@@ -47,6 +47,10 @@ const createSignInUpServiceForTests = () => {
     IS_MULTIWORKSPACE_ENABLED: true,
     IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS: false,
     SERVER_URL: 'http://localhost:3000',
+  };
+
+  const mockWorkspaceService = {
+    activateWorkspace: jest.fn(),
   };
 
   const mockTwentyConfigService = {
@@ -116,9 +120,7 @@ const createSignInUpServiceForTests = () => {
     {
       isValid: jest.fn().mockReturnValue(false),
     } as any,
-    {
-      activateWorkspace: jest.fn(),
-    } as any,
+    mockWorkspaceService as any,
     {
       createQueryRunner: jest.fn(() => queryRunnerMock),
     } as any,
@@ -129,8 +131,23 @@ const createSignInUpServiceForTests = () => {
     mockUserRepository,
     mockWorkspaceRepository,
     mockConfigurationValues,
+    mockWorkspaceService,
   };
 };
+
+beforeEach(() => {
+  process.env.BOOTSTRAP_ADMIN_EMAILS = BOOTSTRAP_ADMIN_EMAILS_FOR_TESTS;
+});
+
+afterEach(() => {
+  if (originalBootstrapAdminEmails === undefined) {
+    delete process.env.BOOTSTRAP_ADMIN_EMAILS;
+
+    return;
+  }
+
+  process.env.BOOTSTRAP_ADMIN_EMAILS = originalBootstrapAdminEmails;
+});
 
 describe('SignInUpService workspace-creation policy', () => {
   it('grants bootstrap owner server permissions to the designated admin email', async () => {
@@ -283,6 +300,60 @@ describe('SignInUpService workspace-creation policy', () => {
     });
   });
 
+  it('throws SIGNUP_DISABLED when auto-signing up without workspace in single-workspace mode after bootstrap', async () => {
+    const { service, mockWorkspaceRepository, mockConfigurationValues } =
+      createSignInUpServiceForTests();
+
+    mockConfigurationValues.IS_MULTIWORKSPACE_ENABLED = false;
+    mockWorkspaceRepository.count.mockResolvedValue(1);
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(mockPartialUserPayload, {
+        provider: AuthProviderEnum.Password,
+        password: 'Hunter2!safe',
+      } as any),
+    ).rejects.toMatchObject({
+      code: AuthExceptionCode.SIGNUP_DISABLED,
+    });
+  });
+
+  it('throws when the new workspace auto-activation fails', async () => {
+    const {
+      service,
+      mockWorkspaceRepository,
+      mockUserRepository,
+      mockWorkspaceService,
+    } = createSignInUpServiceForTests();
+
+    const activationError = new Error('activation failed');
+
+    mockWorkspaceRepository.count.mockResolvedValue(0);
+    mockUserRepository.count.mockResolvedValue(0);
+    mockWorkspaceService.activateWorkspace.mockRejectedValueOnce(
+      activationError,
+    );
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(
+        {
+          ...mockPartialUserPayload,
+          email: 'aline@devbystep.fr',
+        },
+        {
+          provider: AuthProviderEnum.Password,
+          password: 'Hunter2!safe',
+        } as any,
+      ),
+    ).rejects.toThrow(activationError);
+
+    expect(mockWorkspaceService.activateWorkspace).toHaveBeenCalled();
+  });
 });
 
 describe('SignInUpService email-domain restriction', () => {
@@ -324,7 +395,10 @@ describe('SignInUpService email-domain restriction', () => {
           ...mockPartialUserPayload,
           email: 'newcomer@weknow.dev',
         },
-        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+        {
+          provider: AuthProviderEnum.Password,
+          password: 'Hunter2!safe',
+        } as any,
       ),
     ).resolves.toBeDefined();
 
@@ -335,7 +409,7 @@ describe('SignInUpService email-domain restriction', () => {
     );
   });
 
-  it('rejects sign-up when domain does not match the existing super admin (different bootstrap domain)', async () => {
+  it('allows sign-up from another authorized bootstrap domain after the first super admin exists', async () => {
     const { service, mockUserRepository, mockWorkspaceRepository } =
       createSignInUpServiceForTests();
 
@@ -356,11 +430,18 @@ describe('SignInUpService email-domain restriction', () => {
           ...mockPartialUserPayload,
           email: 'someone@devbystep.fr',
         },
-        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+        {
+          provider: AuthProviderEnum.Password,
+          password: 'Hunter2!safe',
+        } as any,
       ),
-    ).rejects.toMatchObject({
-      code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
-    });
+    ).resolves.toBeDefined();
+
+    expect(mockUserRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'someone@devbystep.fr',
+      }),
+    );
   });
 
   it('rejects first sign-up when email is not a designated bootstrap admin', async () => {
@@ -376,7 +457,10 @@ describe('SignInUpService email-domain restriction', () => {
           ...mockPartialUserPayload,
           email: 'random@some-external.dev',
         },
-        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+        {
+          provider: AuthProviderEnum.Password,
+          password: 'Hunter2!safe',
+        } as any,
       ),
     ).rejects.toMatchObject({
       code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
@@ -397,9 +481,11 @@ describe('SignInUpService email-domain restriction', () => {
     jest
       .spyOn((service as any).userService, 'findUserByEmail')
       .mockResolvedValue(null);
-    (service as any).workspaceInvitationService.findInvitationsByEmail.mockResolvedValueOnce(
-      [{ id: 'invite-token', context: { email: 'pierre@external.com' } }],
-    );
+    (
+      service as any
+    ).workspaceInvitationService.findInvitationsByEmail.mockResolvedValueOnce([
+      { id: 'invite-token', context: { email: 'pierre@external.com' } },
+    ]);
 
     await expect(
       service.signUpWithoutWorkspace(
@@ -407,7 +493,10 @@ describe('SignInUpService email-domain restriction', () => {
           ...mockPartialUserPayload,
           email: 'pierre@external.com',
         },
-        { provider: AuthProviderEnum.Password, password: 'Hunter2!safe' } as any,
+        {
+          provider: AuthProviderEnum.Password,
+          password: 'Hunter2!safe',
+        } as any,
       ),
     ).resolves.toBeDefined();
 

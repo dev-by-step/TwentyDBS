@@ -5,10 +5,6 @@ import {
   buildRawCsvOpportunityRow,
 } from 'src/modules/internal-entity/__tests__/factories/raw-csv-opportunity-row.factory';
 import {
-  buildCompanyRecord,
-  buildPersonRecord,
-} from 'src/modules/internal-entity/__tests__/factories/workspace-record.factory';
-import {
   ImportCsvOpportunitiesParserService,
   OpportunityCsvNotFoundError,
 } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
@@ -40,24 +36,14 @@ describe('ImportCsvOpportunitiesParserService', () => {
   };
 
   it('should parse and validate CSV opportunities', async () => {
-    const company = buildCompanyRecord();
-    const person = buildPersonRecord();
     const row1 = buildRawCsvOpportunityRow({
       Nom: 'Deal A',
       Société: JSON.stringify(['WEKNOW']),
-      'Montant / Amount': '1200',
-      'Montant / Currency': 'USD',
-      'Entreprise Id': company.id,
-      'Point de contact Id': person.id,
       Étape: 'NEW',
     });
     const row2 = buildRawCsvOpportunityRow({
       Nom: 'Deal B',
       Société: JSON.stringify([' DEVBYSTEP ']),
-      'Montant / Amount': '',
-      'Montant / Currency': 'EUR',
-      'Entreprise Id': '',
-      'Point de contact Id': '',
       Étape: 'QUALIFIED',
     });
 
@@ -72,21 +58,11 @@ describe('ImportCsvOpportunitiesParserService', () => {
         id: row1.Id,
         name: 'Deal A',
         entityName: 'WEKNOW',
-        amount: 1200,
-        currency: 'USD',
-        companyId: row1['Entreprise Id'],
-        personId: row1['Point de contact Id'],
-        stage: 'NEW',
       },
       {
         id: row2.Id,
         name: 'Deal B',
         entityName: 'DEVBYSTEP',
-        amount: 0,
-        currency: 'EUR',
-        companyId: null,
-        personId: null,
-        stage: 'QUALIFIED',
       },
     ]);
   });
@@ -98,7 +74,7 @@ describe('ImportCsvOpportunitiesParserService', () => {
 
     mockCsvFile(
       buildRawCsvOpportunityCsv({
-        columns: ['Id', 'Nom', 'Étape'],
+        columns: ['Id', 'Nom'],
         rows: [rawOpportunityRow],
       }),
     );
@@ -116,8 +92,6 @@ describe('ImportCsvOpportunitiesParserService', () => {
             Id: 'not-a-uuid',
             Nom: 'Deal A',
             Société: JSON.stringify(['WEKNOW']),
-            'Montant / Amount': '1200',
-            'Montant / Currency': 'EUR',
             Étape: 'NEW',
           }),
         ],
@@ -146,6 +120,60 @@ describe('ImportCsvOpportunitiesParserService', () => {
 
     await expect(service.readCsvOpportunities()).rejects.toThrow(
       `Id opportunité dupliqué dans le CSV: ${row.Id}`,
+    );
+  });
+
+  it('should reject a non-JSON Société value', async () => {
+    mockCsvFile(
+      buildRawCsvOpportunityCsv({
+        rows: [
+          buildRawCsvOpportunityRow({
+            Nom: 'Deal A',
+            Société: 'WEKNOW',
+            Étape: 'NEW',
+          }),
+        ],
+      }),
+    );
+
+    await expect(service.readCsvOpportunities()).rejects.toThrow(
+      'Société ligne 2 doit être un tableau JSON valide',
+    );
+  });
+
+  it('should reject an empty JSON array in Société', async () => {
+    mockCsvFile(
+      buildRawCsvOpportunityCsv({
+        rows: [
+          buildRawCsvOpportunityRow({
+            Nom: 'Deal A',
+            Société: JSON.stringify([]),
+            Étape: 'NEW',
+          }),
+        ],
+      }),
+    );
+
+    await expect(service.readCsvOpportunities()).rejects.toThrow(
+      'Société ligne 2 doit être un tableau JSON non vide',
+    );
+  });
+
+  it('should reject a Société array whose first entry is not a non-empty string', async () => {
+    mockCsvFile(
+      buildRawCsvOpportunityCsv({
+        rows: [
+          buildRawCsvOpportunityRow({
+            Nom: 'Deal A',
+            Société: JSON.stringify([123]),
+            Étape: 'NEW',
+          }),
+        ],
+      }),
+    );
+
+    await expect(service.readCsvOpportunities()).rejects.toThrow(
+      'Société ligne 2 doit contenir une chaîne non vide en première position',
     );
   });
 

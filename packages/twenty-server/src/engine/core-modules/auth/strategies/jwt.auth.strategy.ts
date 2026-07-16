@@ -7,7 +7,7 @@ import { Strategy } from 'passport-jwt';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
-import { IsNull, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import {
@@ -28,7 +28,6 @@ import {
 import { type FlatUserWorkspace } from 'src/engine/core-modules/user-workspace/types/flat-user-workspace.type';
 import { CoreEntityCacheService } from 'src/engine/core-entity-cache/services/core-entity-cache.service';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
-import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -44,7 +43,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly permissionsService: PermissionsService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly coreEntityCacheService: CoreEntityCacheService,
-    private readonly twentyConfigService: TwentyConfigService,
   ) {
     const jwtFromRequestFunction = jwtWrapperService.extractJwtFromRequest();
     // @ts-expect-error legacy noImplicitAny
@@ -132,19 +130,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
       payload.workspaceId,
     );
 
-    if (!isDefined(workspace) && isDefined(userId)) {
-      const fallbackUserWorkspace =
-        await this.findSingleWorkspaceUserWorkspace(userId);
-
-      if (isDefined(fallbackUserWorkspace)) {
-        userWorkspaceId = fallbackUserWorkspace.id;
-        workspace = await this.coreEntityCacheService.get(
-          'workspaceEntity',
-          fallbackUserWorkspace.workspaceId,
-        );
-      }
-    }
-
     if (!isDefined(workspace)) {
       throw new AuthException(
         'Workspace not found',
@@ -174,31 +159,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
       userId,
       userWorkspaceId,
     });
-
-    if (!isDefined(userContext)) {
-      const fallbackUserWorkspace =
-        await this.findSingleWorkspaceUserWorkspace(userId);
-
-      if (isDefined(fallbackUserWorkspace)) {
-        userWorkspaceId = fallbackUserWorkspace.id;
-        workspace = await this.coreEntityCacheService.get(
-          'workspaceEntity',
-          fallbackUserWorkspace.workspaceId,
-        );
-        assertIsDefinedOrThrow(
-          workspace,
-          new AuthException(
-            'Workspace not found',
-            AuthExceptionCode.WORKSPACE_NOT_FOUND,
-          ),
-        );
-        userContext = await this.resolveUserContext({
-          userId,
-          userWorkspaceId,
-          expectedWorkspaceId: workspace.id,
-        });
-      }
-    }
 
     assertIsDefinedOrThrow(
       userContext,
@@ -257,28 +217,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
       ...context,
       workspaceMember,
     };
-  }
-
-  private async findSingleWorkspaceUserWorkspace(
-    userId: string,
-  ): Promise<UserWorkspaceEntity | null> {
-    if (this.twentyConfigService.get('IS_MULTIWORKSPACE_ENABLED')) {
-      return null;
-    }
-
-    return this.userWorkspaceRepository.findOne({
-      where: {
-        userId,
-        deletedAt: IsNull(),
-        workspace: {
-          deletedAt: IsNull(),
-        },
-      },
-      relations: ['workspace'],
-      order: {
-        createdAt: 'ASC',
-      },
-    });
   }
 
   private async resolveUserContext(params: {

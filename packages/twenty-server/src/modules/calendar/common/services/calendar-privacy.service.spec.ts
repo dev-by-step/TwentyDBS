@@ -19,13 +19,19 @@ import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entit
 describe('CalendarPrivacyService', () => {
   let service: CalendarPrivacyService;
 
+  type ResolveContextResult = {
+    currentEntityId: string | null;
+    activeEntityId: string | null;
+    entityIds: string[];
+  };
+
   const defaultResolveContextImplementation = async ({
     fallbackEntityId,
     workspaceMemberId,
   }: {
     fallbackEntityId?: string | null;
     workspaceMemberId?: string;
-  }) => {
+  }): Promise<ResolveContextResult> => {
     const resolvedEntityId =
       fallbackEntityId ??
       (workspaceMemberId === 'workspace-member-1' ? 'same-entity-id' : null);
@@ -103,14 +109,44 @@ describe('CalendarPrivacyService', () => {
       .fn()
       .mockImplementation((fn: () => any, _authContext?: any) => fn()),
   };
-  const mockWorkspaceMemberInternalEntityService = {
+  const mockWorkspaceMemberInternalEntityService: {
+    resolveContext: jest.MockedFunction<
+      typeof defaultResolveContextImplementation
+    >;
+    resolveContextsByWorkspaceMemberIds: jest.Mock;
+  } = {
     resolveContext: jest.fn(defaultResolveContextImplementation),
+    resolveContextsByWorkspaceMemberIds: jest.fn(),
+  };
+
+  const defaultResolveContextsImplementation = async ({
+    workspaceMemberIds,
+    fallbackEntityIdByWorkspaceMemberId,
+  }: {
+    workspaceMemberIds: string[];
+    fallbackEntityIdByWorkspaceMemberId?: ReadonlyMap<string, string | null>;
+  }): Promise<Map<string, ResolveContextResult>> => {
+    const entries = await Promise.all(
+      workspaceMemberIds.map(async (workspaceMemberId) => [
+        workspaceMemberId,
+        await mockWorkspaceMemberInternalEntityService.resolveContext({
+          workspaceMemberId,
+          fallbackEntityId:
+            fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId),
+        }),
+      ]),
+    );
+
+    return new Map(entries as [string, ResolveContextResult][]);
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     mockWorkspaceMemberInternalEntityService.resolveContext.mockImplementation(
       defaultResolveContextImplementation,
+    );
+    mockWorkspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds.mockImplementation(
+      defaultResolveContextsImplementation,
     );
     mockWorkspaceMemberRepository.find.mockResolvedValue([]);
     mockCalendarEventEntityAudienceRepository.find.mockResolvedValue([]);
@@ -273,7 +309,7 @@ describe('CalendarPrivacyService', () => {
       {
         id: 'channel-1',
         connectedAccountId: 'connected-account-1',
-        visibleInternalEntityIds: ['same-entity-id'],
+        visibleInternalEntityIds: [' SAME-ENTITY-ID '],
       },
     ]);
     mockConnectedAccountRepository.find.mockResolvedValue([
@@ -298,7 +334,30 @@ describe('CalendarPrivacyService', () => {
     expect(result.get('calendar-event-1')).toBe(false);
   });
 
-  it('should use imported calendar entity visibility instead of owner-entity visibility when configured', async () => {
+  it('should normalize explicit entity audience ids before comparing with requester entities', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventEntityAudienceRepository.find.mockResolvedValue([
+      {
+        calendarEventId: 'calendar-event-1',
+        internalEntityId: ' SAME-ENTITY-ID ',
+      },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      currentUserEntityId: 'same-entity-id',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(false);
+  });
+
+  it('should keep owner-entity visibility when imported calendar visibility targets another entity', async () => {
     mockWorkspaceMemberInternalEntityService.resolveContext.mockResolvedValue({
       currentEntityId: 'same-entity-id',
       activeEntityId: 'same-entity-id',
@@ -339,7 +398,7 @@ describe('CalendarPrivacyService', () => {
       currentUserEntityId: 'same-entity-id',
     });
 
-    expect(result.get('calendar-event-1')).toBe(true);
+    expect(result.get('calendar-event-1')).toBe(false);
   });
 
   it('should resolve the requester entity from the current user when entityId is absent from the request context', async () => {
@@ -668,7 +727,7 @@ describe('CalendarPrivacyService', () => {
     expect(result.get('calendar-event-1')).toBe(true);
   });
 
-  it('should keep an owner-entity member unmasked even when an explicit audience targets other entities', async () => {
+  it('should mask an owner-entity member when an explicit event audience targets other entities', async () => {
     mockCalendarEventRepository.find.mockResolvedValue([
       {
         id: 'calendar-event-1',
@@ -706,7 +765,7 @@ describe('CalendarPrivacyService', () => {
       currentUserEntityId: 'same-entity-id',
     });
 
-    expect(result.get('calendar-event-1')).toBe(false);
+    expect(result.get('calendar-event-1')).toBe(true);
   });
 
   it('should keep a workspace public calendar event visible when requester entity cannot be resolved', async () => {

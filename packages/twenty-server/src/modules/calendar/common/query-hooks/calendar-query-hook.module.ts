@@ -22,7 +22,9 @@ import { CalendarEventUpdateManyPreQueryHook } from 'src/modules/calendar/common
 import { CalendarEventUpdateOnePreQueryHook } from 'src/modules/calendar/common/query-hooks/calendar-event/calendar-event-update-one.pre-query.hook';
 import { ApplyCalendarEventsVisibilityRestrictionsService } from 'src/modules/calendar/common/query-hooks/calendar-event/services/apply-calendar-events-visibility-restrictions.service';
 import { CalendarEventMutationPermissionService } from 'src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service';
+import { InternalEntityAuditLoggerModule } from 'src/modules/internal-entity/services/internal-entity-audit-logger.module';
 import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
+import { InternalEntityRoleModule } from 'src/modules/internal-entity/services/internal-entity-role.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity
     GlobalWorkspaceDataSourceModule,
     UserRoleModule,
     WorkspaceMemberInternalEntityModule,
+    InternalEntityAuditLoggerModule,
+    InternalEntityRoleModule,
     TypeOrmModule.forFeature([
       CalendarChannelEntity,
       ConnectedAccountEntity,

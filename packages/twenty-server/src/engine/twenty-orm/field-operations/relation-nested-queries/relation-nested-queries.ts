@@ -208,7 +208,7 @@ export class RelationNestedQueries {
             ].every(([field, value]) => record[field] === value),
           );
 
-          if (recordToConnect.length !== 1) {
+          if (recordToConnect.length > 1) {
             const { errorMessage, userFriendlyMessage } =
               formatConnectRecordNotFoundErrorMessage(
                 connectQueryConfig.connectFieldName,
@@ -225,9 +225,13 @@ export class RelationNestedQueries {
             );
           }
 
+          // A connect matching no record must not fail the whole batch (CSV
+          // imports can reference stale relation ids): leave the relation
+          // unset instead.
           entity = {
             ...entity,
-            [connectQueryConfig.relationFieldName]: recordToConnect[0]['id'],
+            [connectQueryConfig.relationFieldName]:
+              recordToConnect.length === 1 ? recordToConnect[0]['id'] : null,
             [connectQueryConfig.connectFieldName]: null,
           };
         }

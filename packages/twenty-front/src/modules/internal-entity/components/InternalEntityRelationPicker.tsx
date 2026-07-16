@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { InternalEntityDetachConfirmationModal } from '@/internal-entity/components/InternalEntityDetachConfirmationModal';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
@@ -14,6 +14,7 @@ type InternalEntityRelationPickerProps = {
   onChange: (morphItem: RecordPickerPickableMorphItem) => void;
   onClickOutside: () => void;
   onSubmit?: () => void;
+  selectedRecordIds?: readonly string[];
 };
 
 export const InternalEntityRelationPicker = ({
@@ -24,14 +25,31 @@ export const InternalEntityRelationPicker = ({
   onChange,
   onClickOutside,
   onSubmit,
+  selectedRecordIds,
 }: InternalEntityRelationPickerProps) => {
   const { closeModal, openModal } = useModal();
   const [pendingRemovalMorphItem, setPendingRemovalMorphItem] =
     useState<RecordPickerPickableMorphItem | null>(null);
+  const selectedRecordIdSet = useMemo(
+    () => new Set(selectedRecordIds ?? []),
+    [selectedRecordIds],
+  );
 
   const handleChange = (morphItem: RecordPickerPickableMorphItem) => {
     if (morphItem.isSelected) {
       onChange(morphItem);
+
+      return;
+    }
+
+    if (
+      selectedRecordIds !== undefined &&
+      !selectedRecordIdSet.has(morphItem.recordId)
+    ) {
+      onChange({
+        ...morphItem,
+        isSelected: true,
+      });
 
       return;
     }

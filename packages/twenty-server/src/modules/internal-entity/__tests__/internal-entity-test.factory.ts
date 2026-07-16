@@ -7,8 +7,7 @@ import {
 import { type CsvOpportunityRow } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 
 const DEFAULT_COLOR = '#2563EB';
-const DEFAULT_ENTITY_NAME =
-  DEFAULT_INTERNAL_ENTITY_SEEDS[0]?.name ?? 'WEKNOW';
+const DEFAULT_ENTITY_NAME = DEFAULT_INTERNAL_ENTITY_SEEDS[0]?.name ?? 'WEKNOW';
 
 export const buildInternalEntitySeed = (
   overrides: Partial<InternalEntitySeed> = {},
@@ -25,10 +24,5 @@ export const buildCsvOpportunityRow = (
   id: randomUUID(),
   name: `Deal ${randomUUID().slice(0, 8)}`,
   entityName: DEFAULT_ENTITY_NAME,
-  amount: 1200,
-  currency: 'EUR',
-  companyId: null,
-  personId: null,
-  stage: 'NEW',
   ...overrides,
 });

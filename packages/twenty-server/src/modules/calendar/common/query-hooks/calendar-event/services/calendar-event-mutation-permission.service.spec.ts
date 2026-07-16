@@ -3,7 +3,8 @@ import { FindOperator } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
-import { type UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { type InternalEntityAuditLoggerService } from 'src/modules/internal-entity/services/internal-entity-audit-logger.service';
+import { type InternalEntityRoleService } from 'src/modules/internal-entity/services/internal-entity-role.service';
 import { createContextAwareOrmManagerMock } from 'src/engine/twenty-orm/global-workspace-datasource/__test-utils__/create-context-aware-orm-manager-mock';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
@@ -69,25 +70,6 @@ const buildServiceContext = ({
     }),
   };
 
-  const userRoleService = {
-    getRolesByUserWorkspaces: jest.fn().mockResolvedValue(
-      new Map([
-        [
-          userWorkspaceId,
-          roleLabel
-            ? [
-                {
-                  label: roleLabel,
-                  universalIdentifier:
-                    roleUniversalIdentifier ?? faker.string.uuid(),
-                },
-              ]
-            : [],
-        ],
-      ]),
-    ),
-  };
-
   const calendarChannelRepository = {
     find: jest.fn(),
   };
@@ -105,7 +87,6 @@ const buildServiceContext = ({
 
   const service = new CalendarEventMutationPermissionService(
     globalWorkspaceOrmManager as unknown as GlobalWorkspaceOrmManager,
-    userRoleService as unknown as UserRoleService,
     calendarChannelRepository as any,
     connectedAccountRepository as any,
     userWorkspaceRepository as any,
@@ -143,6 +124,17 @@ const buildServiceContext = ({
           ),
       ),
     } as unknown as WorkspaceMemberInternalEntityService,
+    {
+      logPermissionDenied: jest.fn(),
+    } as unknown as InternalEntityAuditLoggerService,
+    {
+      isPlatformAdmin: jest.fn().mockResolvedValue(canAccessFullAdminPanel),
+      isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+      canManageEntityScopedRecords: jest.fn().mockResolvedValue(
+        canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+      ),
+      isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+    } as unknown as InternalEntityRoleService,
   );
 
   const authContext: WorkspaceAuthContext = {
@@ -804,6 +796,80 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
+  it('should validate calendar link creation when the channel is provided as a relation connect input', async () => {
+    const {
+      service,
+      authContext,
+      calendarChannelRepository,
+      connectedAccountRepository,
+      userWorkspaceRepository,
+      workspaceMemberRepository,
+      userRepository,
+      entityId,
+    } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    calendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-channel-1',
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    connectedAccountRepository.find.mockResolvedValue([
+      {
+        id: 'connected-account-1',
+        userWorkspaceId: 'owner-user-workspace-1',
+      },
+    ]);
+    userWorkspaceRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-workspace-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    workspaceMemberRepository.find.mockResolvedValue([
+      {
+        id: 'owner-workspace-member-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    userRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-1',
+        entityId,
+      },
+    ]);
+
+    await expect(
+      service.validateCreatePayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: {
+            calendarChannel: {
+              connect: {
+                where: {
+                  id: 'calendar-channel-1',
+                },
+              },
+            },
+          },
+        },
+      ),
+    ).resolves.toEqual({
+      data: {
+        calendarChannel: {
+          connect: {
+            where: {
+              id: 'calendar-channel-1',
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('should deny creating a calendar event to a standard user', async () => {
     const { service, authContext } = buildServiceContext();
 
@@ -919,6 +985,77 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
+  it('should deny creating an event participant on another entity event when the event is provided as a relation connect input', async () => {
+    const {
+      service,
+      authContext,
+      calendarEventRepository,
+      associationRepository,
+      calendarChannelRepository,
+      connectedAccountRepository,
+      userWorkspaceRepository,
+      workspaceMemberRepository,
+      userRepository,
+    } = buildServiceContext();
+
+    calendarEventRepository.findOne.mockResolvedValue({
+      createdBy: {
+        workspaceMemberId: faker.string.uuid(),
+      },
+    });
+    associationRepository.find.mockResolvedValue([
+      {
+        calendarChannelId: 'calendar-channel-1',
+      },
+    ]);
+    calendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-channel-1',
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    connectedAccountRepository.find.mockResolvedValue([
+      {
+        id: 'connected-account-1',
+        userWorkspaceId: 'owner-user-workspace-1',
+      },
+    ]);
+    userWorkspaceRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-workspace-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    workspaceMemberRepository.find.mockResolvedValue([
+      {
+        id: 'owner-workspace-member-1',
+        userId: 'owner-user-1',
+      },
+    ]);
+    userRepository.find.mockResolvedValue([
+      {
+        id: 'owner-user-1',
+        entityId: faker.string.uuid(),
+      },
+    ]);
+
+    await expect(
+      service.validateCreatePayload(authContext, 'calendarEventParticipant', {
+        data: {
+          calendarEvent: {
+            connect: {
+              where: {
+                id: faker.string.uuid(),
+              },
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
   it('should deny bulk mutations to a standard user', async () => {
     const { service, authContext } = buildServiceContext();
 
@@ -1006,22 +1143,6 @@ describe('CalendarEventMutationPermissionService', () => {
         },
       });
 
-      const userRoleService = {
-        getRolesByUserWorkspaces: jest.fn().mockResolvedValue(
-          new Map([
-            [
-              userWorkspaceId,
-              [
-                {
-                  label: roleLabel,
-                  universalIdentifier: roleUniversalIdentifier,
-                },
-              ],
-            ],
-          ]),
-        ),
-      };
-
       const calendarChannelRepository = {
         find: jest
           .fn()
@@ -1066,14 +1187,27 @@ describe('CalendarEventMutationPermissionService', () => {
         ),
       };
 
+      const internalEntityAuditLoggerService = {
+        logPermissionDenied: jest.fn(),
+      };
+      const internalEntityRoleService = {
+        isPlatformAdmin: jest.fn().mockResolvedValue(canAccessFullAdminPanel),
+        isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+        canManageEntityScopedRecords: jest.fn().mockResolvedValue(
+          canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+        ),
+        isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+      };
+
       const service = new CalendarEventMutationPermissionService(
         manager as unknown as GlobalWorkspaceOrmManager,
-        userRoleService as unknown as UserRoleService,
         calendarChannelRepository as any,
         connectedAccountRepository as any,
         userWorkspaceRepository as any,
         userRepository as any,
         workspaceMemberInternalEntityService as unknown as WorkspaceMemberInternalEntityService,
+        internalEntityAuditLoggerService as unknown as InternalEntityAuditLoggerService,
+        internalEntityRoleService as unknown as InternalEntityRoleService,
       );
 
       const authContext: WorkspaceAuthContext = {
@@ -1207,6 +1341,66 @@ describe('CalendarEventMutationPermissionService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             userId: expect.any(FindOperator),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('validateCreateManyPayload', () => {
+    it('should deduplicate calendarChannelIds and validate them in a single batch', async () => {
+      const {
+        service,
+        authContext,
+        calendarChannelRepository,
+        connectedAccountRepository,
+        userWorkspaceRepository,
+        workspaceMemberRepository,
+        userRepository,
+        entityId,
+      } = buildServiceContext({
+        roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+      });
+
+      calendarChannelRepository.find.mockResolvedValue([
+        {
+          id: 'calendar-channel-1',
+          connectedAccountId: 'connected-account-1',
+        },
+      ]);
+      connectedAccountRepository.find.mockResolvedValue([
+        {
+          id: 'connected-account-1',
+          userWorkspaceId: 'owner-user-workspace-1',
+        },
+      ]);
+      userWorkspaceRepository.find.mockResolvedValue([
+        { id: 'owner-user-workspace-1', userId: 'owner-user-1' },
+      ]);
+      workspaceMemberRepository.find.mockResolvedValue([
+        { id: 'workspace-member-1', userId: 'owner-user-1' },
+      ]);
+      userRepository.find.mockResolvedValue([{ id: 'owner-user-1', entityId }]);
+
+      await service.validateCreateManyPayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: [
+            { calendarChannelId: 'calendar-channel-1' },
+            { calendarChannelId: 'calendar-channel-1' },
+            {
+              calendarChannel: { connect: { id: 'calendar-channel-1' } },
+            },
+          ],
+        },
+      );
+
+      expect(calendarChannelRepository.find).toHaveBeenCalledTimes(1);
+      expect(calendarChannelRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: expect.any(FindOperator),
           }),
         }),
       );

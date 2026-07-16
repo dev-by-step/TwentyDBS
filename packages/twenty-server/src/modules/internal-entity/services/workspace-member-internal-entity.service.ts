@@ -30,6 +30,16 @@ export type WorkspaceMemberManageableEntityAccess = {
 
 @Injectable()
 export class WorkspaceMemberInternalEntityService {
+  private static readonly CONTEXT_CACHE_TTL_MS = 30_000;
+
+  private readonly contextCache = new Map<
+    string,
+    {
+      value: WorkspaceMemberInternalEntityContext;
+      expiresAt: number;
+    }
+  >();
+
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly objectMetadataService: ObjectMetadataService,
@@ -95,11 +105,51 @@ export class WorkspaceMemberInternalEntityService {
       return new Map();
     }
 
+    const contexts = new Map<string, WorkspaceMemberInternalEntityContext>();
+    const missingWorkspaceMemberIds: string[] = [];
+
+    for (const workspaceMemberId of uniqueWorkspaceMemberIds) {
+      const fallbackEntityId = this.normalizeEntityId(
+        fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId) ?? null,
+      );
+      const cachedContext = this.getCachedContext({
+        workspaceId,
+        workspaceMemberId,
+        fallbackEntityId,
+      });
+
+      if (cachedContext != null) {
+        contexts.set(workspaceMemberId, cachedContext);
+      } else {
+        missingWorkspaceMemberIds.push(workspaceMemberId);
+      }
+    }
+
+    if (missingWorkspaceMemberIds.length === 0) {
+      return contexts;
+    }
+
     if (!(await this.hasWorkspaceMemberEntityMembershipObject(workspaceId))) {
-      return this.buildFallbackContexts(
-        uniqueWorkspaceMemberIds,
+      const fallbackContexts = this.buildFallbackContexts(
+        missingWorkspaceMemberIds,
         fallbackEntityIdByWorkspaceMemberId,
       );
+
+      for (const [workspaceMemberId, context] of fallbackContexts.entries()) {
+        const fallbackEntityId = this.normalizeEntityId(
+          fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId) ?? null,
+        );
+
+        this.setCachedContext({
+          workspaceId,
+          workspaceMemberId,
+          fallbackEntityId,
+          context,
+        });
+        contexts.set(workspaceMemberId, context);
+      }
+
+      return contexts;
     }
 
     const memberships =
@@ -114,7 +164,7 @@ export class WorkspaceMemberInternalEntityService {
 
           return membershipRepository.find({
             where: {
-              workspaceMemberId: In(uniqueWorkspaceMemberIds),
+              workspaceMemberId: In(missingWorkspaceMemberIds),
             },
           });
         },
@@ -135,7 +185,7 @@ export class WorkspaceMemberInternalEntityService {
       if (
         !isDefined(workspaceMemberId) ||
         !isDefined(internalEntityId) ||
-        !uniqueWorkspaceMemberIds.includes(workspaceMemberId)
+        !missingWorkspaceMemberIds.includes(workspaceMemberId)
       ) {
         continue;
       }
@@ -150,9 +200,7 @@ export class WorkspaceMemberInternalEntityService {
       entityIdsByWorkspaceMemberId.set(workspaceMemberId, entityIds);
     }
 
-    const contexts = new Map<string, WorkspaceMemberInternalEntityContext>();
-
-    for (const workspaceMemberId of uniqueWorkspaceMemberIds) {
+    for (const workspaceMemberId of missingWorkspaceMemberIds) {
       const fallbackEntityId = this.normalizeEntityId(
         fallbackEntityIdByWorkspaceMemberId?.get(workspaceMemberId) ?? null,
       );
@@ -164,7 +212,7 @@ export class WorkspaceMemberInternalEntityService {
         fallbackEntityId,
       });
 
-      contexts.set(workspaceMemberId, {
+      const context: WorkspaceMemberInternalEntityContext = {
         entityIds:
           entityIds.length > 0
             ? entityIds
@@ -173,7 +221,15 @@ export class WorkspaceMemberInternalEntityService {
               : [],
         currentEntityId,
         activeEntityId: currentEntityId,
+      };
+
+      this.setCachedContext({
+        workspaceId,
+        workspaceMemberId,
+        fallbackEntityId,
+        context,
       });
+      contexts.set(workspaceMemberId, context);
     }
 
     return contexts;
@@ -395,5 +451,70 @@ export class WorkspaceMemberInternalEntityService {
 
   private normalizeEntityId(entityId?: string | null) {
     return normalizeOptionalEntityId(entityId);
+  }
+
+  private buildContextCacheKey({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+  }: {
+    workspaceId: string;
+    workspaceMemberId: string;
+    fallbackEntityId?: string | null;
+  }): string {
+    return [workspaceId, workspaceMemberId, fallbackEntityId ?? ''].join(':');
+  }
+
+  private getCachedContext({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+  }: {
+    workspaceId: string;
+    workspaceMemberId: string;
+    fallbackEntityId?: string | null;
+  }): WorkspaceMemberInternalEntityContext | undefined {
+    const cacheKey = this.buildContextCacheKey({
+      workspaceId,
+      workspaceMemberId,
+      fallbackEntityId,
+    });
+    const cachedEntry = this.contextCache.get(cacheKey);
+
+    if (cachedEntry == null) {
+      return undefined;
+    }
+
+    if (Date.now() > cachedEntry.expiresAt) {
+      this.contextCache.delete(cacheKey);
+
+      return undefined;
+    }
+
+    return cachedEntry.value;
+  }
+
+  private setCachedContext({
+    workspaceId,
+    workspaceMemberId,
+    fallbackEntityId,
+    context,
+  }: {
+    workspaceId: string;
+    workspaceMemberId: string;
+    fallbackEntityId?: string | null;
+    context: WorkspaceMemberInternalEntityContext;
+  }): void {
+    const cacheKey = this.buildContextCacheKey({
+      workspaceId,
+      workspaceMemberId,
+      fallbackEntityId,
+    });
+
+    this.contextCache.set(cacheKey, {
+      value: context,
+      expiresAt:
+        Date.now() + WorkspaceMemberInternalEntityService.CONTEXT_CACHE_TTL_MS,
+    });
   }
 }

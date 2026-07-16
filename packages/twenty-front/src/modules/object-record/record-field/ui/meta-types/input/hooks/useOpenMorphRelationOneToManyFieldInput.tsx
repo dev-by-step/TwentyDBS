@@ -122,6 +122,7 @@ export const useOpenMorphRelationOneToManyFieldInput = () => {
         forceSearchFilter: '',
         forceSearchableObjectMetadataItems: objectMetadataItemArray,
         forcePickableMorphItems: pickableMorphItems,
+        replacePickableMorphItems: true,
       });
 
       pushFocusItemToFocusStack({

@@ -9,9 +9,11 @@ import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadat
 import { ImportCsvCommand } from 'src/modules/internal-entity/commands/import-csv.command';
 import { InitInternalEntitiesCommand } from 'src/modules/internal-entity/commands/init-internal-entities.command';
 import { ImportCsvOpportunitiesCommand } from 'src/modules/internal-entity/commands/import-csv-opportunities.command';
+import { InternalEntityAuditLoggerModule } from 'src/modules/internal-entity/services/internal-entity-audit-logger.module';
 import { InternalEntityConfigurationService } from 'src/modules/internal-entity/services/internal-entity-configuration.service';
 import { ImportCsvOpportunitiesParserService } from 'src/modules/internal-entity/services/import-csv-opportunities-parser.service';
 import { InternalEntitySchemaService } from 'src/modules/internal-entity/services/internal-entity-schema.service';
+import { InternalEntityRoleModule } from 'src/modules/internal-entity/services/internal-entity-role.module';
 import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
@@ -22,6 +24,8 @@ import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     RoleModule,
     WorkspaceMemberInternalEntityModule,
+    InternalEntityAuditLoggerModule,
+    InternalEntityRoleModule,
   ],
   providers: [
     ImportCsvCommand,
@@ -35,6 +39,8 @@ import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity
     InitInternalEntitiesCommand,
     InternalEntitySchemaService,
     WorkspaceMemberInternalEntityModule,
+    InternalEntityAuditLoggerModule,
+    InternalEntityRoleModule,
   ],
 })
 export class InternalEntityModule {}

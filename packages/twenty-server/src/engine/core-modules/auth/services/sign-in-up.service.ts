@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { msg } from '@lingui/core/macro';
@@ -16,8 +16,10 @@ import {
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { getEmailDomain } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email-domains.constant';
-import { isBootstrapAdminEmail } from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
-import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import {
+  isBootstrapAdminEmail,
+  isBootstrapAdminEmailDomain,
+} from 'src/engine/core-modules/auth/constants/bootstrap-admin-email.constant';
 import {
   PASSWORD_REGEX,
   compareHash,
@@ -77,8 +79,6 @@ export class SignInUpService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
-
-  private readonly logger = new Logger(SignInUpService.name);
 
   async computePartialUserFromUserPayload(
     newUserPayload: SignInUpNewUserPayload,
@@ -673,21 +673,11 @@ export class SignInUpService {
       ]);
     }
 
-    try {
-      await this.workspaceService.activateWorkspace(
-        createdUser as unknown as AuthContextUser,
-        createdWorkspace,
-        { displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME },
-      );
-    } catch (activationError) {
-      this.logger.error(
-        `Auto-activation failed for workspace ${createdWorkspace.id}: ${
-          activationError instanceof Error
-            ? activationError.message
-            : String(activationError)
-        }`,
-      );
-    }
+    await this.workspaceService.activateWorkspace(
+      createdUser,
+      createdWorkspace,
+      { displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME },
+    );
 
     return { user: createdUser, workspace: createdWorkspace };
   }
@@ -696,6 +686,8 @@ export class SignInUpService {
     newUserParams: SignInUpNewUserPayload,
     authParams: AuthProviderWithPasswordType['authParams'],
   ) {
+    await this.assertSignUpEnabled();
+
     const userExists = await this.userService.findUserByEmail(
       newUserParams.email,
     );
@@ -748,6 +740,10 @@ export class SignInUpService {
 
     if (superAdmin) {
       const superAdminDomain = getEmailDomain(superAdmin.email);
+
+      if (isBootstrapAdminEmailDomain(email)) {
+        return;
+      }
 
       if (
         candidateDomain !== null &&

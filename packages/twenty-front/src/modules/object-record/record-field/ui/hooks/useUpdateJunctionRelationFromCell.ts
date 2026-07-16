@@ -137,6 +137,7 @@ export const useUpdateJunctionRelationFromCell = ({
           junctionRecords: currentJunctionRecords,
           targetRecordId: morphItem.recordId,
           targetFieldName,
+          targetJoinColumnName,
         });
 
         if (!isDefined(junctionRecordToDelete)) {
@@ -180,6 +181,7 @@ export const useUpdateJunctionRelationFromCell = ({
           junctionRecords: currentJunctionRecords,
           targetRecordId: morphItem.recordId,
           targetFieldName,
+          targetJoinColumnName,
         });
 
         if (isDefined(existingJunctionRecord)) {
@@ -237,6 +239,7 @@ export const useUpdateJunctionRelationFromCell = ({
               junctionRecords: currentRecords as FieldRelationFromManyValue,
               targetRecordId: morphItem.recordId,
               targetFieldName,
+              targetJoinColumnName,
             });
             const updatedJunctionRecords = alreadyPresent
               ? currentRecords

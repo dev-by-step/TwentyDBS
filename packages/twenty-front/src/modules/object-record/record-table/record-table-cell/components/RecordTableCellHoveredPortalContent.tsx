@@ -48,6 +48,13 @@ const StyledRecordTableCellHoveredPortalContent = styled.div<{
   user-select: none;
 `;
 
+const StyledHoverDisplayCopy = styled.div`
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  width: 100%;
+`;
+
 export const RecordTableCellHoveredPortalContent = () => {
   const recordTableHoverPosition = useAtomComponentStateValue(
     recordTableHoverPositionComponentState,
@@ -86,9 +93,11 @@ export const RecordTableCellHoveredPortalContent = () => {
             <RecordTableCellFieldInput />
           </RecordTableCellEditMode>
         ) : (
-          <RecordTableCellDisplayMode>
-            <FieldDisplay />
-          </RecordTableCellDisplayMode>
+          <StyledHoverDisplayCopy aria-hidden="true">
+            <RecordTableCellDisplayMode>
+              <FieldDisplay />
+            </RecordTableCellDisplayMode>
+          </StyledHoverDisplayCopy>
         )}
       </FieldFocusStaticFocusedProvider>
       {showButton && <RecordTableCellEditButton />}

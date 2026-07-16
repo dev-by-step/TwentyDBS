@@ -20,6 +20,16 @@ import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-appl
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 export class UserRoleService {
+  private static readonly ROLES_CACHE_TTL_MS = 30_000;
+
+  private readonly rolesCache = new Map<
+    string,
+    {
+      roles: RoleEntity[];
+      expiresAt: number;
+    }
+  >();
+
   constructor(
     @InjectRepository(RoleTargetEntity)
     private readonly roleTargetRepository: Repository<RoleTargetEntity>,
@@ -97,13 +107,32 @@ export class UserRoleService {
     userWorkspaceIds: string[];
     workspaceId: string;
   }): Promise<Map<string, RoleEntity[]>> {
-    if (!userWorkspaceIds.length) {
+    const uniqueUserWorkspaceIds = [...new Set(userWorkspaceIds)];
+
+    if (uniqueUserWorkspaceIds.length === 0) {
       return new Map();
+    }
+
+    const rolesMap = new Map<string, RoleEntity[]>();
+    const missingUserWorkspaceIds: string[] = [];
+
+    for (const userWorkspaceId of uniqueUserWorkspaceIds) {
+      const cachedRoles = this.getCachedRoles({ workspaceId, userWorkspaceId });
+
+      if (cachedRoles != null) {
+        rolesMap.set(userWorkspaceId, cachedRoles);
+      } else {
+        missingUserWorkspaceIds.push(userWorkspaceId);
+      }
+    }
+
+    if (missingUserWorkspaceIds.length === 0) {
+      return rolesMap;
     }
 
     const allRoleTargets = await this.roleTargetRepository.find({
       where: {
-        userWorkspaceId: In(userWorkspaceIds),
+        userWorkspaceId: In(missingUserWorkspaceIds),
         workspaceId,
       },
       relations: {
@@ -113,13 +142,7 @@ export class UserRoleService {
       },
     });
 
-    if (!allRoleTargets.length) {
-      return new Map();
-    }
-
-    const rolesMap = new Map<string, RoleEntity[]>();
-
-    for (const userWorkspaceId of userWorkspaceIds) {
+    for (const userWorkspaceId of missingUserWorkspaceIds) {
       const roleTargetsOfUserWorkspace = allRoleTargets.filter(
         (roleTarget) => roleTarget.userWorkspaceId === userWorkspaceId,
       );
@@ -128,6 +151,11 @@ export class UserRoleService {
         .map((roleTarget) => roleTarget.role)
         .filter(isDefined);
 
+      this.setCachedRoles({
+        workspaceId,
+        userWorkspaceId,
+        roles: rolesOfUserWorkspace,
+      });
       rolesMap.set(userWorkspaceId, rolesOfUserWorkspace);
     }
 
@@ -312,5 +340,55 @@ export class UserRoleService {
         },
       );
     }
+  }
+
+  private buildRolesCacheKey({
+    workspaceId,
+    userWorkspaceId,
+  }: {
+    workspaceId: string;
+    userWorkspaceId: string;
+  }): string {
+    return `${workspaceId}:${userWorkspaceId}`;
+  }
+
+  private getCachedRoles({
+    workspaceId,
+    userWorkspaceId,
+  }: {
+    workspaceId: string;
+    userWorkspaceId: string;
+  }): RoleEntity[] | undefined {
+    const cacheKey = this.buildRolesCacheKey({ workspaceId, userWorkspaceId });
+    const cachedEntry = this.rolesCache.get(cacheKey);
+
+    if (cachedEntry == null) {
+      return undefined;
+    }
+
+    if (Date.now() > cachedEntry.expiresAt) {
+      this.rolesCache.delete(cacheKey);
+
+      return undefined;
+    }
+
+    return cachedEntry.roles;
+  }
+
+  private setCachedRoles({
+    workspaceId,
+    userWorkspaceId,
+    roles,
+  }: {
+    workspaceId: string;
+    userWorkspaceId: string;
+    roles: RoleEntity[];
+  }): void {
+    const cacheKey = this.buildRolesCacheKey({ workspaceId, userWorkspaceId });
+
+    this.rolesCache.set(cacheKey, {
+      roles,
+      expiresAt: Date.now() + UserRoleService.ROLES_CACHE_TTL_MS,
+    });
   }
 }

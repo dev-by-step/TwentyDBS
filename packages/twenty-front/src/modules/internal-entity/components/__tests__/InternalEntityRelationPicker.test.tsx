@@ -91,7 +91,9 @@ describe('InternalEntityRelationPicker', () => {
     });
   });
 
-  const renderPicker = () =>
+  const renderPicker = ({
+    selectedRecordIds,
+  }: { selectedRecordIds?: readonly string[] } = {}) =>
     render(
       <InternalEntityRelationPicker
         componentInstanceId="picker-instance-id"
@@ -99,6 +101,7 @@ describe('InternalEntityRelationPicker', () => {
         modalInstanceId={modalInstanceId}
         onChange={mockOnChange}
         onClickOutside={mockOnClickOutside}
+        selectedRecordIds={selectedRecordIds}
       />,
     );
 
@@ -123,7 +126,7 @@ describe('InternalEntityRelationPicker', () => {
   });
 
   it('should require confirmation before removing an entity', () => {
-    renderPicker();
+    renderPicker({ selectedRecordIds: ['internal-entity-1'] });
 
     fireEvent.click(screen.getByTestId('deselect-record'));
 
@@ -141,8 +144,22 @@ describe('InternalEntityRelationPicker', () => {
     expect(mockCloseModal).toHaveBeenCalledWith(modalInstanceId);
   });
 
+  it('should treat stale deselection as an add without opening the removal modal', () => {
+    renderPicker({ selectedRecordIds: [] });
+
+    fireEvent.click(screen.getByTestId('deselect-record'));
+
+    expect(mockOnChange).toHaveBeenCalledWith({
+      objectMetadataId: 'internal-entity-object-id',
+      recordId: 'internal-entity-1',
+      isMatchingSearchFilter: true,
+      isSelected: true,
+    });
+    expect(mockOpenModal).not.toHaveBeenCalled();
+  });
+
   it('should clear the pending removal when the modal closes', () => {
-    renderPicker();
+    renderPicker({ selectedRecordIds: ['internal-entity-1'] });
 
     fireEvent.click(screen.getByTestId('deselect-record'));
     fireEvent.click(screen.getByTestId('close-detach-modal'));

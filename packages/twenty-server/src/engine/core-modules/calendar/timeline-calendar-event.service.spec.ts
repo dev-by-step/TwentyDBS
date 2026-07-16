@@ -52,6 +52,7 @@ describe('TimelineCalendarEventService', () => {
 
   beforeEach(async () => {
     mockCalendarEventRepository = {
+      count: jest.fn().mockResolvedValue(1),
       find: jest.fn(),
       findAndCount: jest.fn(),
     };
@@ -434,16 +435,17 @@ describe('TimelineCalendarEventService', () => {
   it('should keep cross-entity group calendar events visible but masked', async () => {
     const currentWorkspaceMemberId = 'current-workspace-member-id';
 
-    mockCalendarEventRepository.find
-      .mockResolvedValueOnce([{ id: '1' }])
-      .mockResolvedValueOnce([
+    mockCalendarEventRepository.findAndCount.mockResolvedValue([
+      [
         {
           ...mockCalendarEvent,
           calendarChannelEventAssociations: [
             { calendarChannelId: 'channel-1' },
           ],
         },
-      ]);
+      ],
+      1,
+    ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
       {
         id: 'channel-1',
@@ -479,16 +481,12 @@ describe('TimelineCalendarEventService', () => {
   it('should hide masked events from my company calendar view', async () => {
     const currentWorkspaceMemberId = 'current-workspace-member-id';
 
-    mockCalendarEventRepository.find
-      .mockResolvedValueOnce([{ id: '1' }])
-      .mockResolvedValueOnce([
-        {
-          ...mockCalendarEvent,
-          calendarChannelEventAssociations: [
-            { calendarChannelId: 'channel-1' },
-          ],
-        },
-      ]);
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        ...mockCalendarEvent,
+        calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+      },
+    ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
       {
         id: 'channel-1',

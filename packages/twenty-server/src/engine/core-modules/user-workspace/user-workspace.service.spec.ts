@@ -29,6 +29,9 @@ import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 
+const BOOTSTRAP_ADMIN_EMAILS_FOR_TESTS = 'aline@weknow.dev,aline@devbystep.fr';
+const originalBootstrapAdminEmails = process.env.BOOTSTRAP_ADMIN_EMAILS;
+
 describe('UserWorkspaceService', () => {
   let service: UserWorkspaceService;
   let userWorkspaceRepository: Repository<UserWorkspaceEntity>;
@@ -41,6 +44,8 @@ describe('UserWorkspaceService', () => {
   let onboardingService: OnboardingService;
 
   beforeEach(async () => {
+    process.env.BOOTSTRAP_ADMIN_EMAILS = BOOTSTRAP_ADMIN_EMAILS_FOR_TESTS;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserWorkspaceService,
@@ -184,6 +189,16 @@ describe('UserWorkspaceService', () => {
 
     userRoleService = module.get<UserRoleService>(UserRoleService);
     onboardingService = module.get<OnboardingService>(OnboardingService);
+  });
+
+  afterEach(() => {
+    if (originalBootstrapAdminEmails === undefined) {
+      delete process.env.BOOTSTRAP_ADMIN_EMAILS;
+
+      return;
+    }
+
+    process.env.BOOTSTRAP_ADMIN_EMAILS = originalBootstrapAdminEmails;
   });
 
   it('should be defined', () => {

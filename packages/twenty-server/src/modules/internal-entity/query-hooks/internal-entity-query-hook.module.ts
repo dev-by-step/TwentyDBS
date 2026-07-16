@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
@@ -24,6 +26,9 @@ import { InternalEntitySourceTaggingCreateOnePostQueryHook } from 'src/modules/i
 import { InternalEntitySourceTaggingCreateOnePreQueryHook } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging-create-one.pre-query-hook';
 import { InternalEntitySourceTaggingService } from 'src/modules/internal-entity/query-hooks/internal-entity-source-tagging.service';
 import { InternalEntityAccessPolicyService } from 'src/modules/internal-entity/query-hooks/services/internal-entity-access-policy.service';
+import { InternalEntityScopeCacheService } from 'src/modules/internal-entity/query-hooks/services/internal-entity-scope-cache.service';
+import { InternalEntityAuditLoggerModule } from 'src/modules/internal-entity/services/internal-entity-audit-logger.module';
+import { InternalEntityRoleModule } from 'src/modules/internal-entity/services/internal-entity-role.module';
 import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity/services/workspace-member-internal-entity.module';
 
 @Module({
@@ -32,9 +37,13 @@ import { WorkspaceMemberInternalEntityModule } from 'src/modules/internal-entity
     ObjectMetadataModule,
     UserRoleModule,
     WorkspaceMemberInternalEntityModule,
+    InternalEntityRoleModule,
+    InternalEntityAuditLoggerModule,
+    TypeOrmModule.forFeature([UserEntity]),
   ],
   providers: [
     InternalEntityAccessPolicyService,
+    InternalEntityScopeCacheService,
     InternalEntityAccessCreateOnePreQueryHook,
     InternalEntityAccessCreateManyPreQueryHook,
     InternalEntityAccessFindManyPreQueryHook,

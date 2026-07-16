@@ -20,6 +20,10 @@ import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { BASE_INTERNAL_ENTITY_SETUP } from '@/onboarding/constants/baseInternalEntitySetup';
 import { COMPLETE_SUPERADMIN_WORKSPACE_SETUP } from '@/onboarding/graphql/mutations/completeSuperadminWorkspaceSetup';
 import {
+  getRecoverableDuplicateRecordId,
+  isDuplicateRecordError,
+} from '@/onboarding/utils/getRecoverableDuplicateRecordId';
+import {
   ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
   ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
 } from '@/onboarding/constants/superadminWorkspaceSetupUserVarKeys';
@@ -656,18 +660,42 @@ export const SuperadminWorkspaceSetup = () => {
 
     setIsSaving(true);
 
+    // FIX-29 : sur un workspace déjà seedé (ou un re-run de l'onboarding),
+    // l'entité de base peut déjà exister alors que le draft n'a pas d'id
+    // (lecture initiale vide : permissions, cache…). Le serveur est
+    // l'autorité : en cas de duplicate identifiant l'enregistrement en
+    // conflit, on le réutilise au lieu de bloquer tout le wizard.
+    const createOrReuseInternalEntity = async (
+      entityName: string,
+    ): Promise<Pick<InternalEntityRecord, 'id'>> => {
+      try {
+        return await createInternalEntity({
+          id: BASE_INTERNAL_ENTITY_SETUP.find(
+            (baseEntity) => baseEntity.name === entityName,
+          )?.id,
+          name: entityName,
+        });
+      } catch (error) {
+        const conflictingRecordId = getRecoverableDuplicateRecordId(
+          error,
+          INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
+        );
+
+        if (isDefined(conflictingRecordId)) {
+          return { id: conflictingRecordId };
+        }
+
+        throw error;
+      }
+    };
+
     try {
       const createdEntities = await Promise.all(
         normalizedDrafts
           .filter((entityDraft) => !isDefined(entityDraft.id))
           .map(async (entityDraft) => ({
             name: entityDraft.name,
-            record: await createInternalEntity({
-              id: BASE_INTERNAL_ENTITY_SETUP.find(
-                (b) => b.name === entityDraft.name,
-              )?.id,
-              name: entityDraft.name,
-            }),
+            record: await createOrReuseInternalEntity(entityDraft.name),
           })),
       );
 
@@ -720,12 +748,23 @@ export const SuperadminWorkspaceSetup = () => {
               entityState.isMember &&
               !existingMembershipByEntityId.has(entityState.id),
           )
-          .map((entityState) =>
-            createWorkspaceMemberEntityMembership({
-              workspaceMemberId: currentWorkspaceMember.id,
-              internalEntityId: entityState.id,
-            }),
-          ),
+          .map(async (entityState) => {
+            try {
+              await createWorkspaceMemberEntityMembership({
+                workspaceMemberId: currentWorkspaceMember.id,
+                internalEntityId: entityState.id,
+              });
+            } catch (error) {
+              // FIX-29 : membership déjà présente en base (index unique
+              // IMP-06) alors que la lecture initiale ne l'avait pas
+              // remontée — l'état désiré est déjà atteint, on continue.
+              if (isDuplicateRecordError(error)) {
+                return;
+              }
+
+              throw error;
+            }
+          }),
       );
 
       const membershipIdsToDelete = memberships

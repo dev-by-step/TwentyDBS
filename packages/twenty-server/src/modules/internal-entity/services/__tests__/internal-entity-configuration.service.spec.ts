@@ -56,6 +56,35 @@ describe('InternalEntityConfigurationService', () => {
     );
   });
 
+  it('should prefer TwentyConfigService over direct process env', () => {
+    const configuredInternalEntity = buildInternalEntitySeed({
+      name: 'CONFIG_SERVICE_ENTITY',
+      color: '#abcdef',
+    });
+    const processEnvInternalEntity = buildInternalEntitySeed({
+      name: 'PROCESS_ENV_ENTITY',
+      color: '#123456',
+    });
+
+    process.env[INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME] = JSON.stringify([
+      processEnvInternalEntity,
+    ]);
+
+    const service = new InternalEntityConfigurationService({
+      get: jest
+        .fn()
+        .mockReturnValue(JSON.stringify([configuredInternalEntity])),
+    } as never);
+
+    expect(service.getInternalEntitySeeds()).toStrictEqual([
+      {
+        ...configuredInternalEntity,
+        color: configuredInternalEntity.color.toUpperCase(),
+        id: configuredInternalEntity.id.toLowerCase(),
+      },
+    ]);
+  });
+
   it('should resolve seeds from object env override', () => {
     const customInternalEntity = buildInternalEntitySeed({
       name: 'OBJECT_CONFIG_ENTITY',

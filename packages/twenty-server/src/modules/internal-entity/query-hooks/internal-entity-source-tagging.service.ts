@@ -14,10 +14,19 @@ import {
   CommonQueryRunnerExceptionCode,
 } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
-import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  type UserWorkspaceAuthContext,
+  type WorkspaceAuthContext,
+} from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+  PermissionsExceptionMessage,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { GlobalWorkspaceDataSourceService } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.service';
 import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import {
   buildWorkspaceSqlTableName,
@@ -29,6 +38,7 @@ import {
   OPPORTUNITY_OBJECT_NAME,
 } from 'src/modules/internal-entity/query-hooks/constants/internal-entity-source-tagging.constants';
 import { type InternalEntitySourceTaggableRecordInput } from 'src/modules/internal-entity/query-hooks/types/internal-entity-source-tagging.type';
+import { extractRelationTargetId } from 'src/modules/internal-entity/query-hooks/utils/extract-relation-target-id.util';
 import {
   buildMembershipInsertBatch,
   buildMembershipInsertQuery,
@@ -37,6 +47,8 @@ import {
   getInternalEntityMembershipConfig,
   isInternalEntitySourceTargetObjectName,
 } from 'src/modules/internal-entity/query-hooks/utils/internal-entity-source-tagging.util';
+import { InternalEntityAuditLoggerService } from 'src/modules/internal-entity/services/internal-entity-audit-logger.service';
+import { InternalEntityRoleService } from 'src/modules/internal-entity/services/internal-entity-role.service';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 @Injectable()
@@ -45,6 +57,8 @@ export class InternalEntitySourceTaggingService {
     private readonly globalWorkspaceDataSourceService: GlobalWorkspaceDataSourceService,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly workspaceMemberInternalEntityService: WorkspaceMemberInternalEntityService,
+    private readonly internalEntityAuditLoggerService: InternalEntityAuditLoggerService,
+    private readonly internalEntityRoleService: InternalEntityRoleService,
   ) {}
 
   async tagCreateOnePayload(
@@ -58,10 +72,7 @@ export class InternalEntitySourceTaggingService {
 
     this.assertPayloadDataIsDefined(payload.data);
 
-    if (
-      this.shouldBypassInternalEntitySourceTagging(authContext) &&
-      objectName !== OPPORTUNITY_OBJECT_NAME
-    ) {
+    if (await this.canBypassInternalEntitySourceTagging(authContext)) {
       return payload;
     }
 
@@ -72,6 +83,10 @@ export class InternalEntitySourceTaggingService {
     }
 
     if (this.hasExplicitInternalEntityAssignment(payload.data)) {
+      await this.assertExplicitInternalEntityAssignmentsAllowed(authContext, [
+        payload.data,
+      ]);
+
       return payload;
     }
 
@@ -104,10 +119,7 @@ export class InternalEntitySourceTaggingService {
       );
     }
 
-    if (
-      this.shouldBypassInternalEntitySourceTagging(authContext) &&
-      objectName !== OPPORTUNITY_OBJECT_NAME
-    ) {
+    if (await this.canBypassInternalEntitySourceTagging(authContext)) {
       return payload;
     }
 
@@ -116,6 +128,11 @@ export class InternalEntitySourceTaggingService {
 
       return payload;
     }
+
+    await this.assertExplicitInternalEntityAssignmentsAllowed(
+      authContext,
+      payload.data,
+    );
 
     const hasRecordsMissingInternalEntityAssignment = payload.data.some(
       (record) => !this.hasExplicitInternalEntityAssignment(record),
@@ -147,10 +164,110 @@ export class InternalEntitySourceTaggingService {
     );
   }
 
-  private shouldBypassInternalEntitySourceTagging(
+  // A user must not be able to attach an opportunity they create to an
+  // internal entity they don't belong to (e.g. via `internalEntityId` or
+  // `internalEntity: { connect: { where: { id } } }` in the payload) — that
+  // would create a record invisible to them and to their own entity's team.
+  // Platform admins and entity managers are trusted to assign any entity;
+  // service-to-service contexts (API key, application) are unrestricted since
+  // there is no "own entity" concept for them.
+  private async assertExplicitInternalEntityAssignmentsAllowed(
     authContext: WorkspaceAuthContext,
-  ): boolean {
-    return authContext.shouldBypassInternalEntitySourceTagging === true;
+    records: InternalEntitySourceTaggableRecordInput[],
+  ): Promise<void> {
+    if (!isUserAuthContext(authContext)) {
+      return;
+    }
+
+    const recordsWithExplicitAssignment = records.filter((record) =>
+      this.hasExplicitInternalEntityAssignment(record),
+    );
+
+    if (recordsWithExplicitAssignment.length === 0) {
+      return;
+    }
+
+    if (
+      await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      )
+    ) {
+      return;
+    }
+
+    const { entityIds } =
+      await this.workspaceMemberInternalEntityService.resolveContext({
+        workspaceId: authContext.workspace.id,
+        workspaceMemberId: authContext.workspaceMemberId,
+        fallbackEntityId: authContext.user.entityId,
+        requestedActiveEntityId: authContext.activeInternalEntityId,
+      });
+
+    for (const record of recordsWithExplicitAssignment) {
+      const explicitInternalEntityId = normalizeOptionalEntityId(
+        extractRelationTargetId(
+          record as Record<string, unknown>,
+          'internalEntity',
+          'internalEntityId',
+        ),
+      );
+
+      // No id could be extracted (e.g. a create-time `disconnect`): nothing
+      // to validate, the record simply won't be tagged with an entity.
+      if (!isDefined(explicitInternalEntityId)) {
+        continue;
+      }
+
+      if (!entityIds.includes(explicitInternalEntityId)) {
+        throw new PermissionsException(
+          PermissionsExceptionMessage.PERMISSION_DENIED,
+          PermissionsExceptionCode.PERMISSION_DENIED,
+          {
+            userFriendlyMessage: msg`You can only attach opportunities to an internal entity you belong to.`,
+          },
+        );
+      }
+    }
+  }
+
+  // The bypass flag is fed by a client-controlled HTTP header
+  // (x-spreadsheet-import-bypass-source-tagging): only honour it for
+  // server-to-server contexts (API key, application) or for users allowed to
+  // manage entity-scoped records (platform admins and entity managers).
+  // For everyone else the flag is ignored and normal source tagging applies.
+  private async canBypassInternalEntitySourceTagging(
+    authContext: WorkspaceAuthContext,
+  ): Promise<boolean> {
+    if (authContext.shouldBypassInternalEntitySourceTagging !== true) {
+      return false;
+    }
+
+    if (!isUserAuthContext(authContext)) {
+      this.internalEntityAuditLoggerService.logSourceTaggingBypass({
+        workspaceId: authContext.workspace.id,
+        reason: 'server-context',
+      });
+
+      return true;
+    }
+
+    const canManage =
+      await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      );
+
+    if (canManage) {
+      this.internalEntityAuditLoggerService.logSourceTaggingBypass({
+        workspaceId: authContext.workspace.id,
+        userId: authContext.user.id,
+        workspaceMemberId: authContext.workspaceMemberId,
+        reason: authContext.user.canAccessFullAdminPanel
+          ? 'platform-admin'
+          : 'entity-manager',
+      });
+    }
+
+    return canManage;
   }
 
   async createMembershipsForRecords({
@@ -168,7 +285,7 @@ export class InternalEntitySourceTaggingService {
       return;
     }
 
-    if (this.shouldBypassInternalEntitySourceTagging(authContext)) {
+    if (await this.canBypassInternalEntitySourceTagging(authContext)) {
       return;
     }
 

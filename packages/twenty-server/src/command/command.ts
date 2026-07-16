@@ -7,8 +7,14 @@ import { shouldCaptureException } from 'src/engine/utils/global-exception-handle
 import { CommandModule } from './command.module';
 
 async function bootstrap() {
-  const errorHandler = (err: Error) => {
+  const errorHandler = (err: any) => {
     loggerService.error(err?.message, err?.name);
+    if (err?.failedWorkspaceMigrationBuildResult) {
+      loggerService.error(
+        JSON.stringify(err.failedWorkspaceMigrationBuildResult, null, 2),
+        err?.name ?? 'CommandError',
+      );
+    }
 
     if (shouldCaptureException(err)) {
       exceptionHandlerService.captureExceptions([err]);

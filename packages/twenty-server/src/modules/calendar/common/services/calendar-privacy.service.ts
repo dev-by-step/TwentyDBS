@@ -12,6 +12,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type TimelineCalendarEventDTO } from 'src/engine/core-modules/calendar/dtos/timeline-calendar-event.dto';
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 import { CALENDAR_EVENT_SHARING_SCOPE } from 'src/modules/calendar/common/constants/calendar-event-sharing-scope.constants';
 import { CALENDAR_PRIVACY_OCCUPIED_TITLE } from 'src/modules/calendar/common/constants/calendar-privacy.constants';
 import { type CalendarChannelEventAssociationWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-channel-event-association.workspace-entity';
@@ -66,7 +67,7 @@ export class CalendarPrivacyService {
             currentUserId,
             currentWorkspaceMemberId,
           });
-        const accessibleEntityIds = new Set(
+        const accessibleEntityIds = this.normalizeEntityIdSet(
           resolvedCurrentUserEntityContext.entityIds,
         );
 
@@ -278,30 +279,72 @@ export class CalendarPrivacyService {
             ),
         );
 
-        const ownerEntityIdByCalendarChannelId = new Map(
-          await Promise.all(
-            calendarChannels.map(async (calendarChannel) => {
-              const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
-                calendarChannel.connectedAccountId,
-              );
-              const userId = isDefined(userWorkspaceId)
-                ? userIdByUserWorkspaceId.get(userWorkspaceId)
-                : undefined;
-              const workspaceMemberId = isDefined(userId)
-                ? workspaceMemberIdByUserId.get(userId)
-                : null;
-              const fallbackEntityId =
-                users.find((user) => user.id === userId)?.entityId ?? null;
-              const { currentEntityId } =
-                await this.workspaceMemberInternalEntityService.resolveContext({
-                  workspaceId,
-                  workspaceMemberId,
-                  fallbackEntityId,
-                });
+        const workspaceMemberIdByCalendarChannelId = new Map(
+          calendarChannels.map((calendarChannel) => {
+            const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
+              calendarChannel.connectedAccountId,
+            );
+            const userId = isDefined(userWorkspaceId)
+              ? userIdByUserWorkspaceId.get(userWorkspaceId)
+              : undefined;
+            const workspaceMemberId = isDefined(userId)
+              ? workspaceMemberIdByUserId.get(userId)
+              : null;
 
-              return [calendarChannel.id, currentEntityId] as const;
-            }),
+            return [calendarChannel.id, workspaceMemberId ?? null] as const;
+          }),
+        );
+
+        const workspaceMemberIds = [
+          ...new Set(
+            [...workspaceMemberIdByCalendarChannelId.values()].filter(
+              isDefined,
+            ),
           ),
+        ];
+
+        const fallbackEntityIdByWorkspaceMemberId = new Map(
+          workspaceMemberIds.map((workspaceMemberId) => {
+            const userId = [...workspaceMemberIdByUserId.entries()].find(
+              ([, resolvedWorkspaceMemberId]) =>
+                resolvedWorkspaceMemberId === workspaceMemberId,
+            )?.[0];
+
+            return [
+              workspaceMemberId,
+              userId != null
+                ? (users.find((user) => user.id === userId)?.entityId ?? null)
+                : null,
+            ] as const;
+          }),
+        );
+
+        const ownerEntityContexts =
+          workspaceMemberIds.length > 0
+            ? await this.workspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds(
+                {
+                  workspaceId,
+                  workspaceMemberIds,
+                  fallbackEntityIdByWorkspaceMemberId,
+                },
+              )
+            : new Map<string, WorkspaceMemberInternalEntityContext>();
+
+        const ownerEntityIdByCalendarChannelId = new Map(
+          calendarChannels.map((calendarChannel) => {
+            const workspaceMemberId = workspaceMemberIdByCalendarChannelId.get(
+              calendarChannel.id,
+            );
+            const currentEntityId = isDefined(workspaceMemberId)
+              ? (ownerEntityContexts.get(workspaceMemberId)?.currentEntityId ??
+                null)
+              : null;
+
+            return [
+              calendarChannel.id,
+              normalizeOptionalEntityId(currentEntityId),
+            ] as const;
+          }),
         );
 
         const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
@@ -313,7 +356,9 @@ export class CalendarPrivacyService {
         const visibleInternalEntityIdsByCalendarChannelId = new Map(
           calendarChannels.map((calendarChannel) => [
             calendarChannel.id,
-            new Set(calendarChannel.visibleInternalEntityIds ?? []),
+            this.normalizeEntityIdSet(
+              calendarChannel.visibleInternalEntityIds ?? [],
+            ),
           ]),
         );
 
@@ -369,24 +414,33 @@ export class CalendarPrivacyService {
             continue;
           }
 
-          // Owner-entity members always see their own events, regardless of
-          // any explicit audience grant. When a channel has an explicit
-          // entity access list, that list becomes the channel-level source of
-          // truth for non-owner visibility; legacy channels without that list
-          // keep the previous owner-entity behavior.
+          // Calendar privacy arbitration:
+          // 1. WORKSPACE_PUBLIC events are handled above.
+          // 2. Event-level explicit audience wins when configured.
+          // 3. Otherwise, apply the legacy owner-entity rule, with optional
+          // channel-level visibility granting additional entity access.
           const channelVisibleEntityIds =
             visibleEntityIdsByCalendarEventId.get(calendarEventId);
-          const hasExplicitChannelEntityVisibility =
-            isDefined(channelVisibleEntityIds) &&
-            channelVisibleEntityIds.size > 0;
-          const isViewerInChannelVisibleEntity =
-            hasExplicitChannelEntityVisibility &&
-            [...channelVisibleEntityIds].some((id) =>
-              accessibleEntityIds.has(id),
+          const audienceEntityIds =
+            audienceEntityIdsByCalendarEventId.get(calendarEventId);
+          const hasExplicitEntityAudience =
+            isDefined(audienceEntityIds) && audienceEntityIds.size > 0;
+          const isViewerInEntityAudience =
+            isDefined(audienceEntityIds) &&
+            audienceEntityIds.size > 0 &&
+            [...audienceEntityIds].some((entityId) =>
+              accessibleEntityIds.has(entityId),
             );
+          const isCurrentMemberInPersonAudience =
+            isViewerInPersonAudience(calendarEventId);
 
-          if (isViewerInChannelVisibleEntity) {
+          if (isViewerInEntityAudience || isCurrentMemberInPersonAudience) {
             defaultMaskMap.set(calendarEventId, false);
+            continue;
+          }
+
+          if (hasExplicitEntityAudience) {
+            defaultMaskMap.set(calendarEventId, true);
             continue;
           }
 
@@ -395,7 +449,6 @@ export class CalendarPrivacyService {
           const hasUnknownOwnerEntity =
             calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId);
           const isViewerInOwnerEntity =
-            !hasExplicitChannelEntityVisibility &&
             !hasUnknownOwnerEntity &&
             isDefined(ownerEntityIds) &&
             ownerEntityIds.size > 0 &&
@@ -406,19 +459,14 @@ export class CalendarPrivacyService {
             continue;
           }
 
-          const audienceEntityIds =
-            audienceEntityIdsByCalendarEventId.get(calendarEventId);
-          const isViewerInEntityAudience =
-            isDefined(audienceEntityIds) &&
-            audienceEntityIds.size > 0 &&
-            [...audienceEntityIds].some((entityId) =>
-              accessibleEntityIds.has(entityId),
+          const isViewerInChannelVisibleEntity =
+            isDefined(channelVisibleEntityIds) &&
+            channelVisibleEntityIds.size > 0 &&
+            [...channelVisibleEntityIds].some((id) =>
+              accessibleEntityIds.has(id),
             );
 
-          if (
-            isViewerInEntityAudience ||
-            isViewerInPersonAudience(calendarEventId)
-          ) {
+          if (isViewerInChannelVisibleEntity) {
             defaultMaskMap.set(calendarEventId, false);
             continue;
           }
@@ -630,11 +678,24 @@ export class CalendarPrivacyService {
 
       const set = audienceMap.get(calendarEventId) ?? new Set<string>();
 
-      set.add(targetValue);
+      const normalizedTargetValue =
+        targetField === 'internalEntityId'
+          ? normalizeOptionalEntityId(targetValue)
+          : targetValue;
+
+      if (!isDefined(normalizedTargetValue)) {
+        continue;
+      }
+
+      set.add(normalizedTargetValue);
       audienceMap.set(calendarEventId, set);
     }
 
     return audienceMap;
+  }
+
+  private normalizeEntityIdSet(entityIds: unknown[]): Set<string> {
+    return new Set(entityIds.map(normalizeOptionalEntityId).filter(isDefined));
   }
 
   private extractStringField(

@@ -43,6 +43,7 @@ export const PRIMARY_DEV_WORKSPACE_USERS = {
       INTERNAL_ENTITY_SEEDS.WEKNOW.id,
       INTERNAL_ENTITY_SEEDS.DEVBYSTEP.id,
       INTERNAL_ENTITY_SEEDS.ALLSENSIA.id,
+      INTERNAL_ENTITY_SEEDS.ANGLE_INTELLIGENCE.id,
     ],
     canImpersonate: true,
     canAccessFullAdminPanel: true,

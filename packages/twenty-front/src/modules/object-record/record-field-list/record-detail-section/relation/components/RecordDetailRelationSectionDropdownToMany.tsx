@@ -246,6 +246,9 @@ export const RecordDetailRelationSectionDropdownToMany = ({
       forceSearchFilter: '',
       forceSearchableObjectMetadataItems: [pickerObjectMetadataItem],
       forcePickableMorphItems: pickableMorphItems,
+      replacePickableMorphItems: true,
+      hidePickedMorphItems:
+        internalEntityRelationBehavior?.requiresDetachConfirmation ?? false,
     });
   };
 
@@ -409,6 +412,7 @@ export const RecordDetailRelationSectionDropdownToMany = ({
         onClickOutside={() => {
           closeDropdown(dropdownId);
         }}
+        selectedRecordIds={pickerRecords.map((record) => record.recordId)}
       />
     ) : (
       <MultipleRecordPicker

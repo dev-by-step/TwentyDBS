@@ -10,6 +10,7 @@ type GraphqlOperation = {
 export const makeGraphqlAPIRequest = (
   graphqlOperation: GraphqlOperation,
   token: string | undefined = APPLE_JANE_ADMIN_ACCESS_TOKEN,
+  headers?: Record<string, string>,
 ) => {
   const client = request(`http://localhost:${APP_PORT}`);
 
@@ -17,6 +18,10 @@ export const makeGraphqlAPIRequest = (
 
   if (isDefined(token)) {
     clientInstance.set('Authorization', `Bearer ${token}`);
+  }
+
+  if (isDefined(headers)) {
+    clientInstance.set(headers);
   }
 
   return clientInstance.send({

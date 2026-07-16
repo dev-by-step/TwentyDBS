@@ -12,6 +12,7 @@ export const ENTITY_CONFIGURATION_OBJECT_NAMES = [
   'companyEntityMembership',
   'internalEntity',
   'personEntityMembership',
+  'workspaceMemberEntityMembership',
 ] as const;
 
 export const PERSONAL_WORK_OBJECT_NAMES = [

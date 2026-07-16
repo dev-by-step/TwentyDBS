@@ -4,6 +4,7 @@ import { plainToClass } from 'class-transformer';
 import {
   IsDefined,
   IsOptional,
+  IsString,
   IsUrl,
   ValidateIf,
   type ValidationError,
@@ -92,6 +93,28 @@ export class ConfigVariables {
   })
   @IsOptional()
   WORKSPACE_SCHEMA_DDL_LOCKED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'Comma-separated bootstrap admin emails allowed to initialize and administer the forked workspace.',
+    isEnvOnly: true,
+    type: ConfigVariableType.STRING,
+  })
+  @IsOptional()
+  @IsString()
+  BOOTSTRAP_ADMIN_EMAILS = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'JSON array, or JSON object with an "entities" array, used to seed internal entities. Each entity requires id, name, color, and optional aliases.',
+    isEnvOnly: true,
+    type: ConfigVariableType.STRING,
+  })
+  @IsOptional()
+  @IsString()
+  INTERNAL_ENTITY_SEEDS = '';
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.TOKENS_DURATION,

@@ -6,6 +6,7 @@ import {
   CalendarChannelException,
   CalendarChannelExceptionCode,
 } from 'src/engine/metadata-modules/calendar-channel/calendar-channel.exception';
+import { normalizeOptionalEntityId } from 'src/engine/utils/normalize-optional-entity-id.util';
 import { WorkspaceMemberInternalEntityService } from 'src/modules/internal-entity/services/workspace-member-internal-entity.service';
 
 @Injectable()
@@ -32,8 +33,8 @@ export class CalendarChannelEntityAccessService {
     const normalizedRequestedVisibleInternalEntityIds = [
       ...new Set(
         (requestedVisibleInternalEntityIds ?? [])
-          .map((visibleInternalEntityId) => visibleInternalEntityId.trim())
-          .filter(Boolean),
+          .map(normalizeOptionalEntityId)
+          .filter(isDefined),
       ),
     ];
 

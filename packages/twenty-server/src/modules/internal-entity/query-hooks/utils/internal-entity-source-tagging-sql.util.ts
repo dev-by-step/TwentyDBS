@@ -47,6 +47,12 @@ export const buildMembershipInsertBatch = ({
     mappings: recordIds.map((recordId) => ({ recordId, internalEntityId })),
   });
 
+// The NOT EXISTS check intentionally matches rows regardless of `deletedAt`:
+// this insert is re-run on every source-tagging create and on every
+// `init-internal-entities` backfill (including at every server boot), so an
+// admin who explicitly soft-deleted a membership row must not see it silently
+// resurrected on the next run. Only a row that never existed for this
+// (source, entity) pair gets (re-)inserted.
 export const buildMembershipInsertQuery = ({
   membershipSqlTable,
   sourceJoinColumnName,
@@ -73,7 +79,6 @@ export const buildMembershipInsertQuery = ({
      FROM ${membershipSqlTable} existing
      WHERE existing.${quotedJoinColumn} = source.record_id
        AND existing."internalEntityId" = source.internal_entity_id
-       AND existing."deletedAt" IS NULL
    )
    ON CONFLICT DO NOTHING`,
     values,

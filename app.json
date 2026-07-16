@@ -24,6 +24,10 @@
       "description": "Public base URL of the deployed Twenty instance.",
       "required": true
     },
+    "BOOTSTRAP_ADMIN_EMAILS": {
+      "description": "Comma-separated list of admin emails allowed to bootstrap and administer the first workspace.",
+      "required": true
+    },
     "STORAGE_TYPE": {
       "description": "Storage driver used by Twenty.",
       "value": "local",
