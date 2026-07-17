@@ -1,5 +1,4 @@
 import { useMutation } from '@apollo/client/react';
-import { styled } from '@linaria/react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { SubTitle } from '@/auth/components/SubTitle';
@@ -13,10 +12,18 @@ import { useCreateManyNavigationMenuItems } from '@/navigation-menu-item/common/
 import { useDeleteManyNavigationMenuItems } from '@/navigation-menu-item/common/hooks/useDeleteManyNavigationMenuItems';
 import { useUpdateManyNavigationMenuItems } from '@/navigation-menu-item/common/hooks/useUpdateManyNavigationMenuItems';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
-import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useDeleteManyRecords } from '@/object-record/hooks/useDeleteManyRecords';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { SuperadminEntitiesSection } from '@/onboarding/components/SuperadminEntitiesSection';
+import { SuperadminModuleOrderSection } from '@/onboarding/components/SuperadminModuleOrderSection';
+import { SuperadminModulesSection } from '@/onboarding/components/SuperadminModulesSection';
+import {
+  StyledActionRow,
+  StyledContent,
+  StyledHint,
+  StyledPrimaryAction,
+} from '@/onboarding/components/SuperadminWorkspaceSetup.styles';
 import { BASE_INTERNAL_ENTITY_SETUP } from '@/onboarding/constants/baseInternalEntitySetup';
 import { COMPLETE_SUPERADMIN_WORKSPACE_SETUP } from '@/onboarding/graphql/mutations/completeSuperadminWorkspaceSetup';
 import {
@@ -24,251 +31,27 @@ import {
   isDuplicateRecordError,
 } from '@/onboarding/utils/getRecoverableDuplicateRecordId';
 import {
+  type EntityDraft,
+  type InternalEntityRecord,
+  parseSavedSetupState,
+  resolveModuleOptions,
+  type WorkspaceMemberEntityMembershipRecord,
+} from '@/onboarding/utils/superadminWorkspaceSetup';
+import {
   ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
   ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
 } from '@/onboarding/constants/superadminWorkspaceSetupUserVarKeys';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { TextInput } from '@/ui/input/components/TextInput';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { Checkbox, LightIconButton, MainButton } from 'twenty-ui/input';
+import { MainButton } from 'twenty-ui/input';
 import { ModalContent } from 'twenty-ui/layout';
-import { H2Title, IconArrowDown, IconArrowUp } from 'twenty-ui/display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
 import {
   type NavigationMenuItem,
   NavigationMenuItemType,
 } from '~/generated-metadata/graphql';
-
-type InternalEntityRecord = {
-  __typename: string;
-  id: string;
-  name: string;
-  color?: string | null;
-};
-
-type WorkspaceMemberEntityMembershipRecord = {
-  __typename: string;
-  id: string;
-  workspaceMemberId: string;
-  internalEntityId: string;
-};
-
-type SavedEntityState = {
-  id?: string;
-  name?: string;
-  website?: string | null;
-  headcount?: number | null;
-  isMember?: boolean;
-};
-
-type SavedSetupState = {
-  entities?: SavedEntityState[];
-  selectedObjectMetadataIds?: string[];
-};
-
-type EntityDraft = {
-  id?: string;
-  name: string;
-  website: string;
-  headcount: string;
-  isMember: boolean;
-};
-
-type ModuleOption = {
-  objectMetadataId: string;
-  nameSingular: string;
-  label: string;
-};
-
-const STARTUP_MODULE_PRIORITY = [
-  'workspaceMember',
-  'person',
-  'company',
-  'opportunity',
-  'task',
-  'note',
-  'project',
-  'calendarEvent',
-  'messageThread',
-  'workflow',
-] as const;
-
-const StyledContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[8]};
-  overflow-y: auto;
-  padding: ${themeCssVariables.spacing[8]} 0;
-  width: 100%;
-`;
-
-const StyledSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[4]};
-`;
-
-const StyledEntityCard = styled.div`
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[4]};
-  padding: ${themeCssVariables.spacing[4]};
-`;
-
-const StyledEntityHeader = styled.div`
-  align-items: center;
-  display: flex;
-  gap: ${themeCssVariables.spacing[3]};
-  justify-content: space-between;
-`;
-
-const StyledEntityName = styled.div`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.md};
-  font-weight: ${themeCssVariables.font.weight.medium};
-`;
-
-const StyledCheckboxRow = styled.label`
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  gap: ${themeCssVariables.spacing[3]};
-`;
-
-const StyledCheckboxLabel = styled.span`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.sm};
-`;
-
-const StyledTwoColumns = styled.div`
-  display: grid;
-  gap: ${themeCssVariables.spacing[3]};
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  @media (max-width: 768px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-`;
-
-const StyledModuleList = styled.div`
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`;
-
-const StyledModuleRow = styled.div`
-  align-items: center;
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  display: flex;
-  gap: ${themeCssVariables.spacing[3]};
-  justify-content: space-between;
-  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
-
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const StyledModuleOrderList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledModuleOrderRow = styled.div`
-  align-items: center;
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  display: flex;
-  gap: ${themeCssVariables.spacing[3]};
-  justify-content: space-between;
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
-`;
-
-const StyledModuleOrderActions = styled.div`
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledActionRow = styled.div`
-  display: flex;
-  gap: ${themeCssVariables.spacing[3]};
-  justify-content: space-between;
-`;
-
-const StyledPrimaryAction = styled.div`
-  width: 220px;
-`;
-
-const StyledHint = styled.div`
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
-`;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const parseSavedSetupState = (value: unknown): SavedSetupState | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  return {
-    entities: Array.isArray(value.entities)
-      ? value.entities.filter(isRecord).map((entity) => ({
-          id: typeof entity.id === 'string' ? entity.id : undefined,
-          name: typeof entity.name === 'string' ? entity.name : undefined,
-          website: typeof entity.website === 'string' ? entity.website : null,
-          headcount:
-            typeof entity.headcount === 'number' ? entity.headcount : null,
-          isMember: entity.isMember === true,
-        }))
-      : undefined,
-    selectedObjectMetadataIds: Array.isArray(value.selectedObjectMetadataIds)
-      ? value.selectedObjectMetadataIds.filter(
-          (objectMetadataId): objectMetadataId is string =>
-            typeof objectMetadataId === 'string',
-        )
-      : undefined,
-  };
-};
-
-const resolveModuleOptions = (
-  objectMetadataItems: EnrichedObjectMetadataItem[],
-): ModuleOption[] => {
-  const objectMetadataByName = new Map(
-    objectMetadataItems.map((objectMetadataItem) => [
-      objectMetadataItem.nameSingular,
-      objectMetadataItem,
-    ]),
-  );
-
-  return STARTUP_MODULE_PRIORITY.flatMap((objectName) => {
-    const objectMetadataItem = objectMetadataByName.get(objectName);
-
-    if (!isDefined(objectMetadataItem)) {
-      return [];
-    }
-
-    return [
-      {
-        objectMetadataId: objectMetadataItem.id,
-        nameSingular: objectMetadataItem.nameSingular,
-        label:
-          objectMetadataItem.nameSingular === 'workspaceMember'
-            ? 'Team'
-            : objectMetadataItem.labelPlural,
-      },
-    ];
-  });
-};
 
 export const SuperadminWorkspaceSetup = () => {
   const { t } = useLingui();
@@ -849,130 +632,22 @@ export const SuperadminWorkspaceSetup = () => {
         </Trans>
       </SubTitle>
       <StyledContent>
-        <StyledSection>
-          <H2Title
-            title={t`Internal entities`}
-            description={t`Review the four base entities, fill in their details, and select the ones you actually belong to.`}
-          />
-          {entityDrafts.map((entityDraft) => (
-            <StyledEntityCard key={entityDraft.name}>
-              <StyledEntityHeader>
-                <StyledEntityName>{entityDraft.name}</StyledEntityName>
-              </StyledEntityHeader>
-              <StyledCheckboxRow>
-                <Checkbox
-                  checked={entityDraft.isMember}
-                  onChange={(event) =>
-                    updateEntityDraft(entityDraft.name, {
-                      isMember: event.target.checked,
-                    })
-                  }
-                  aria-label={t`I belong to this entity`}
-                />
-                <StyledCheckboxLabel>
-                  <Trans>I belong to this entity</Trans>
-                </StyledCheckboxLabel>
-              </StyledCheckboxRow>
-              <StyledTwoColumns>
-                <TextInput
-                  label={t`Website`}
-                  value={entityDraft.website}
-                  onChange={(nextValue) =>
-                    updateEntityDraft(entityDraft.name, {
-                      website: nextValue,
-                    })
-                  }
-                  placeholder={t`https://example.com`}
-                  fullWidth
-                />
-              </StyledTwoColumns>
-              <TextInput
-                label={t`Team size`}
-                value={entityDraft.headcount}
-                type="number"
-                onChange={(nextValue) =>
-                  updateEntityDraft(entityDraft.name, {
-                    headcount: nextValue,
-                  })
-                }
-                placeholder={t`25`}
-                fullWidth
-              />
-            </StyledEntityCard>
-          ))}
-        </StyledSection>
+        <SuperadminEntitiesSection
+          entityDrafts={entityDrafts}
+          onUpdateEntityDraft={updateEntityDraft}
+        />
 
-        <StyledSection>
-          <H2Title
-            title={t`Workspace modules`}
-            description={t`Pick the startup modules to keep visible in the workplace.`}
-          />
-          <StyledModuleList>
-            {moduleOptions.map((moduleOption) => (
-              <StyledModuleRow key={moduleOption.objectMetadataId}>
-                <StyledCheckboxRow>
-                  <Checkbox
-                    checked={selectedModuleIds.includes(
-                      moduleOption.objectMetadataId,
-                    )}
-                    onChange={(event) =>
-                      toggleModuleSelection(
-                        moduleOption.objectMetadataId,
-                        event.target.checked,
-                      )
-                    }
-                    aria-label={moduleOption.label}
-                  />
-                  <StyledCheckboxLabel>
-                    {moduleOption.label}
-                  </StyledCheckboxLabel>
-                </StyledCheckboxRow>
-              </StyledModuleRow>
-            ))}
-          </StyledModuleList>
-          <StyledHint>
-            <Trans>
-              The checked modules become workspace-level navigation items.
-            </Trans>
-          </StyledHint>
-        </StyledSection>
+        <SuperadminModulesSection
+          moduleOptions={moduleOptions}
+          selectedModuleIds={selectedModuleIds}
+          onToggleModuleSelection={toggleModuleSelection}
+        />
 
         {selectedModuleOptions.length > 0 && (
-          <StyledSection>
-            <H2Title
-              title={t`Menu order`}
-              description={t`Adjust the order of the selected modules in the workspace menu.`}
-            />
-            <StyledModuleOrderList>
-              {selectedModuleOptions.map((moduleOption, index) => (
-                <StyledModuleOrderRow key={moduleOption.objectMetadataId}>
-                  <StyledCheckboxLabel>
-                    {moduleOption.label}
-                  </StyledCheckboxLabel>
-                  <StyledModuleOrderActions>
-                    <LightIconButton
-                      title={t`Move up`}
-                      Icon={IconArrowUp}
-                      accent="tertiary"
-                      disabled={index === 0}
-                      onClick={() =>
-                        moveSelectedModule(moduleOption.objectMetadataId, -1)
-                      }
-                    />
-                    <LightIconButton
-                      title={t`Move down`}
-                      Icon={IconArrowDown}
-                      accent="tertiary"
-                      disabled={index === selectedModuleOptions.length - 1}
-                      onClick={() =>
-                        moveSelectedModule(moduleOption.objectMetadataId, 1)
-                      }
-                    />
-                  </StyledModuleOrderActions>
-                </StyledModuleOrderRow>
-              ))}
-            </StyledModuleOrderList>
-          </StyledSection>
+          <SuperadminModuleOrderSection
+            selectedModuleOptions={selectedModuleOptions}
+            onMoveSelectedModule={moveSelectedModule}
+          />
         )}
       </StyledContent>
       <StyledActionRow>

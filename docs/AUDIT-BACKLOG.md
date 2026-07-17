@@ -466,13 +466,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
   - À faire **après** IMP-13 (le role service extrait allège déjà la policy) et idéalement avant de retoucher lourdement ces fichiers.
 - **Effort** : élevé (refactor structurel — bien couvrir de tests avant/après ; les suites unitaire + intégration existantes servent de filet).
 
-#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` (956 lignes) — `A_FAIRE`
+#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` — `EN_COURS` (2026-07-16)
 
 - **Sévérité/Axe** : 🟡 `MAINT`
-- **Fichiers** : `packages/twenty-front/.../SuperadminWorkspaceSetup.tsx`
-- **Problème** : composant de 956 lignes, viole la règle projet « composants < 300 lignes ». Mélange logique de wizard, état et rendu de chaque étape.
-- **Correction proposée** : découper par **étape du wizard** (un composant par étape) + extraire la logique dans des **hooks dédiés** (`useSuperadminSetupStepX`). Le composant racine ne garde que l'orchestration.
-- **Effort** : moyen (front, sans logique serveur).
+- **Fichiers** : `SuperadminWorkspaceSetup.tsx` + nouveaux `SuperadminWorkspaceSetup.styles.ts`, `SuperadminEntitiesSection.tsx`, `SuperadminModulesSection.tsx`, `SuperadminModuleOrderSection.tsx`, `utils/superadminWorkspaceSetup.ts` (+ test).
+- **Progrès (décomposition sûre, sans changement de comportement)** : le composant passe de **995 à 670 lignes**. Extraits (déplacements verbatim, validés par typecheck + lint) : les 17 styled-components → fichier `.styles.ts` ; les types + helpers purs (`parseSavedSetupState`, `resolveModuleOptions`) → `utils/superadminWorkspaceSetup.ts` avec 5 tests unitaires ; les 3 sections d'UI (entités, modules, ordre du menu) → 3 sous-composants présentationnels purs (props in, aucun état). Le `handleSubmit`/FIX-29 n'a pas été touché.
+- **Reste (volontairement différé)** : extraire l'orchestration (`handleSubmit` + `syncWorkspaceNavigationMenu` + state, ~350 l.) dans un hook `useSuperadminWorkspaceSetupForm` pour passer sous 300 lignes. C'est la partie couplée au chemin critique d'onboarding ; à faire APRÈS avoir ajouté un test de rendu du composant (filet de sécurité absent aujourd'hui) pour ne pas risquer une régression du submit.
+- **Vérif** : `jest src/modules/onboarding` 27/27 ; `nx typecheck twenty-front` OK ; `nx lint:diff-with-main twenty-front` OK ; prettier OK.
 
 #### IMP-16 — Unifier les deux résolveurs de seeds — `FAIT` (2026-07-16, résolu par IMP-09)
 
