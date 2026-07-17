@@ -77,14 +77,15 @@ export class CalendarEventMutationPermissionService {
         'calendarChannelId',
       );
 
-      if (isDefined(calendarChannelId)) {
-        await this.assertCalendarChannelMutationAllowed(
-          authContext,
-          [calendarChannelId],
-          msg`Only the entity manager or the platform administrator can create this calendar link.`,
-          'calendarChannelEventAssociation',
-        );
-      }
+      // FIX-11 : un payload sans référence de canal extractible (forme
+      // d'input inconnue ou relation absente) est refusé au lieu de sauter
+      // la vérification — l'assert rejette les listes vides.
+      await this.assertCalendarChannelMutationAllowed(
+        authContext,
+        isDefined(calendarChannelId) ? [calendarChannelId] : [],
+        msg`Only the entity manager or the platform administrator can create this calendar link.`,
+        'calendarChannelEventAssociation',
+      );
 
       return payload;
     }
@@ -102,12 +103,22 @@ export class CalendarEventMutationPermissionService {
         'calendarEventId',
       );
 
-      if (isDefined(calendarEventId)) {
-        await this.assertCalendarEventMutationAllowed(
-          authContext,
-          calendarEventId,
+      // FIX-11 : même règle — pas d'événement identifiable, pas de création.
+      if (!isDefined(calendarEventId)) {
+        this.throwPermissionDenied(
+          msg`An event participant must reference its calendar event.`,
+          {
+            authContext,
+            objectName: 'calendarEventParticipant',
+            reason: 'missing-calendar-event-reference',
+          },
         );
       }
+
+      await this.assertCalendarEventMutationAllowed(
+        authContext,
+        calendarEventId,
+      );
     }
 
     return payload;
@@ -127,28 +138,23 @@ export class CalendarEventMutationPermissionService {
     }
 
     if (objectName === 'calendarChannelEventAssociation') {
-      const calendarChannelIds = [
-        ...new Set(
-          payload.data
-            .map((data) =>
-              extractRelationTargetId(
-                data,
-                'calendarChannel',
-                'calendarChannelId',
-              ),
-            )
-            .filter(isDefined),
-        ),
-      ];
+      const extractedCalendarChannelIds = payload.data.map((data) =>
+        extractRelationTargetId(data, 'calendarChannel', 'calendarChannelId'),
+      );
 
-      if (calendarChannelIds.length > 0) {
-        await this.assertCalendarChannelMutationAllowed(
-          authContext,
-          calendarChannelIds,
-          msg`Only the entity manager or the platform administrator can create this calendar link.`,
-          'calendarChannelEventAssociation',
-        );
-      }
+      // FIX-11 : chaque ligne du batch doit référencer son canal — une ligne
+      // sans référence extractible invalide tout le batch (liste vide passée
+      // à l'assert, qui la refuse).
+      const calendarChannelIds = extractedCalendarChannelIds.every(isDefined)
+        ? [...new Set(extractedCalendarChannelIds.filter(isDefined))]
+        : [];
+
+      await this.assertCalendarChannelMutationAllowed(
+        authContext,
+        calendarChannelIds,
+        msg`Only the entity manager or the platform administrator can create this calendar link.`,
+        'calendarChannelEventAssociation',
+      );
 
       return payload;
     }
@@ -160,14 +166,25 @@ export class CalendarEventMutationPermissionService {
     }
 
     if (objectName === 'calendarEventParticipant') {
+      const extractedCalendarEventIds = payload.data.map((data) =>
+        extractRelationTargetId(data, 'calendarEvent', 'calendarEventId'),
+      );
+
+      // FIX-11 : même règle par ligne — pas d'événement identifiable,
+      // pas de création.
+      if (!extractedCalendarEventIds.every(isDefined)) {
+        this.throwPermissionDenied(
+          msg`An event participant must reference its calendar event.`,
+          {
+            authContext,
+            objectName: 'calendarEventParticipant',
+            reason: 'missing-calendar-event-reference',
+          },
+        );
+      }
+
       const calendarEventIds = [
-        ...new Set(
-          payload.data
-            .map((data) =>
-              extractRelationTargetId(data, 'calendarEvent', 'calendarEventId'),
-            )
-            .filter(isDefined),
-        ),
+        ...new Set(extractedCalendarEventIds.filter(isDefined)),
       ];
 
       await Promise.all(
@@ -405,7 +422,11 @@ export class CalendarEventMutationPermissionService {
       });
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(permissionDeniedMessage, {
         ...auditContext,
         reason: 'not-entity-manager-nor-admin',
@@ -498,7 +519,11 @@ export class CalendarEventMutationPermissionService {
   private async assertCalendarRecordCreationAllowed(
     authContext: UserWorkspaceAuthContext,
   ): Promise<void> {
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Only the entity manager or the platform administrator can create this event.`,
         {
