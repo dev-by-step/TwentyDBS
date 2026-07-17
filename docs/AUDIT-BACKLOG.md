@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 25   | 5       | 30    |
+| FIX (bugs / incohérences) | 26   | 4       | 30    |
 | IMP (améliorations)       | 18   | 3       | 21    |
 
-> `FAIT` FIX : 01→07, 09→13, 15→18, 20→23, 26→30.
+> `FAIT` FIX : 01→07, 09→18, 20→23, 26→30.
 > `FAIT` IMP : 01→13, 16→20.
 > `PARTIELLEMENT FAIT` : FIX-24 (docs).
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
@@ -47,9 +47,8 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥇 Priorité 1 — Sécurité (à traiter en premier)
 
-| ID     | Axe       | Résumé                                                                                 |
-| ------ | --------- | -------------------------------------------------------------------------------------- |
-| FIX-14 | 🟠 SEC/UX | `skipInviteTeamOnboardingStep` mute des flags workspace-level sous `NoPermissionGuard` |
+| ID  | Axe | Résumé |
+| --- | --- | ------ |
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
@@ -221,12 +220,15 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Problème** : seul le domaine email du premier super admin peut s'auto-inscrire — les 3 autres sociétés passent obligatoirement par invitation.
 - **Piste** : liste de domaines autorisés en variable d'env (un par société), ou assumer le modèle « invitation only » et documenter.
 
-#### FIX-14 — `skipInviteTeamOnboardingStep` modifie l'onboarding de tout le workspace — `A_FAIRE`
+#### FIX-14 — `skipInviteTeamOnboardingStep` modifie l'onboarding de tout le workspace — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟠 `SEC`/`UX`
-- **Fichiers** : `packages/twenty-server/src/engine/core-modules/onboarding/onboarding.resolver.ts`, `onboarding.service.ts` (`advanceFromInviteTeamStep`)
-- **Problème** : mutation sous `NoPermissionGuard` qui bascule des flags workspace-level (clear invite-team + arme book-onboarding pour tous).
-- **Piste** : passer ces flags au niveau user (userVars par userId), ou restreindre la mutation.
+- **Décision produit** : drapeaux d'onboarding au niveau UTILISATEUR.
+- **Fichiers** : `onboarding.service.ts` (+ spec), `onboarding.resolver.ts` (+ spec), `sign-in-up.service.ts`, `workspace-invitation.service.ts`.
+- **Problème** : `setOnboardingInviteTeamPending` et `setOnboardingBookOnboardingPending` écrivaient des userVars **workspace-level** (userId nul). Comme `getAll` fusionne le scope workspace partagé, un seul utilisateur qui passait/complétait l'étape « inviter l'équipe » basculait l'onboarding de TOUS les membres. (Codex avait déjà ajouté un garde superadmin sur la mutation `skip`, mais le drapeau restait partagé.)
+- **Correction** : les deux setters + `advanceFromInviteTeamStep` prennent désormais un `userId` et écrivent en scope user (userId + workspaceId), comme `setOnboardingConnectAccountPending`. Les 5 call sites passent l'utilisateur acteur : sign-up (`user.id`), envoi d'invitations (`sender.userId`), setup superadmin (`user.id`), `skipBookOnboardingStep`/`skipInviteTeamOnboardingStep` (`@AuthUser`). Le nettoyage book-onboarding dans `getOnboardingStatus` est aussi passé user-level.
+- **Caveat migration** : un éventuel drapeau workspace-level _hérité_ (posé par l'ancien code avant déploiement) resterait lisible via le scope partagé de `getAll` jusqu'à expiration ; sans impact sur un workspace fraîchement seedé (cas local + prod déjà onboardée). Pas de migration dédiée jugée nécessaire.
+- **Vérif** : `advanceFromInviteTeamStep` scoped-user (spec) + specs resolver/sign-in-up/invitation verts (24/24 sur le périmètre) ; typecheck OK.
 
 #### FIX-29 — Wizard superadmin non idempotent : bloque sur un workspace déjà seedé — `FAIT` (2026-07-16)
 

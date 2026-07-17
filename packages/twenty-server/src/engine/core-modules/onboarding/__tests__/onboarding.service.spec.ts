@@ -35,8 +35,11 @@ describe('OnboardingService', () => {
   });
 
   describe('advanceFromInviteTeamStep', () => {
-    it('clears invite-team pending and arms book-onboarding pending', async () => {
+    // FIX-14 : les drapeaux invite-team / book-onboarding sont scoped à
+    // l'utilisateur (userId + workspaceId), plus au workspace entier.
+    it('clears invite-team pending and arms book-onboarding pending for the acting user', async () => {
       const workspaceId = 'workspace-id';
+      const userId = 'user-id';
 
       const clearInviteSpy = jest
         .spyOn(service, 'setOnboardingInviteTeamPending')
@@ -45,13 +48,15 @@ describe('OnboardingService', () => {
         .spyOn(service, 'setOnboardingBookOnboardingPending')
         .mockResolvedValue();
 
-      await service.advanceFromInviteTeamStep({ workspaceId });
+      await service.advanceFromInviteTeamStep({ userId, workspaceId });
 
       expect(clearInviteSpy).toHaveBeenCalledWith({
+        userId,
         workspaceId,
         value: false,
       });
       expect(armBookOnboardingSpy).toHaveBeenCalledWith({
+        userId,
         workspaceId,
         value: true,
       });

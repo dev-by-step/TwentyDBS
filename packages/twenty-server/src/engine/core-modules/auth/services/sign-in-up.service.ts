@@ -647,6 +647,7 @@ export class SignInUpService {
 
       await this.onboardingService.setOnboardingInviteTeamPending(
         {
+          userId: user.id,
           workspaceId: workspace.id,
           value: true,
         },

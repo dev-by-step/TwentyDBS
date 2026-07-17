@@ -356,6 +356,7 @@ export class WorkspaceInvitationService {
     }
 
     await this.onboardingService.advanceFromInviteTeamStep({
+      userId: sender.userId,
       workspaceId: workspace.id,
     });
 
