@@ -53,6 +53,10 @@ const createSignInUpServiceForTests = () => {
     activateWorkspace: jest.fn(),
   };
 
+  const mockThrottlerService = {
+    tokenBucketThrottleOrThrow: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockTwentyConfigService = {
     get: jest.fn(
       (configKey: keyof MockConfigurationValues) =>
@@ -121,6 +125,7 @@ const createSignInUpServiceForTests = () => {
       isValid: jest.fn().mockReturnValue(false),
     } as any,
     mockWorkspaceService as any,
+    mockThrottlerService as any,
     {
       createQueryRunner: jest.fn(() => queryRunnerMock),
     } as any,
@@ -132,6 +137,7 @@ const createSignInUpServiceForTests = () => {
     mockWorkspaceRepository,
     mockConfigurationValues,
     mockWorkspaceService,
+    mockThrottlerService,
   };
 };
 
@@ -372,6 +378,41 @@ describe('SignInUpService email-domain restriction', () => {
     ).rejects.toMatchObject({
       code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
     });
+  });
+
+  // IMP-12 : au-delà de la limite de tentatives, le refus est indistinguable
+  // d'un refus de domaine (même code, message uniforme) et court-circuite
+  // avant toute lecture de la base.
+  it('throttles repeated sign-up attempts for the same email', async () => {
+    const { service, mockThrottlerService, mockUserRepository } =
+      createSignInUpServiceForTests();
+
+    mockThrottlerService.tokenBucketThrottleOrThrow.mockRejectedValueOnce(
+      new Error('Limit reached'),
+    );
+    jest
+      .spyOn((service as any).userService, 'findUserByEmail')
+      .mockResolvedValue(null);
+
+    await expect(
+      service.signUpWithoutWorkspace(mockDisallowedDomainPayload, {
+        provider: AuthProviderEnum.Password,
+        password: 'Hunter2!safe',
+      } as any),
+    ).rejects.toMatchObject({
+      code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+    });
+
+    expect(
+      mockThrottlerService.tokenBucketThrottleOrThrow,
+    ).toHaveBeenCalledWith(
+      expect.stringContaining('sign-up-attempt:'),
+      1,
+      expect.any(Number),
+      expect.any(Number),
+    );
+    // La limite court-circuite avant la lecture du super admin.
+    expect(mockUserRepository.findOne).not.toHaveBeenCalled();
   });
 
   it('allows sign-up from the same domain as the existing super admin', async () => {

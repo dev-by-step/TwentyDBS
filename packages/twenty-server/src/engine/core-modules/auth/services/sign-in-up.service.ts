@@ -39,6 +39,7 @@ import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service'
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { OnboardingService } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { TelemetryEventType } from 'src/engine/core-modules/telemetry/telemetry-event.type';
+import { ThrottlerService } from 'src/engine/core-modules/throttler/throttler.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
 import { UserService } from 'src/engine/core-modules/user/services/user.service';
@@ -55,6 +56,12 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 import { getDomainNameByEmail } from 'src/utils/get-domain-name-by-email';
 import { isWorkEmail } from 'src/utils/is-work-email';
+
+// IMP-12 : limite anti-énumération des tentatives d'auto-inscription, par
+// e-mail normalisé. Généreux pour ne jamais gêner un utilisateur légitime qui
+// réessaie, mais suffisant pour freiner un sondage automatisé d'identités.
+const SIGN_UP_ATTEMPT_MAX_TOKENS = 10;
+const SIGN_UP_ATTEMPT_TIME_WINDOW_MS = 15 * 60 * 1000;
 
 @Injectable()
 // oxlint-disable-next-line twenty/inject-workspace-repository
@@ -76,6 +83,7 @@ export class SignInUpService {
     private readonly fileCorePictureService: FileCorePictureService,
     private readonly enterprisePlanService: EnterprisePlanService,
     private readonly workspaceService: WorkspaceService,
+    private readonly throttlerService: ThrottlerService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -731,6 +739,13 @@ export class SignInUpService {
   }
 
   async assertEmailDomainAllowedForAutoSignUp(email: string) {
+    // IMP-12 : borne les tentatives d'auto-inscription par e-mail normalisé
+    // (défense en profondeur au-dessus du CaptchaGuard) pour freiner
+    // l'énumération de comptes. Le refus lève un message UNIFORME (voir
+    // `throwUniformSignUpRestricted`) afin de ne rien divulguer sur l'état
+    // interne (existence d'un super admin, d'une invitation, d'un domaine).
+    await this.assertSignUpAttemptWithinRateLimit(email);
+
     const candidateDomain = getEmailDomain(email);
 
     const superAdmin = await this.userRepository.findOne({
@@ -757,12 +772,8 @@ export class SignInUpService {
         return;
       }
 
-      throw new AuthException(
+      this.throwUniformSignUpRestricted(
         'Sign-up is restricted to the workspace owner email domain',
-        AuthExceptionCode.FORBIDDEN_EXCEPTION,
-        {
-          userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
-        },
       );
     }
 
@@ -774,13 +785,44 @@ export class SignInUpService {
       return;
     }
 
-    throw new AuthException(
+    this.throwUniformSignUpRestricted(
       'Sign-up requires a designated admin email for the first account',
+    );
+  }
+
+  // IMP-12 : message d'erreur uniforme pour tout refus d'auto-inscription —
+  // ne pas divulguer la raison (domaine, invitation, bootstrap) qui
+  // permettrait d'énumérer les comptes/domaines connus.
+  private throwUniformSignUpRestricted(internalReason: string): never {
+    throw new AuthException(
+      internalReason,
       AuthExceptionCode.FORBIDDEN_EXCEPTION,
       {
-        userFriendlyMessage: msg`Sign-up is restricted. The first account must use an authorized admin email.`,
+        userFriendlyMessage: msg`Sign-up is restricted. Please request an invitation from a workspace admin.`,
       },
     );
+  }
+
+  // IMP-12 : token bucket par e-mail normalisé. En cas de dépassement, on
+  // renvoie le MÊME message uniforme qu'un refus pour ne pas signaler que
+  // l'adresse a été activement sondée.
+  private async assertSignUpAttemptWithinRateLimit(
+    email: string,
+  ): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    try {
+      await this.throttlerService.tokenBucketThrottleOrThrow(
+        `sign-up-attempt:${normalizedEmail}`,
+        1,
+        SIGN_UP_ATTEMPT_MAX_TOKENS,
+        SIGN_UP_ATTEMPT_TIME_WINDOW_MS,
+      );
+    } catch {
+      this.throwUniformSignUpRestricted(
+        'Too many sign-up attempts for this email',
+      );
+    }
   }
 
   /**

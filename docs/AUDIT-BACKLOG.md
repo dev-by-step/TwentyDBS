@@ -31,11 +31,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 23   | 7       | 30    |
-| IMP (améliorations)       | 17   | 4       | 21    |
+| FIX (bugs / incohérences) | 25   | 5       | 30    |
+| IMP (améliorations)       | 18   | 3       | 21    |
 
-> `FAIT` FIX : 01→07, 09, 11, 12, 15→18, 20→23, 26→30.
-> `FAIT` IMP : 01→11, 13, 16→20.
+> `FAIT` FIX : 01→07, 09→13, 15→18, 20→23, 26→30.
+> `FAIT` IMP : 01→13, 16→20.
 > `PARTIELLEMENT FAIT` : FIX-24 (docs).
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 
@@ -47,11 +47,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥇 Priorité 1 — Sécurité (à traiter en premier)
 
-| ID     | Axe       | Résumé                                                                                    |
-| ------ | --------- | ----------------------------------------------------------------------------------------- |
-| FIX-10 | 🟠 SEC    | Confidentialité calendrier : le propriétaire peut perdre l'accès à ses propres événements |
-| FIX-14 | 🟠 SEC/UX | `skipInviteTeamOnboardingStep` mute des flags workspace-level sous `NoPermissionGuard`    |
-| FIX-13 | 🟠 SEC/UX | Auto-signup limité à un seul domaine (les 3 autres sociétés ne peuvent pas s'inscrire)    |
+| ID     | Axe       | Résumé                                                                                 |
+| ------ | --------- | -------------------------------------------------------------------------------------- |
+| FIX-14 | 🟠 SEC/UX | `skipInviteTeamOnboardingStep` mute des flags workspace-level sous `NoPermissionGuard` |
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
@@ -77,7 +75,6 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | ID     | Axe      | Résumé                                                          |
 | ------ | -------- | --------------------------------------------------------------- |
-| IMP-12 | ⚪ SEC   | Durcir le flux signup contre l'énumération de comptes           |
 | FIX-21 | ⚪ MAINT | `validate*Payload` sans `executeInWorkspaceContext`             |
 | FIX-24 | ⚪ DOC   | Docs périmées (ARCHITECTURE.md à réaligner après FIX-08/FIX-10) |
 | FIX-25 | ⚪ MAINT | Hygiène git : `.codex/`, `AGENTS.md`, snapshots Jest à trancher |
@@ -187,7 +184,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Correction** : réécriture sur le pattern IMP-19 (`useSelectableInternalEntities`) — requête construite manuellement via `generateFindManyRecordsQuery` **seulement si** la métadonnée existe (sinon requête placebo `currentUser { id }`), `skip` sur absence de métadonnée / membre / permission de lecture. Hooks toujours appelés inconditionnellement (Rules of Hooks). Fallback `user.entityId` conservé.
 - **Vérif** : `npx nx typecheck twenty-front` OK.
 
-#### FIX-10 — Confidentialité calendrier : code ≠ commentaire ≠ spec — `A_FAIRE`
+#### FIX-10 — Confidentialité calendrier : code ≠ commentaire ≠ spec — `FAIT` (2026-07-16)
+
+- **Décision produit** : le propriétaire du compte connecté voit TOUJOURS ses propres événements.
+- **Correction** : `calendar-privacy.service.ts` construit désormais `ownerWorkspaceMemberIdsByCalendarEventId` et, en tête d'arbitrage (juste après le check WORKSPACE_PUBLIC), démasque inconditionnellement si `currentWorkspaceMemberId` est propriétaire de l'événement — avant toute règle d'entité/audience/visibilité de canal. Ordre d'arbitrage re-documenté (public > propriétaire > audience explicite > entité propriétaire > visibilité canal > masqué).
+- **Vérif** : nouveau test « should never mask a calendar event for its connected-account owner » (canal excluant explicitement l'entité du propriétaire) — spec privacy 25/25.
 
 - **Sévérité/Axe** : 🟠 `SEC`/`DOC`
 - **Fichiers** : `packages/twenty-server/src/modules/calendar/common/services/calendar-privacy.service.ts` (~l.372-407), `docs/ARCHITECTURE.md`
@@ -211,7 +212,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Problème** : `entityIds.some(id => id !== activeEntityId)` rejette tout record partagé entre entités (Carte 4). Message d'erreur trompeur.
 - **Piste** : exiger `entityIds.includes(activeEntityId)` au lieu de l'exclusivité (décider du comportement pour les managers).
 
-#### FIX-13 — Restriction signup mono-domaine vs 4 sociétés — `A_FAIRE`
+#### FIX-13 — Restriction signup mono-domaine vs 4 sociétés — `FAIT` (2026-07-16, décision produit)
+
+- **Décision** : **invitation uniquement** pour les 3 autres sociétés (statu quo conservé volontairement). Aucun changement de code ; comportement documenté. Les membres de DEVBYSTEP/ALLSENSIA/ANGLE_INTELLIGENCE rejoignent le workspace sur invitation d'un admin (ou via un domaine listé dans `BOOTSTRAP_ADMIN_EMAILS`). Se combine avec IMP-12 (durcissement anti-énumération).
 
 - **Sévérité/Axe** : 🟠 `SEC`/`UX`
 - **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/services/sign-in-up.service.ts` (`assertEmailDomainAllowedForAutoSignUp`)
@@ -438,13 +441,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Contenu livré** : logger structuré `warn` avec événements typés — `logPermissionDenied`, `logSourceTaggingBypass`, `logInternalEntityMerge` (constaté en action lors de la fusion des 3 doublons FIX-29), `logJwtFallback` (disponible, sans appelant : le fallback JWT a été supprimé, voir FIX-17). Schéma : `{event, workspaceId, userId?, objectName?, décision…}` sur stdout (agrégeable).
 - **Vérif** : specs des 4 consommateurs verts ; merges observés en réel dans les logs d'`init-internal-entities`.
 
-#### IMP-12 — Durcir le flux signup contre l'énumération — `A_FAIRE`
+#### IMP-12 — Durcir le flux signup contre l'énumération — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : ⚪ `SEC`
-- **Fichiers** : `sign-in-up.service.ts` (`assertEmailDomainAllowedForAutoSignUp`)
-- **Problème** : le flux d'inscription répond différemment selon qu'une invitation existe ou non pour l'email, et il n'y a pas de rate-limit spécifique sur les tentatives refusées. Un attaquant peut donc **énumérer** quels emails/domaines sont connus du système en observant les différences de réponse.
-- **Correction proposée** : (1) uniformiser les messages d'erreur (même réponse générique quel que soit l'état interne) ; (2) ajouter un throttle sur les tentatives de signup refusées (par IP / par email). Se traite naturellement avec FIX-13 (restriction de domaine) et FIX-15 (flag signup).
-- **Effort** : moyen.
+- **Fichiers** : `sign-in-up.service.ts` (+ spec), `auth.module.ts`
+- **Décision produit** : oui, durcir (on reste en invitation-only, cf. FIX-13).
+- **Correction** : (1) **messages uniformes** — tous les refus d'auto-inscription passent par `throwUniformSignUpRestricted` (même code + même `userFriendlyMessage`), supprimant l'oracle qui révélait l'existence d'un super admin / d'une invitation / d'un domaine ; (2) **throttle par e-mail** — `assertSignUpAttemptWithinRateLimit` consomme un token (`ThrottlerService`, 10 tentatives / 15 min, clé `sign-up-attempt:<email normalisé>`), le dépassement renvoyant le MÊME message uniforme. En défense en profondeur au-dessus du `CaptchaGuard` déjà présent sur la mutation `signUp`.
+- **Vérif** : nouveau test « throttles repeated sign-up attempts » (court-circuite avant lecture DB) — spec 13/13 ; typecheck OK.
 
 ### Maintenabilité
 

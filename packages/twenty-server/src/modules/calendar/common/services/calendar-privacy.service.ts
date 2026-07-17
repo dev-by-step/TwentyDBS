@@ -348,6 +348,12 @@ export class CalendarPrivacyService {
         );
 
         const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
+        // FIX-10 : membres propriétaires (comptes connectés) par événement,
+        // pour garantir qu'un propriétaire voit toujours ses propres créneaux.
+        const ownerWorkspaceMemberIdsByCalendarEventId = new Map<
+          string,
+          Set<string>
+        >();
         const calendarEventIdsWithUnknownOwnerEntity = new Set<string>();
         const visibleEntityIdsByCalendarEventId = new Map<
           string,
@@ -366,10 +372,27 @@ export class CalendarPrivacyService {
           const ownerEntityId = ownerEntityIdByCalendarChannelId.get(
             association.calendarChannelId,
           );
+          const ownerWorkspaceMemberId =
+            workspaceMemberIdByCalendarChannelId.get(
+              association.calendarChannelId,
+            );
           const visibleInternalEntityIds =
             visibleInternalEntityIdsByCalendarChannelId.get(
               association.calendarChannelId,
             );
+
+          if (isDefined(ownerWorkspaceMemberId)) {
+            const ownerWorkspaceMemberIds =
+              ownerWorkspaceMemberIdsByCalendarEventId.get(
+                association.calendarEventId,
+              ) ?? new Set<string>();
+
+            ownerWorkspaceMemberIds.add(ownerWorkspaceMemberId);
+            ownerWorkspaceMemberIdsByCalendarEventId.set(
+              association.calendarEventId,
+              ownerWorkspaceMemberIds,
+            );
+          }
 
           if (
             isDefined(visibleInternalEntityIds) &&
@@ -414,10 +437,26 @@ export class CalendarPrivacyService {
             continue;
           }
 
+          // FIX-10 : le propriétaire du compte connecté voit TOUJOURS ses
+          // propres événements, quelles que soient les règles d'entité/audience
+          // (notamment une visibilité de canal qui exclurait sa propre entité).
+          const isViewerOwnerOfEvent =
+            isDefined(currentWorkspaceMemberId) &&
+            (ownerWorkspaceMemberIdsByCalendarEventId
+              .get(calendarEventId)
+              ?.has(currentWorkspaceMemberId) ??
+              false);
+
+          if (isViewerOwnerOfEvent) {
+            defaultMaskMap.set(calendarEventId, false);
+            continue;
+          }
+
           // Calendar privacy arbitration:
           // 1. WORKSPACE_PUBLIC events are handled above.
-          // 2. Event-level explicit audience wins when configured.
-          // 3. Otherwise, apply the legacy owner-entity rule, with optional
+          // 2. The connected-account owner always sees their own events (FIX-10).
+          // 3. Event-level explicit audience wins when configured.
+          // 4. Otherwise, apply the legacy owner-entity rule, with optional
           // channel-level visibility granting additional entity access.
           const channelVisibleEntityIds =
             visibleEntityIdsByCalendarEventId.get(calendarEventId);

@@ -255,6 +255,51 @@ describe('CalendarPrivacyService', () => {
     expect(result.get('calendar-event-1')).toBe(true);
   });
 
+  // FIX-10 : le propriétaire du compte connecté voit toujours ses propres
+  // événements, même quand la règle d'entité les masquerait.
+  it('should never mask a calendar event for its connected-account owner', async () => {
+    mockCalendarEventRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-event-1',
+        sharingScope: CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
+      },
+    ]);
+    mockCalendarEventAssociationRepository.find.mockResolvedValue([
+      { calendarEventId: 'calendar-event-1', calendarChannelId: 'channel-1' },
+    ]);
+    mockCalendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'channel-1',
+        connectedAccountId: 'connected-account-1',
+        // La visibilité du canal exclut délibérément l'entité du propriétaire.
+        visibleInternalEntityIds: ['some-other-entity-id'],
+      },
+    ]);
+    mockConnectedAccountRepository.find.mockResolvedValue([
+      { id: 'connected-account-1', userWorkspaceId: 'user-workspace-1' },
+    ]);
+    mockUserWorkspaceRepository.find.mockResolvedValue([
+      { id: 'user-workspace-1', userId: 'owner-user-1' },
+    ]);
+    mockWorkspaceMemberRepository.find.mockResolvedValue([
+      { id: 'owner-workspace-member-1', userId: 'owner-user-1' },
+    ]);
+    mockUserRepository.find.mockResolvedValue([
+      { id: 'owner-user-1', entityId: 'owner-entity-id' },
+    ]);
+
+    const result = await service.getCalendarEventMaskMap({
+      calendarEventIds: ['calendar-event-1'],
+      workspaceId: 'workspace-id',
+      // Le viewer est le propriétaire de l'agenda, mais son entité ne serait
+      // pas éligible au démasquage par les règles d'entité/visibilité.
+      currentUserEntityId: 'unrelated-entity-id',
+      currentWorkspaceMemberId: 'owner-workspace-member-1',
+    });
+
+    expect(result.get('calendar-event-1')).toBe(false);
+  });
+
   it('should not mask a calendar event owned by another accessible internal entity', async () => {
     mockWorkspaceMemberInternalEntityService.resolveContext.mockResolvedValue({
       currentEntityId: 'same-entity-id',
