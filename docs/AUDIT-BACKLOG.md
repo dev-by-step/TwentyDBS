@@ -32,10 +32,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
 | FIX (bugs / incohérences) | 28   | 2       | 30    |
-| IMP (améliorations)       | 18   | 3       | 21    |
+| IMP (améliorations)       | 19   | 2       | 21    |
 
 > `FAIT` FIX : 01→18, 20→24, 26→30.
-> `FAIT` IMP : 01→13, 16→20.
+> `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 
 ---
@@ -66,7 +66,6 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 | ID     | Axe      | Résumé                                                                       |
 | ------ | -------- | ---------------------------------------------------------------------------- |
 | IMP-14 | 🟠 MAINT | Découper les 2 fichiers géants (access-policy 1679 l., init-command 1950 l.) |
-| IMP-15 | 🟡 MAINT | Découper `SuperadminWorkspaceSetup.tsx` (956 lignes)                         |
 
 ### 🎗️ Priorité 5 — Mineurs / hygiène
 
@@ -466,13 +465,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
   - À faire **après** IMP-13 (le role service extrait allège déjà la policy) et idéalement avant de retoucher lourdement ces fichiers.
 - **Effort** : élevé (refactor structurel — bien couvrir de tests avant/après ; les suites unitaire + intégration existantes servent de filet).
 
-#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` — `EN_COURS` (2026-07-16)
+#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟡 `MAINT`
 - **Fichiers** : `SuperadminWorkspaceSetup.tsx` + nouveaux `SuperadminWorkspaceSetup.styles.ts`, `SuperadminEntitiesSection.tsx`, `SuperadminModulesSection.tsx`, `SuperadminModuleOrderSection.tsx`, `utils/superadminWorkspaceSetup.ts` (+ test).
 - **Progrès (décomposition sûre, sans changement de comportement)** : le composant passe de **995 à 670 lignes**. Extraits (déplacements verbatim, validés par typecheck + lint) : les 17 styled-components → fichier `.styles.ts` ; les types + helpers purs (`parseSavedSetupState`, `resolveModuleOptions`) → `utils/superadminWorkspaceSetup.ts` avec 5 tests unitaires ; les 3 sections d'UI (entités, modules, ordre du menu) → 3 sous-composants présentationnels purs (props in, aucun état). Le `handleSubmit`/FIX-29 n'a pas été touché.
-- **Reste (volontairement différé)** : extraire l'orchestration (`handleSubmit` + `syncWorkspaceNavigationMenu` + state, ~350 l.) dans un hook `useSuperadminWorkspaceSetupForm` pour passer sous 300 lignes. C'est la partie couplée au chemin critique d'onboarding ; à faire APRÈS avoir ajouté un test de rendu du composant (filet de sécurité absent aujourd'hui) pour ne pas risquer une régression du submit.
-- **Vérif** : `jest src/modules/onboarding` 27/27 ; `nx typecheck twenty-front` OK ; `nx lint:diff-with-main twenty-front` OK ; prettier OK.
+- **Finalisation** : (1) ajout d'un **test de rendu** filet de sécurité (`__tests__/SuperadminWorkspaceSetup.test.tsx`, 3 cas) exerçant l'affichage des 3 sections ET le flux `handleSubmit` de bout en bout (création entité + membership + completeSetup + snackbar succès) ; (2) extraction de toute l'orchestration (state + effets + handlers + `handleSubmit`/FIX-29 + `syncWorkspaceNavigationMenu`) dans `hooks/useSuperadminWorkspaceSetupForm.ts` (déplacement verbatim). Le composant tombe à **93 lignes** (< 300 ✓) ; le filet de rendu passe à l'identique après extraction, prouvant zéro changement de comportement.
+- **Vérif** : `jest src/modules/onboarding` **30/30** (dont le test de rendu, identique avant/après extraction) ; `nx typecheck twenty-front` OK ; `nx lint:diff-with-main twenty-front` OK ; oxlint + prettier OK.
 
 #### IMP-16 — Unifier les deux résolveurs de seeds — `FAIT` (2026-07-16, résolu par IMP-09)
 
