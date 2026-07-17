@@ -31,12 +31,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 26   | 4       | 30    |
+| FIX (bugs / incohérences) | 28   | 2       | 30    |
 | IMP (améliorations)       | 18   | 3       | 21    |
 
-> `FAIT` FIX : 01→07, 09→18, 20→23, 26→30.
+> `FAIT` FIX : 01→18, 20→24, 26→30.
 > `FAIT` IMP : 01→13, 16→20.
-> `PARTIELLEMENT FAIT` : FIX-24 (docs).
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 
 ---
@@ -52,10 +51,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
-| ID     | Axe         | Résumé                                                                                |
-| ------ | ----------- | ------------------------------------------------------------------------------------- |
-| FIX-08 | 🟠 DOC/DATA | Fallback par créateur contredit la décision documentée (**décision produit requise**) |
-| IMP-21 | 🟡 UX       | Aucun récap des relations ignorées à l'import CSV (silencieux)                        |
+| ID     | Axe   | Résumé                                                         |
+| ------ | ----- | -------------------------------------------------------------- |
+| IMP-21 | 🟡 UX | Aucun récap des relations ignorées à l'import CSV (silencieux) |
 
 ### 🥉 Priorité 3 — Performance / Scalabilité
 
@@ -75,7 +73,6 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 | ID     | Axe      | Résumé                                                          |
 | ------ | -------- | --------------------------------------------------------------- |
 | FIX-21 | ⚪ MAINT | `validate*Payload` sans `executeInWorkspaceContext`             |
-| FIX-24 | ⚪ DOC   | Docs périmées (ARCHITECTURE.md à réaligner après FIX-08/FIX-10) |
 | FIX-25 | ⚪ MAINT | Hygiène git : `.codex/`, `AGENTS.md`, snapshots Jest à trancher |
 
 ---
@@ -168,12 +165,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Problème** : `UPDATE … WHERE internalEntityId IS DISTINCT FROM csv_values` — toute réassignation manuelle d'une opportunité listée dans le CSV est annulée au redeploy suivant.
 - **Piste** : ne backfiller que si `internalEntityId IS NULL`, ou marquer les opportunités migrées (colonne / userVar) pour ne les traiter qu'une fois.
 
-#### FIX-08 — Fallback par créateur contredit la décision documentée — `A_FAIRE`
+#### FIX-08 — Fallback par créateur contredit la décision documentée — `FAIT` (2026-07-16, décision produit)
 
 - **Sévérité/Axe** : 🟠 `DOC`/`DATA`
-- **Fichiers** : `init-internal-entities.command.ts` (`backfillOpportunitiesFromWorkspaceMembers`), `MEMORY.md`, `docs/ARCHITECTURE.md`
-- **Problème** : MEMORY/ARCHITECTURE disent « aucun fallback par créateur », le code infère `internalEntityId` depuis `createdBy`/`owner`.
-- **Piste** : trancher (retirer le backfill OU mettre à jour la doc) — décision produit à demander.
+- **Fichiers** : `init-internal-entities.command.ts`, `docs/ARCHITECTURE.md`
+- **Décision** : **aucun fallback par créateur** (option retenue). Vérifié en code : plus aucune inférence de `internalEntityId` depuis `createdBy`/`owner` dans `init-internal-entities.command.ts` (grep vide). Une opportunité sans correspondance CSV reste `NULL`. Doc `ARCHITECTURE.md` réalignée en conséquence (voir FIX-24). Code et doc désormais cohérents.
 
 #### FIX-09 — Page Calendrier Groupe crashe si metadata absente — `FAIT` (2026-07-16)
 
@@ -326,13 +322,12 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Constat/correction** : le vrai comportement est une asymétrie de **tagging** (person/company auto-tagués sans assignation explicite possible ; opportunity autorise une assignation explicite validée via sa FK directe). Commentaire explicatif ajouté au point de branchement `objectName !== OPPORTUNITY_OBJECT_NAME` figeant l'intention (ne pas uniformiser les deux branches sous peine de casser l'isolation ou l'assignation légitime). Le bypass FIX-03, lui, s'applique désormais uniformément à tous les objets (vérifié en amont du branchement).
 - **Vérif** : spec source-tagging 22/22, typecheck OK.
 
-#### FIX-24 — Docs périmées — `PARTIELLEMENT FAIT`
+#### FIX-24 — Docs périmées — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : ⚪ `DOC`
-- **Fichiers** : `MEMORY.md` (fait), `docs/ARCHITECTURE.md` (reste)
-- **Problème** : `MEMORY.md` a été resynchronisé pour FIX-01→06 et les fixes récents, mais `docs/ARCHITECTURE.md` reste à réaligner sur deux points non tranchés : le fallback par créateur (FIX-08) et l'ordre d'arbitrage de la confidentialité calendrier (FIX-10).
-- **Correction proposée** : **dépend de FIX-08 et FIX-10** (décisions produit). Une fois ces deux items tranchés, mettre `docs/ARCHITECTURE.md` en cohérence avec le code retenu, puis passer FIX-24 à `FAIT`.
-- **Effort** : faible (mais bloqué par FIX-08/FIX-10).
+- **Fichiers** : `MEMORY.md` (déjà à jour), `docs/ARCHITECTURE.md`
+- **Correction** : `ARCHITECTURE.md` réaligné sur les décisions tranchées — arbitrage de masquage calendrier réécrit avec la règle « propriétaire toujours visible » (FIX-10) + normalisation (FIX-20) ; note backfill précisée (aucun fallback créateur FIX-08, garde `IS NULL` FIX-07) ; nouvelle section « Accès & inscription » documentant invitation-only (FIX-13), anti-énumération (IMP-12) et onboarding par utilisateur (FIX-14).
+- **Vérif** : prettier OK ; cohérence code/doc revue sur les 3 axes tranchés.
 
 #### FIX-25 — Hygiène git : `.codex/`, `AGENTS.md` et snapshots — `A_FAIRE`
 
