@@ -14,6 +14,25 @@
 - **Prod :** https://20.devbystep.fr (Dokku sur `vps-issa` 54.37.39.172, image `.dokku/Dockerfile`, Procfile web+worker, plugins dokku-postgres + dokku-redis + dokku-letsencrypt).
 - **Déploiement :** `git push dokku 10-permissions-entites:main` (branche locale → `main` côté dokku, `deploy-branch` config = `main`). Build sur le VPS via `.dokku/Dockerfile`, 4 GB de swap ajoutés pour le build front.
 
+### Variables d'environnement prod (Dokku app `twenty-dbs`)
+
+Deux variables **env-only** (déclarées dans `ConfigVariables`, `ADVANCED_SETTINGS`) pilotent des contrats d'exploitation. Sans elles, le code utilise un fallback codé en dur identique → aucun changement de comportement, mais le grant/seed ne sont pas rejouables proprement.
+
+- **`BOOTSTRAP_ADMIN_EMAILS`** — liste (séparée par virgules) des e-mails qui reçoivent `canAccessFullAdminPanel` + `canImpersonate` + rôle **Admin** à chaque connexion. **Doit correspondre exactement à l'e-mail de connexion** du compte, sinon le grant ne s'applique pas. Superadmin unique = **aline**. ⚠️ **Deux e-mails distincts selon l'environnement** : en **prod**, son vrai mail est **`aline@devbystep.fr`** ; `aline@weknow.dev` n'est **que le compte de test du dev-seeder local** (`database:reset`). Donc en prod on met `aline@devbystep.fr`. Sans la variable : aline garde ses droits (persistés en base) mais ils ne sont pas ré-appliqués sur nouvelle connexion / re-seed. Avant de poser la valeur, vérifier l'e-mail réel du compte : `SELECT email FROM core."user" WHERE "canAccessFullAdminPanel"=true;`.
+
+  ```bash
+  # PROD (vrai mail d'aline)
+  dokku config:set twenty-dbs BOOTSTRAP_ADMIN_EMAILS=aline@devbystep.fr
+  # LOCAL dev : le compte seedé est aline@weknow.dev (fallback codé en dur, rien à poser)
+  ```
+
+- **`INTERNAL_ENTITY_SEEDS`** — JSON des 4 sociétés (tableau OU `{ "entities": [...] }`), lu par `InternalEntityConfigurationService` → `init-internal-entities`. Chaque entité exige `id` (uuid), `name`, `color` (`#RRGGBB`), `aliases` optionnel. **Reprendre les IDs canoniques existants** (ci-dessous) pour éviter tout dédoublonnage/fusion. Guillemets simples obligatoires (les couleurs `#` seraient sinon des commentaires shell).
+  ```bash
+  dokku config:set twenty-dbs INTERNAL_ENTITY_SEEDS='[{"id":"550e8400-e29b-41d4-a716-446655440001","name":"WEKNOW","color":"#2563EB"},{"id":"550e8400-e29b-41d4-a716-446655440002","name":"DEVBYSTEP","color":"#16A34A"},{"id":"550e8400-e29b-41d4-a716-446655440003","name":"ALLSENSIA","color":"#D97706"},{"id":"550e8400-e29b-41d4-a716-446655440004","name":"ANGLE_INTELLIGENCE","color":"#7C3AED"}]'
+  ```
+
+`dokku config:set` **redémarre l'app** (l'entrypoint relance `init-internal-entities` au boot). Les deux peuvent être posées en un seul `config:set` (un seul redémarrage). Vérif : `dokku config:get twenty-dbs <VAR>`.
+
 ## Objectif métier
 
 Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKNOW`, `DEVBYSTEP`, `ALLSENSIA`, `ANGLE_INTELLIGENCE`) avec :
@@ -39,9 +58,9 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 ## Décisions structurantes — déploiement et onboarding
 
 - **Single-tenant** : `IS_MULTIWORKSPACE_ENABLED=false`. Le 1er signup crée le workspace `TwentyDBS` + auto-active (cf. `signUpOnNewWorkspace.activateWorkspace`). Les signups suivants rejoignent ce workspace via `signInUpOnExistingWorkspace`. Aucune UI de "création de workspace" n'est jamais affichée.
-- **Auto-signup verrouillé au domaine du super admin** : `SignInUpService.assertEmailDomainAllowedForAutoSignUp` lookup `userRepository.findOne({ where: { canAccessFullAdminPanel: true } })`. Si un super admin existe, seul son domaine email peut s'auto-inscrire. Si aucun super admin (bootstrap), seuls `BOOTSTRAP_ADMIN_EMAILS` (`aline@weknow.dev`, `aline@devbystep.fr`) peuvent créer le 1er compte. Les invitations explicites continuent à bypass le check (via `signInUpWithPersonalInvitation`).
+- **Auto-signup verrouillé au domaine du super admin** : `SignInUpService.assertEmailDomainAllowedForAutoSignUp` lookup `userRepository.findOne({ where: { canAccessFullAdminPanel: true } })`. Si un super admin existe, seul son domaine email peut s'auto-inscrire. Si aucun super admin (bootstrap), seul `BOOTSTRAP_ADMIN_EMAILS` (superadmin unique aline : `aline@devbystep.fr` en prod, `aline@weknow.dev` en dev-seed local) peut créer le 1er compte. Les invitations explicites continuent à bypass le check (via `signInUpWithPersonalInvitation`).
 - **Skip InviteTeam pour non-admins** : nouvelle mutation `skipInviteTeamOnboardingStep` (NoPermissionGuard) + helper `advanceFromInviteTeamStep`. `InviteTeam.tsx` affiche un écran simplifié pour les users sans `WORKSPACE_MEMBERS` (un seul bouton Continue).
-- **Bootstrap admin** : `BOOTSTRAP_ADMIN_EMAILS = ['aline@weknow.dev', 'aline@devbystep.fr']`. Aline obtient `canAccessFullAdminPanel=true` à son signup + onboarding superadmin pour configurer les InternalEntities.
+- **Bootstrap admin** : **superadmin unique = aline**. Décision produit (2026-07-18) : un seul superadmin, son mail officiel. **Prod = `aline@devbystep.fr`** (vrai mail) ; `aline@weknow.dev` = compte de test dev-seeder local uniquement. Donc `BOOTSTRAP_ADMIN_EMAILS=aline@devbystep.fr` en prod (voir « Variables d'environnement prod » ci-dessus). Aline obtient `canAccessFullAdminPanel=true` + `canImpersonate=true` + rôle Admin à son signup + onboarding superadmin pour configurer les InternalEntities. _(Ancien réglage à 2 e-mails abandonné.)_
 - **Entrypoint Twenty** : `setup_and_migrate_db` teste désormais la présence de la table `core.keyValuePair` (créée par la 1re migration) au lieu du schema `core` (que TypeORM crée vide à la connexion). Évite que `database:init:prod` soit faussement skippé.
 - **Image Docker Dokku** : `.dokku/Dockerfile` (dérivé de `packages/twenty-docker/twenty/Dockerfile`) embarque le Procfile à `/app/Procfile`. Le worker share l'image avec le web, sélectionné via Procfile + `dokku ps:scale twenty-dbs web=1 worker=1`.
 - **`scripts/dokku/bootstrap-twenty.sh`** : provisionne l'app + services + storage + scaling. Fait `postgres:link --alias PG_DATABASE` et `redis:link` (indispensable, sinon DNS introuvable au boot) + `git:set deploy-branch main`.
