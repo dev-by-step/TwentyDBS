@@ -18,20 +18,24 @@
 
 Deux variables **env-only** (déclarées dans `ConfigVariables`, `ADVANCED_SETTINGS`) pilotent des contrats d'exploitation. Sans elles, le code utilise un fallback codé en dur identique → aucun changement de comportement, mais le grant/seed ne sont pas rejouables proprement.
 
-- **`BOOTSTRAP_ADMIN_EMAILS`** — liste (séparée par virgules) des e-mails qui reçoivent `canAccessFullAdminPanel` + `canImpersonate` + rôle **Admin** à chaque connexion. **Doit correspondre exactement à l'e-mail de connexion** du compte, sinon le grant ne s'applique pas. Superadmin unique = **aline**. ⚠️ **Deux e-mails distincts selon l'environnement** : en **prod**, son vrai mail est **`aline@devbystep.fr`** ; `aline@weknow.dev` n'est **que le compte de test du dev-seeder local** (`database:reset`). Donc en prod on met `aline@devbystep.fr`. Sans la variable : aline garde ses droits (persistés en base) mais ils ne sont pas ré-appliqués sur nouvelle connexion / re-seed. Avant de poser la valeur, vérifier l'e-mail réel du compte : `SELECT email FROM core."user" WHERE "canAccessFullAdminPanel"=true;`.
+**État réel posé en prod (2026-07-18) :**
+
+- ✅ **`BOOTSTRAP_ADMIN_EMAILS='aline@devbystep.fr'`** — posée et vérifiée (`config:export`).
+- ❌ **`INTERNAL_ENTITY_SEEDS`** — **volontairement NON posée** : impossible à stocker sur ce VPS (voir piège `#` ci-dessous). L'app utilise le fallback codé en dur (mêmes 4 entités) → aucun impact.
+
+⚠️ **Piège Dokku de ce VPS — les valeurs contenant `#` sont tronquées.** L'environnement shell du VPS est cassé (erreurs `syntax error near unexpected token '('` de basher) et **commente tout à partir du premier `#`** au moment d'écrire dans le fichier ENV, **même avec `--encoded` (base64)** — vérifié : `INTERNAL_ENTITY_SEEDS` s'est stockée tronquée à `...WEKNOW","color":\`. Ne jamais poser une valeur contenant `#` via `config:set` ici. Contournement pour `INTERNAL_ENTITY_SEEDS` si un jour on veut la rendre configurable : dans le JSON, remplacer le `#` littéral des couleurs par son échappement Unicode `\u0023` (caractère U+0023). Ex. écrire `"color":"\u00232563EB"` au lieu de `"color":"#2563EB"` : `JSON.parse` le re-décode en `#2563EB` (le validateur teste la valeur **parsée** → OK), et la chaîne stockée en config ne contient plus aucun `#` littéral, donc n'est plus tronquée. Toujours vérifier après coup avec `dokku config:export --format=shell twenty-dbs` (et **pas** `config:get`, qui a le même bug d'affichage sur `#`).
+
+⚠️ **Le restart auto de `config:set` est SAUTÉ sur cette app** (« Skipping web/worker as it is missing from the current Procfile » : le Procfile est embarqué dans l'image `.dokku/Dockerfile`, pas détecté par la phase restart). Conséquence : une variable posée par `config:set` n'est **pas chargée dans les conteneurs en cours** ; elle s'active au **prochain `git push dokku`**. Pour `BOOTSTRAP_ADMIN_EMAILS` c'est sans urgence (aline garde ses droits persistés en base en attendant).
+
+- **`BOOTSTRAP_ADMIN_EMAILS`** — liste (virgules) des e-mails qui reçoivent `canAccessFullAdminPanel` + `canImpersonate` + rôle **Admin** à chaque connexion. **Doit correspondre exactement à l'e-mail de connexion** du compte. Superadmin unique = **aline** : en **prod** son vrai mail est **`aline@devbystep.fr`** (vérifié en base prod) ; `aline@weknow.dev` n'est que le compte du dev-seeder local. Vérif e-mail réel : `SELECT email FROM core."user" WHERE "canAccessFullAdminPanel"=true;`.
 
   ```bash
-  # PROD (vrai mail d'aline)
   dokku config:set twenty-dbs BOOTSTRAP_ADMIN_EMAILS=aline@devbystep.fr
-  # LOCAL dev : le compte seedé est aline@weknow.dev (fallback codé en dur, rien à poser)
   ```
 
-- **`INTERNAL_ENTITY_SEEDS`** — JSON des 4 sociétés (tableau OU `{ "entities": [...] }`), lu par `InternalEntityConfigurationService` → `init-internal-entities`. Chaque entité exige `id` (uuid), `name`, `color` (`#RRGGBB`), `aliases` optionnel. **Reprendre les IDs canoniques existants** (ci-dessous) pour éviter tout dédoublonnage/fusion. Guillemets simples obligatoires (les couleurs `#` seraient sinon des commentaires shell).
-  ```bash
-  dokku config:set twenty-dbs INTERNAL_ENTITY_SEEDS='[{"id":"550e8400-e29b-41d4-a716-446655440001","name":"WEKNOW","color":"#2563EB"},{"id":"550e8400-e29b-41d4-a716-446655440002","name":"DEVBYSTEP","color":"#16A34A"},{"id":"550e8400-e29b-41d4-a716-446655440003","name":"ALLSENSIA","color":"#D97706"},{"id":"550e8400-e29b-41d4-a716-446655440004","name":"ANGLE_INTELLIGENCE","color":"#7C3AED"}]'
-  ```
+- **`INTERNAL_ENTITY_SEEDS`** — JSON des 4 sociétés (tableau OU `{ "entities": [...] }`), lu par `InternalEntityConfigurationService` → `init-internal-entities`. Chaque entité : `id` (uuid canonique existant), `name`, `color` (`#RRGGBB`), `aliases` optionnel. **Non posée en prod** (bug `#` ci-dessus + fallback identique). IDs/couleurs canoniques (= ceux en base, à réutiliser tels quels si besoin) : WEKNOW `550e8400-…440001`/`#2563EB`, DEVBYSTEP `…440002`/`#16A34A`, ALLSENSIA `…440003`/`#D97706`, ANGLE_INTELLIGENCE `…440004`/`#7C3AED`.
 
-`dokku config:set` **redémarre l'app** (l'entrypoint relance `init-internal-entities` au boot). Les deux peuvent être posées en un seul `config:set` (un seul redémarrage). Vérif : `dokku config:get twenty-dbs <VAR>`.
+Accès VPS : `ssh dokku@vps-issa <commande-dokku>` (user restreint aux commandes dokku). Service PG prod = `twenty-dbs-db` ; requête non-interactive : `echo 'SELECT …;' | ssh dokku@vps-issa postgres:connect twenty-dbs-db`.
 
 ## Objectif métier
 
