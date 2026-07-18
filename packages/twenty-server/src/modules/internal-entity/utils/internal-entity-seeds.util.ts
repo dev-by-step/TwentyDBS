@@ -9,7 +9,16 @@ type InternalEntitySeedsConfig = {
   entities: unknown;
 };
 
-const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+// Le `#` de tête est OPTIONNEL à l'entrée : certains environnements de
+// déploiement (shells cassés, config Dokku de notre VPS) tronquent toute valeur
+// à partir du premier `#`, qu'ils traitent comme un début de commentaire — même
+// une valeur base64-décodée. Accepter `RRGGBB` sans dièse permet donc de poser
+// `INTERNAL_ENTITY_SEEDS` proprement dans ces environnements. La couleur est
+// systématiquement re-normalisée en `#RRGGBB` en sortie (cf. normalizeHexColor).
+const HEX_COLOR_PATTERN = /^#?[0-9A-Fa-f]{6}$/;
+
+const normalizeHexColor = (color: string): string =>
+  `#${color.replace(/^#/, '')}`.toUpperCase();
 
 const normalizeLookupValue = (value: string): string => value.trim().toLowerCase();
 
@@ -147,7 +156,7 @@ const validateInternalEntitySeedOrThrow = (
   return {
     id: id.toLowerCase(),
     name: name.trim(),
-    color: color.toUpperCase(),
+    color: normalizeHexColor(color),
     ...(aliases ? { aliases: aliases.map((alias) => alias.trim()) } : {}),
   };
 };
