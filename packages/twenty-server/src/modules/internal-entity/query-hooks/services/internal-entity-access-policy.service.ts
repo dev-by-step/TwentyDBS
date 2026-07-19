@@ -924,10 +924,6 @@ export class InternalEntityAccessPolicyService {
       return undefined;
     }
 
-    if (scopeMode === 'read' && !this.hasRequestedActiveEntity(authContext)) {
-      return undefined;
-    }
-
     const canApplyScopeFilter = await this.canApplyEntityScopeFilter(
       authContext.workspace.id,
       objectName,
@@ -935,6 +931,22 @@ export class InternalEntityAccessPolicyService {
 
     if (!canApplyScopeFilter) {
       return undefined;
+    }
+
+    // La portée de lecture est TOUJOURS dérivée des adhésions résolues côté
+    // serveur — jamais de ce que le client déclare. L'en-tête
+    // `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` ne peut que RESTREINDRE la portée
+    // à une de ses entités, jamais l'élargir : `resolveContext` ne retient
+    // l'entité demandée que si elle figure dans `entityIds` (adhésions réelles).
+    //
+    // Vue Groupe (aucune entité active demandée) = toutes les entités du membre,
+    // et non plus « aucun filtre ». Auparavant ce cas retournait `undefined`,
+    // donc une requête omettant simplement l'en-tête voyait l'intégralité du
+    // workspace.
+    if (scopeMode === 'read' && !this.hasRequestedActiveEntity(authContext)) {
+      const { entityIds } = await this.resolveEntityContext(authContext);
+
+      return this.getEntityScopeFilter(objectName, entityIds);
     }
 
     return this.getEntityScopeFilter(objectName, [

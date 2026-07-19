@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 28   | 3       | 32    |
+| FIX (bugs / incohérences) | 30   | 2       | 33    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30. — `INVALIDE` FIX : 31.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33. — `INVALIDE` FIX : 31.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -153,6 +153,22 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
 - **Problème** : `seedChatThreads` insérait `userWorkspaceId: ''` (chaîne vide) alors que la colonne est `uuid NOT NULL` sur `core.agentChatThread` → `nx database:reset` échouait systématiquement sur un nouvel environnement, avant même que le schéma workspace ne soit créé. Non lié au fork multi-entités (fonctionnalité agents IA), mais bloquait la validation de TOUT le reste.
 - **Correction** : utilise désormais `USER_WORKSPACE_DATA_SEED_IDS.JONY` (l'admin du workspace seedé) comme propriétaire du thread par défaut.
 - **Vérif** : `nx database:reset` complet sans erreur, suite d'intégration exécutée avec succès sur la DB fraîchement seedée.
+
+### 🔐 Durcissements de spec
+
+#### FIX-33 — La Vue Groupe est scopée aux entités du membre (durcissement, changement de spec) — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `SEC`
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getEntityScopedObjectFilter`), `internal-entity-access-policy.service.spec.ts`, `docs/ROADMAP.md` (Carte 10)
+- **Nature** : ⚠️ **changement de spec assumé, pas un correctif de bug.** L'ancien comportement (Vue Groupe = aucun filtre de lecture) était **conforme** à la Carte 10 — c'est le sujet du faux positif FIX-31. Décision produit du 2026-07-18 : le durcir malgré tout.
+- **Motif** : la portée de lecture était pilotée par `activeInternalEntityId`, alimenté par l'en-tête HTTP `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` **fourni par le client**. Une requête omettant simplement l'en-tête retournait donc l'intégralité du workspace.
+- **Nouveau contrat** : la portée est **toujours** résolue côté serveur depuis les adhésions du membre.
+  1. Platform admin → exemption de lecture conservée sur les objets de configuration.
+  2. En-tête présent et désignant une entité d'appartenance → portée restreinte à cette entité.
+  3. En-tête présent mais désignant une entité **non membre** → ignoré, retour à l'entité courante (l'en-tête ne peut jamais **élargir**).
+  4. Vue Groupe (en-tête absent) → portée = **toutes les entités d'appartenance** du membre (auparavant : aucun filtre).
+- **Vérifié en réel** (`louis@devbystep.dev`, non-admin, membre de 3 entités sur 4, appels GraphQL directs avec son propre token) : sans en-tête → `WEKNOW, DEVBYSTEP, ALLSENSIA` (ANGLE_INTELLIGENCE exclu) ✅ ; en-tête `DEVBYSTEP` → `DEVBYSTEP` seul ✅ ; en-tête `ANGLE_INTELLIGENCE` (non membre) → `DEVBYSTEP`, en-tête ignoré ✅.
+- **Tests** : le test qui verrouillait l'ancien contrat a été réécrit ; ajout d'un test « l'en-tête ne peut pas élargir la portée ». Le mock de `resolveContext` était **infidèle** (il renvoyait l'entité demandée sans la valider contre les adhésions, exprimant un état impossible en prod) — il réplique désormais la validation réelle. 150/150 verts, typecheck + lint OK.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 

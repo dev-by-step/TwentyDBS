@@ -300,7 +300,7 @@ entité dont je ne fais pas partie).
 ### Critères d'Acceptation
 
 **Scoping par entité :**
-- [x] Un utilisateur sans entité active (Vue Groupe) voit toutes les données CRM accessibles à son rôle (filtre désactivé en lecture).
+- [x] ~~Un utilisateur sans entité active (Vue Groupe) voit toutes les données CRM accessibles à son rôle (filtre désactivé en lecture).~~ **Révisé le 2026-07-18** : la Vue Groupe est désormais scopée à **toutes les entités d'appartenance du membre**, et non plus « aucun filtre ». Motif : la portée de lecture était dérivée d'un en-tête HTTP fourni par le client, donc une requête l'omettant lisait l'intégralité du workspace. La portée est maintenant toujours résolue côté serveur depuis les adhésions ; l'en-tête ne peut que **restreindre** à une entité dont l'appelant est membre, jamais élargir. Les platform admins conservent leur exemption de lecture.
 - [x] Un utilisateur en Vue Société (`activeInternalEntityId` posé) ne voit que les `Company`/`Person`/`Opportunity`/`Membership`/`InternalEntity` rattachés à son entité.
 - [x] Les mutations (`updateOne`, `deleteOne`, `bulkUpdate`, etc.) sont rejetées sur un enregistrement d'une autre entité, sauf pour `STANDARD_ROLE.admin` (platform admin) ou `STANDARD_ROLE.entityManager`.
 - [x] `findDuplicates` et `mergeMany` sont restreints aux entity managers / platform admins, et uniquement sur des enregistrements de l'entité active.
@@ -326,4 +326,4 @@ entité dont je ne fais pas partie).
 
 ### Notes de mise en service
 - Après tout reset DB ou ajout de relation, relancer `npx nx run twenty-server:command -- init-internal-entities` puis `npx nx run twenty-front:graphql:generate`.
-- Le front communique l'entité active via header HTTP `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME`. Vue Groupe = header absent / vide → aucune contrainte de lecture appliquée par l'access policy.
+- Le front communique l'entité active via header HTTP `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME`. **Depuis le 2026-07-18** : Vue Groupe = header absent / vide → lecture scopée à **toutes les entités d'appartenance du membre** (et non plus « aucune contrainte »). Le header est une **restriction** optionnelle à une seule de ces entités : s'il désigne une entité dont l'appelant n'est pas membre, il est ignoré et la portée retombe sur son entité courante.

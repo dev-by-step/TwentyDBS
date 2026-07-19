@@ -20,7 +20,8 @@ const HEX_COLOR_PATTERN = /^#?[0-9A-Fa-f]{6}$/;
 const normalizeHexColor = (color: string): string =>
   `#${color.replace(/^#/, '')}`.toUpperCase();
 
-const normalizeLookupValue = (value: string): string => value.trim().toLowerCase();
+const normalizeLookupValue = (value: string): string =>
+  value.trim().toLowerCase();
 
 const isInternalEntitySeedsConfig = (
   value: unknown,
@@ -101,8 +102,8 @@ export const resolveInternalEntitySeedId = (
   }
 
   return (
-    internalEntitySeeds.find(
-      (seed) => buildLookupValues(seed).includes(normalizedEntityName),
+    internalEntitySeeds.find((seed) =>
+      buildLookupValues(seed).includes(normalizedEntityName),
     )?.id ?? null
   );
 };
@@ -125,7 +126,11 @@ const validateInternalEntitySeedOrThrow = (
     );
   }
 
-  if (!isDefined(name) || typeof name !== 'string' || name.trim().length === 0) {
+  if (
+    !isDefined(name) ||
+    typeof name !== 'string' ||
+    name.trim().length === 0
+  ) {
     throw new Error(
       `${INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME}[${index}].name est obligatoire`,
     );

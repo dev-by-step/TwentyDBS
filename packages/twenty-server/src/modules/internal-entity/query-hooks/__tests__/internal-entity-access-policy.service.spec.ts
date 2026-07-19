@@ -147,10 +147,25 @@ const buildServiceContext = ({
   const service = new InternalEntityAccessPolicyService(
     globalWorkspaceOrmManager as unknown as GlobalWorkspaceOrmManager,
     {
-      resolveContext: jest.fn().mockResolvedValue({
-        currentEntityId: entityId,
-        activeEntityId: activeEntityId ?? entityId,
-        entityIds: accessibleEntityIds ?? [entityId],
+      // Ce mock reproduit la validation du vrai service
+      // (`WorkspaceMemberInternalEntityService.resolveActiveEntityId`) : l'entité
+      // active demandée par le client n'est retenue QUE si elle fait partie des
+      // adhésions du membre, sinon on retombe sur son entité courante. Sans
+      // cela, le mock pourrait exprimer un état impossible en production
+      // (portée élargie à une entité dont l'appelant n'est pas membre) et
+      // masquerait la garantie de sécurité correspondante.
+      resolveContext: jest.fn().mockImplementation(async () => {
+        const memberEntityIds = accessibleEntityIds ?? [entityId];
+
+        return {
+          currentEntityId: entityId,
+          activeEntityId:
+            activeEntityId !== undefined &&
+            memberEntityIds.includes(activeEntityId)
+              ? activeEntityId
+              : entityId,
+          entityIds: memberEntityIds,
+        };
       }),
     } as unknown as WorkspaceMemberInternalEntityService,
     objectMetadataService as unknown as import('src/engine/metadata-modules/object-metadata/object-metadata.service').ObjectMetadataService,
@@ -201,8 +216,11 @@ const buildServiceContext = ({
 };
 
 describe('InternalEntityAccessPolicyService', () => {
-  it('should keep opportunity findMany queries unscoped in group view', async () => {
-    const { service, authContext } = buildServiceContext({
+  // La Vue Groupe n'est plus « aucun filtre » : elle est scopée à TOUTES les
+  // entités du membre, résolues côté serveur. Une requête qui omet l'en-tête
+  // d'entité active ne peut donc plus lire l'intégralité du workspace.
+  it('should scope opportunity findMany queries to all member entities in group view', async () => {
+    const { service, authContext, entityId } = buildServiceContext({
       includeActiveEntityHeader: false,
     });
 
@@ -220,7 +238,30 @@ describe('InternalEntityAccessPolicyService', () => {
       },
     );
 
-    expect(payload.filter).toEqual(filter);
+    expect(payload.filter).toEqual({
+      and: [filter, { internalEntityId: { in: [entityId] } }],
+    });
+  });
+
+  // Garantie de sécurité : l'en-tête `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` est
+  // fourni par le client, il ne doit donc jamais pouvoir ÉLARGIR la portée à une
+  // entité dont l'appelant n'est pas membre — seulement la restreindre.
+  it('should ignore an active entity header pointing to a non-member entity', async () => {
+    const foreignEntityId = '99999999-9999-4999-8999-999999999999';
+    const { service, authContext, entityId } = buildServiceContext({
+      activeEntityId: foreignEntityId,
+    });
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {},
+    );
+
+    expect(payload.filter).toEqual({
+      internalEntityId: { in: [entityId] },
+    });
+    expect(JSON.stringify(payload.filter)).not.toContain(foreignEntityId);
   });
 
   it('should scope opportunity findMany queries to the current entity', async () => {
@@ -304,6 +345,9 @@ describe('InternalEntityAccessPolicyService', () => {
     const activeEntityId = faker.string.uuid();
     const { service, authContext } = buildServiceContext({
       activeEntityId,
+      // L'entité active doit faire partie des adhésions du membre, sinon elle
+      // est ignorée (l'en-tête client ne peut pas élargir la portée).
+      accessibleEntityIds: [activeEntityId],
       objectMetadataByObjectName: {
         company: [
           {
