@@ -31,12 +31,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 28   | 2       | 30    |
+| FIX (bugs / incohérences) | 28   | 3       | 32    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30.
+> `FAIT` FIX : 01→18, 20→24, 26→30. — `INVALIDE` FIX : 31.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
+> Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
 
 ---
 
@@ -46,14 +47,14 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥇 Priorité 1 — Sécurité (à traiter en premier)
 
-| ID  | Axe | Résumé |
-| --- | --- | ------ |
+_Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
-| ID     | Axe   | Résumé                                                         |
-| ------ | ----- | -------------------------------------------------------------- |
-| IMP-21 | 🟡 UX | Aucun récap des relations ignorées à l'import CSV (silencieux) |
+| ID     | Axe   | Résumé                                                                   |
+| ------ | ----- | ------------------------------------------------------------------------ |
+| FIX-32 | 🟠 UX | Settings > Internal entities : le superadmin ne voit qu'une entité sur 4 |
+| IMP-21 | 🟡 UX | Aucun récap des relations ignorées à l'import CSV (silencieux)           |
 
 ### 🥉 Priorité 3 — Performance / Scalabilité
 
@@ -153,7 +154,28 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Correction** : utilise désormais `USER_WORKSPACE_DATA_SEED_IDS.JONY` (l'admin du workspace seedé) comme propriétaire du thread par défaut.
 - **Vérif** : `nx database:reset` complet sans erreur, suite d'intégration exécutée avec succès sur la DB fraîchement seedée.
 
+### ❌ Faux positifs (conservés pour ne pas être re-signalés)
+
+#### FIX-31 — « Isolation multi-entités contournable en lecture » — `INVALIDE` (2026-07-18, faux positif)
+
+- **Ce qui avait été signalé** : avec le token d'un non-admin (`louis@devbystep.dev`, membre de 3 entités sur 4), un appel GraphQL direct omettant le filtre d'entité renvoie **les 4 entités** et **les 50 opportunités**, alors que son écran en affiche 0 sous sa vue d'entité. Conclusion (erronée) : le scoping en lecture serait « opt-in par le client » via l'en-tête `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME`, donc contournable.
+- **Pourquoi c'est INVALIDE** : c'est le **comportement spécifié et accepté** de la Carte 10 (`docs/ROADMAP.md`), verbatim :
+  - « Un utilisateur **sans entité active (Vue Groupe) voit toutes les données CRM accessibles à son rôle (filtre désactivé en lecture)** » ;
+  - Notes de mise en service : « **Vue Groupe = header absent / vide → aucune contrainte de lecture appliquée par l'access policy** ».
+    Le scoping **en lecture** est un confort de vue, pas une frontière de sécurité. Le contrôle d'accès réel repose sur (1) le **rôle** (« accessibles à son rôle »), (2) les **mutations** qui, elles, sont bien rejetées hors entité (sauf platform admin / entityManager), (3) le **masquage calendrier** (Cartes 5 et 10).
+- **À retenir** : ne pas re-signaler la lecture non filtrée en Vue Groupe comme une faille. Si le besoin métier évolue vers une isolation en lecture réellement contraignante, c'est un **changement de spec** (nouvelle carte), pas un correctif de bug.
+
 ### 🟠 À faire — Importants
+
+#### FIX-32 — Settings > Internal entities n'affiche qu'une entité sur 4 pour le superadmin — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX`
+- **Fichiers** : `buildEntityScopedRecordFilter.ts` (`DEFAULT_ENTITY_FILTER_MAP`, clé `internalEntity`), page `settings/internal-entities`
+- **Constat** : la page « Entity colors » annonce « Pick a color for **each** internal entity » mais ne liste que l'entité active → un platform admin ne peut pas configurer la couleur des 3 autres sans basculer en Vue Groupe. Reproduit avec aline (superadmin) : 1 entité affichée sur 4.
+- **Cause** : le front applique `internalEntity: (entityId) => ({ id: { eq: entityId } })`. Côté serveur, les objets de configuration (`ENTITY_CONFIGURATION_OBJECT_NAME_SET`) sont au contraire **volontairement exemptés en lecture pour les platform admins** — le filtre front écrase donc cette exemption sur une page d'administration.
+- **⚠️ Ne PAS corriger en retirant la clé `internalEntity` du filtre global** : la Carte 10 spécifie qu'en **Vue Société** un utilisateur ne voit que les `InternalEntity` rattachés à son entité. Retirer la clé casse ce critère (vérifié en A/B : un non-admin passe de 1 à 4 entités visibles dans sa vue d'entité).
+- **Correctif livré (2026-07-18)** : nouvelle option `bypassEntityViewScope` sur `useFindManyRecords` (documentée : n'ôte aucune protection, la portée reste imposée par l'access policy serveur), activée **uniquement** par `SettingsInternalEntities.tsx`. Le `DEFAULT_ENTITY_FILTER_MAP` global est laissé intact.
+- **Vérifications en réel** : aline (platform admin, vue WEKNOW) → les **4** entités configurables avec leurs couleurs ✅ ; `/objects/internalEntities` reste à **1** sous vue WEKNOW → critère Carte 10 préservé ✅ ; un non-admin (`louis@devbystep.dev`) est de toute façon **redirigé hors de cette page de settings** (déjà réservée aux admins) ✅. `npx nx typecheck twenty-front` + `lint:diff-with-main` OK.
 
 #### FIX-07 — Le backfill CSV écrase les corrections manuelles à chaque boot — `FAIT` (2026-07-16, constaté)
 

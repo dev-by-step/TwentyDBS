@@ -33,6 +33,18 @@ export type UseFindManyRecordsParams<T> = ObjectMetadataItemIdentifier &
     recordGqlFields?: RecordGqlOperationGqlRecordFields;
     fetchPolicy?: WatchQueryFetchPolicy;
     withSoftDeleted?: boolean;
+    /**
+     * N'applique pas le filtre client « Ma société / Vue groupe » à cette
+     * requête. Réservé aux écrans d'administration qui doivent lister des
+     * objets de CONFIGURATION multi-entités (ex. Settings > Internal entities,
+     * qui doit proposer une couleur pour *chaque* entité).
+     *
+     * Ne désactive aucune protection : la portée réelle reste décidée par
+     * `InternalEntityAccessPolicyService` côté serveur, qui scope ces objets
+     * selon l'entité active de l'appelant et n'exempte en lecture que les
+     * platform admins. Un utilisateur non-admin reste donc limité à son entité.
+     */
+    bypassEntityViewScope?: boolean;
   };
 
 export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
@@ -47,6 +59,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   cursorFilter,
   limit = QUERY_DEFAULT_LIMIT_RECORDS,
   withSoftDeleted = false,
+  bypassEntityViewScope = false,
 }: UseFindManyRecordsParams<T>) => {
   const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -76,7 +89,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   const entityScopedFilter = buildEntityScopedRecordFilter({
     objectNameSingular,
     filter: withSoftDeleteFilter,
-    selectedEntityId,
+    selectedEntityId: bypassEntityViewScope ? null : selectedEntityId,
   });
 
   const queryIdentifier = getQueryIdentifier({

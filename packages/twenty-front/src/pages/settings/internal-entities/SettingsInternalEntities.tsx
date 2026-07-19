@@ -137,10 +137,17 @@ export const SettingsInternalEntities = () => {
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { updateOneRecord } = useUpdateOneRecord();
 
+  // FIX-32 : cet écran d'administration doit proposer une couleur pour *chaque*
+  // entité interne. Sans ce bypass, le filtre de vue « Ma société / Vue groupe »
+  // réduisait la liste à la seule entité active — un platform admin ne pouvait
+  // donc pas configurer les autres. La portée effective reste imposée par le
+  // serveur (qui n'exempte en lecture que les platform admins), un utilisateur
+  // non-admin continue de ne voir que son entité.
   const { records: internalEntities = [], loading } =
     useFindManyRecords<InternalEntityRecord>({
       objectNameSingular: INTERNAL_ENTITY_OBJECT_NAME_SINGULAR,
       recordGqlFields: { id: true, name: true, color: true },
+      bypassEntityViewScope: true,
     });
 
   const sortedEntities = [...internalEntities].sort(
