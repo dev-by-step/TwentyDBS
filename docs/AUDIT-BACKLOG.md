@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 30   | 2       | 33    |
+| FIX (bugs / incohérences) | 32   | 3       | 36    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33. — `INVALIDE` FIX : 31.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33, 35, 36. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 34.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -169,6 +169,32 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
   4. Vue Groupe (en-tête absent) → portée = **toutes les entités d'appartenance** du membre (auparavant : aucun filtre).
 - **Vérifié en réel** (`louis@devbystep.dev`, non-admin, membre de 3 entités sur 4, appels GraphQL directs avec son propre token) : sans en-tête → `WEKNOW, DEVBYSTEP, ALLSENSIA` (ANGLE_INTELLIGENCE exclu) ✅ ; en-tête `DEVBYSTEP` → `DEVBYSTEP` seul ✅ ; en-tête `ANGLE_INTELLIGENCE` (non membre) → `DEVBYSTEP`, en-tête ignoré ✅.
 - **Tests** : le test qui verrouillait l'ancien contrat a été réécrit ; ajout d'un test « l'en-tête ne peut pas élargir la portée ». Le mock de `resolveContext` était **infidèle** (il renvoyait l'entité demandée sans la valider contre les adhésions, exprimant un état impossible en prod) — il réplique désormais la validation réelle. 150/150 verts, typecheck + lint OK.
+
+#### FIX-35 — Écran vide trompeur : « Add your first… » alors que des enregistrements existent — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX`
+- **Fichiers** : `RecordTableEmptyState.tsx`
+- **Constat** : sous une vue d'entité qui masque tous les enregistrements, l'écran affichait « Add your first Opportunity — Use our API or add your first Opportunity manually » alors que 50 opportunités existaient (simplement filtrées). Deux messages incohérents selon le contexte.
+- **Cause** : la sonde `useFindManyRecords({ limit: 1 })` qui calcule `noRecordAtAll` était **elle-même filtrée par l'entité active** → `totalCount = 0` → branche « aucun enregistrement du tout ».
+- **Correctif** : la sonde passe `bypassEntityViewScope: true` (option introduite par FIX-32). Elle répond désormais à « existe-t-il le moindre enregistrement ? » et non « en reste-t-il dans la vue courante ? ». La portée reste imposée par le serveur : l'utilisateur ne compte que des enregistrements de ses entités.
+- **Vérification** : typecheck + lint OK, tests d'état vide 6/6. ⚠️ Le cas n'a **pas pu être rejoué en local** après coup : le backfill du CSV dev ayant rattaché toutes les données, plus aucune vue d'entité ne renvoie 0. Correctif validé par lecture de code et par le fait que l'option `bypassEntityViewScope` est prouvée de bout en bout sur FIX-32.
+
+#### FIX-36 — Onglets de fiche absents de l'arbre d'accessibilité — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX` (accessibilité)
+- **Fichiers** : `twenty-ui/.../TabButton/TabButton.tsx`, `ui/layout/tab-list/components/TabList.tsx`
+- **Constat** : les onglets de fiche (Timeline, Tasks, Notes, Files, Emails, Calendar) étaient rendus en `<a>` sans `role="tab"` ni `aria-selected`, donc invisibles pour les lecteurs d'écran **et** inciblables par leur rôle dans les tests automatisés (constaté pendant l'audit : impossible de cliquer l'onglet Notes autrement que par un sélecteur de classe Linaria).
+- **Correctif** : `TabButton` expose `role="tab"`, `aria-selected` et `aria-disabled` ; le conteneur `TabList` expose `role="tablist"`.
+- **Vérification en réel** : l'arbre d'accessibilité expose désormais `tab "Timeline" [selected]`, `tab "Tasks"`, `tab "Notes"`, `tab "Files"`, `tab "Emails"`, `tab "Calendar"` ✅. Typecheck twenty-ui + twenty-front, lint OK.
+
+#### FIX-34 — Le nettoyage dev annule le backfill Company/Person qu'il vient de produire — `A_FAIRE` (découvert 2026-07-18)
+
+- **Sévérité/Axe** : 🟡 `DATA` (dev uniquement — garde `workspaceId !== SEED_APPLE_WORKSPACE_ID`, **aucun impact prod**)
+- **Fichiers** : `init-internal-entities.command.ts` (`cleanupPrimaryDevWorkspaceMemberships`)
+- **Constat** : dans un même run d'`init-internal-entities`, `backfillCompanyMembershipsFromOpportunities` crée les adhésions (« 20 candidat(s) traité(s) pour Company <- Opportunity »), puis `cleanupPrimaryDevWorkspaceMemberships` les supprime. Le nettoyage ne conserve que les correspondances dont le **nom de société est identique au nom d'entité** — soit les 4 auto-références `WEKNOW -> WEKNOW`, `DEVBYSTEP -> DEVBYSTEP`, etc.
+- **Effet** : après backfill complet en local, `companies rattachées = 4/20` et `persons = 14/30`, alors que les 16 sociétés clientes ont bien des opportunités rattachées à une entité. **En prod : 59/59 companies et 77/77 persons rattachées.** L'environnement de dev n'est donc pas représentatif de la prod — c'est précisément ce qui a produit plusieurs faux diagnostics lors de l'audit du 2026-07-18.
+- **Absence de justification** : ni commentaire, ni entrée de backlog, ni décision produit documentée (contrairement à FIX-08). Introduit par le commit `b9a629f62b` (« perms »).
+- **Piste** : restreindre la suppression aux adhésions **non justifiées par une donnée réelle** — c.-à-d. épargner celles dont l'entité est celle d'une opportunité de la société — au lieu de filtrer sur l'égalité des noms. À arbitrer : une société cliente (ex. `Asteria Retail`) doit-elle apparaître dans le portefeuille de l'entité qui porte ses opportunités ? C'est un choix de modélisation produit, non déductible du code.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 

@@ -161,7 +161,9 @@ export const TabList = ({
         <StyledContainer className={className}>
           <StyledNodeDimension onDimensionChange={onContainerWidthChange}>
             <StyledInnerContainer>
-              <StyledTabContainer>
+              {/* `role="tablist"` donne aux `role="tab"` enfants leur contexte
+                  d'accessibilité (position, nombre total, onglet actif). */}
+              <StyledTabContainer role="tablist">
                 {visibleTabs.slice(0, visibleTabCount).map((tab) => (
                   <TabButton
                     key={tab.id}
