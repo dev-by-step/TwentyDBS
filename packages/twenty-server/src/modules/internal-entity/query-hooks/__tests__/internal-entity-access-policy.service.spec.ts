@@ -133,15 +133,23 @@ const buildServiceContext = ({
   const internalEntityScopeCacheService = new InternalEntityScopeCacheService();
 
   const internalEntityRoleService = {
-    isPlatformAdmin: jest.fn().mockResolvedValue(
-      persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel,
-    ),
-    isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
-    canManageEntityScopedRecords: jest.fn().mockResolvedValue(
-      (persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel) ||
-        roleLabel === ENTITY_MANAGER_ROLE_LABEL,
-    ),
-    isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+    isPlatformAdmin: jest
+      .fn()
+      .mockResolvedValue(
+        persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel,
+      ),
+    isEntityManager: jest
+      .fn()
+      .mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+    canManageEntityScopedRecords: jest
+      .fn()
+      .mockResolvedValue(
+        (persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel) ||
+          roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+      ),
+    isInternalEntitySuperAdmin: jest
+      .fn()
+      .mockReturnValue(canAccessFullAdminPanel),
   };
 
   const service = new InternalEntityAccessPolicyService(

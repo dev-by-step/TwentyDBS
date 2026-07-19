@@ -374,7 +374,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (!(await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        ))
+      ) {
         this.throwPermissionDenied(
           msg`Only superadmins can modify internal entity settings.`,
           {
@@ -385,7 +389,9 @@ export class InternalEntityAccessPolicyService {
         );
       }
     } else if (objectName === 'workspaceMemberEntityMembership') {
-      if (!(await this.internalEntityRoleService.isPlatformAdmin(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.isPlatformAdmin(authContext))
+      ) {
         this.throwPermissionDenied(
           msg`Bulk updates on workspace member entity assignments are reserved to platform administrators.`,
           {
@@ -396,7 +402,11 @@ export class InternalEntityAccessPolicyService {
         );
       }
     } else if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
-      if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+          authContext,
+        ))
+      ) {
         this.throwPermissionDenied(
           msg`Bulk updates on entity assignments are reserved to entity managers and platform administrators.`,
           {
@@ -410,7 +420,9 @@ export class InternalEntityAccessPolicyService {
 
     if (
       ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-      !(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
     ) {
       this.throwPermissionDenied(
         msg`Bulk updates are reserved to entity managers and platform administrators.`,
@@ -492,7 +504,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
+      if (
+        await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        )
+      ) {
         return payload;
       }
 
@@ -506,7 +522,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Duplicate detection on entity-scoped records is reserved to entity managers and platform administrators.`,
         {
@@ -583,7 +603,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can merge entity records.`,
         {
@@ -642,7 +666,9 @@ export class InternalEntityAccessPolicyService {
 
     if (
       objectName === 'internalEntity' &&
-      (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))
+      (await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+        authContext,
+      ))
     ) {
       return;
     }
@@ -719,7 +745,9 @@ export class InternalEntityAccessPolicyService {
     // reaching the bypass.
     const canBypassEntityMatchForCrmObject =
       ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-      (await this.internalEntityRoleService.canManageEntityScopedRecords(authContext));
+      (await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ));
 
     if (
       !canBypassEntityMatchForCrmObject &&
@@ -825,7 +853,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
+      if (
+        await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        )
+      ) {
         return;
       }
 
@@ -858,7 +890,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can manage entity assignments.`,
         {

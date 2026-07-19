@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 33   | 3       | 37    |
+| FIX (bugs / incohérences) | 34   | 2       | 37    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33, 35, 36, 37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 34.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -196,14 +196,16 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
 - **Correctif** : `useAggregateRecords` skippe désormais tant qu'aucun utilisateur n'est authentifié (`currentUserState`). Gate volontairement posée sur l'**état d'authentification** et non sur la route : `useShowAuthModal` dépend de `useLocation()`, donc du Router — dépendance trop lourde pour un hook de données aussi largement utilisé (première tentative : elle cassait 4 tests unitaires en exigeant un `<Router>`).
 - **Vérifié en réel** : page de connexion → **0 requête GraphQL et 0 erreur console** (le décor s'affiche à l'identique) ✅ ; une fois authentifié, les agrégations de pied de tableau fonctionnent normalement (« Unique of Emails 6 », « Empty of Phones 0% », « Earliest of Creation date ») ✅. Tests `useAggregateRecords` + `useAggregateRecordsQuery` 8/8, typecheck + lint OK.
 
-#### FIX-34 — Le nettoyage dev annule le backfill Company/Person qu'il vient de produire — `A_FAIRE` (découvert 2026-07-18)
+#### FIX-34 — Le nettoyage dev annule le backfill Company/Person qu'il vient de produire — `FAIT` (2026-07-18)
 
 - **Sévérité/Axe** : 🟡 `DATA` (dev uniquement — garde `workspaceId !== SEED_APPLE_WORKSPACE_ID`, **aucun impact prod**)
 - **Fichiers** : `init-internal-entities.command.ts` (`cleanupPrimaryDevWorkspaceMemberships`)
 - **Constat** : dans un même run d'`init-internal-entities`, `backfillCompanyMembershipsFromOpportunities` crée les adhésions (« 20 candidat(s) traité(s) pour Company <- Opportunity »), puis `cleanupPrimaryDevWorkspaceMemberships` les supprime. Le nettoyage ne conserve que les correspondances dont le **nom de société est identique au nom d'entité** — soit les 4 auto-références `WEKNOW -> WEKNOW`, `DEVBYSTEP -> DEVBYSTEP`, etc.
 - **Effet** : après backfill complet en local, `companies rattachées = 4/20` et `persons = 14/30`, alors que les 16 sociétés clientes ont bien des opportunités rattachées à une entité. **En prod : 59/59 companies et 77/77 persons rattachées.** L'environnement de dev n'est donc pas représentatif de la prod — c'est précisément ce qui a produit plusieurs faux diagnostics lors de l'audit du 2026-07-18.
 - **Absence de justification** : ni commentaire, ni entrée de backlog, ni décision produit documentée (contrairement à FIX-08). Introduit par le commit `b9a629f62b` (« perms »).
-- **Piste** : restreindre la suppression aux adhésions **non justifiées par une donnée réelle** — c.-à-d. épargner celles dont l'entité est celle d'une opportunité de la société — au lieu de filtrer sur l'égalité des noms. À arbitrer : une société cliente (ex. `Asteria Retail`) doit-elle apparaître dans le portefeuille de l'entité qui porte ses opportunités ? C'est un choix de modélisation produit, non déductible du code.
+- **Correctif livré** : le nettoyage conserve désormais une adhésion si elle est justifiée par une donnée réelle — (1) la société **est** l'entité (auto-référence canonique), **ou** (2) une opportunité rattache cette société (`opportunity.companyId`) / ce contact (`opportunity.pointOfContactId`) à cette entité. Seul le bruit des cascades Person <-> Company est supprimé.
+- **Arbitrage retenu** : une société cliente appartient au portefeuille de l'entité qui porte ses opportunités — c'est la règle qui reproduit la prod.
+- **Vérifié en réel** : après relance d'`init-internal-entities`, **20/20 companies** et **30/30 persons** rattachées (contre 4/20 et 14/30), avec un mapping cohérent (`Asteria Retail -> WEKNOW`, `Helios Industrie -> DEVBYSTEP`, `Cobalt Sante -> ALLSENSIA`, `Atlas Mobility -> ANGLE_INTELLIGENCE`). L'environnement de dev reflète enfin la prod. 150/150 tests, typecheck + lint OK.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 

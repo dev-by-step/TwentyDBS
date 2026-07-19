@@ -269,6 +269,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       internalEntitySqlTable,
       companySqlTable,
       personSqlTable,
+      opportunitySqlTable,
       companyEntityMembershipSqlTable,
       personEntityMembershipSqlTable,
       workspaceMemberSqlTable,
@@ -1566,6 +1567,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     internalEntitySqlTable,
     companySqlTable,
     personSqlTable,
+    opportunitySqlTable,
     companyEntityMembershipSqlTable,
     personEntityMembershipSqlTable,
     workspaceMemberSqlTable,
@@ -1576,6 +1578,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     internalEntitySqlTable: string;
     companySqlTable: string;
     personSqlTable: string;
+    opportunitySqlTable: string;
     companyEntityMembershipSqlTable: string;
     personEntityMembershipSqlTable: string;
     workspaceMemberSqlTable: string;
@@ -1585,8 +1588,18 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
+    // Ce nettoyage ne vise que le bruit produit par les cascades
+    // Person <-> Company du seed de démo. Une adhésion est conservée si elle est
+    // justifiée par une donnée réelle :
+    //   1. la société EST l'entité (auto-référence canonique : WEKNOW <-> WEKNOW) ;
+    //   2. ou une opportunité rattache cette société / ce contact à cette entité.
+    // Sans la règle 2, le nettoyage supprimait les adhésions que
+    // `backfillCompanyMembershipsFromOpportunities` venait de créer dans le même
+    // run : les 16 sociétés clientes restaient orphelines alors que leurs
+    // opportunités étaient bien rattachées, rendant l'environnement de dev non
+    // représentatif de la prod (où 59/59 sociétés sont rattachées).
     this.logger.log(
-      'Nettoyage des memberships de démo pour ne garder que les correspondances entité <-> société canonique...',
+      'Nettoyage des memberships de démo (conserve les correspondances canoniques et celles justifiées par une opportunité)...',
     );
 
     const normalizeNameSql = (alias: string) =>
@@ -1607,6 +1620,13 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
            WHERE company."id" = membership."companyId"
              AND company."deletedAt" IS NULL
              AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${opportunitySqlTable} opportunity
+           WHERE opportunity."companyId" = membership."companyId"
+             AND opportunity."internalEntityId" = membership."internalEntityId"
+             AND opportunity."deletedAt" IS NULL
          )
        RETURNING membership."id"`,
     );
@@ -1629,6 +1649,13 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
            WHERE person."id" = membership."personId"
              AND person."deletedAt" IS NULL
              AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${opportunitySqlTable} opportunity
+           WHERE opportunity."pointOfContactId" = membership."personId"
+             AND opportunity."internalEntityId" = membership."internalEntityId"
+             AND opportunity."deletedAt" IS NULL
          )
        RETURNING membership."id"`,
     );
