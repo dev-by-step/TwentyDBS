@@ -8,7 +8,9 @@ import { type RecordGqlFieldsAggregate } from '@/object-record/graphql/types/Rec
 import { type RecordGqlOperationFindManyResult } from '@/object-record/graphql/types/RecordGqlOperationFindManyResult';
 import { useAggregateRecordsQuery } from '@/object-record/hooks/useAggregateRecordsQuery';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { currentUserState } from '@/auth/states/currentUserState';
 import { type ExtendedAggregateOperations } from '@/object-record/record-table/types/ExtendedAggregateOperations';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import isEmpty from 'lodash.isempty';
 import { type RecordGqlOperationFilter } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
@@ -31,6 +33,16 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
   skip?: boolean;
 }) => {
   const { selectedEntityId } = useEntityFilter();
+  // Le décor de la page de connexion monte une vraie table d'enregistrements
+  // alimentée par des données mockées. Les requêtes de records sont déjà
+  // court-circuitées dans ce cas (cf. `useRecordIndexTableQuery`), mais pas les
+  // agrégations : elles partaient sans session et échouaient en 400
+  // (« Unknown type CompanyFilterInput », le schéma n'étant pas résolu hors
+  // authentification). On se gate sur l'état d'authentification réel plutôt que
+  // sur la route (`useShowAuthModal` dépend du Router, dépendance trop lourde
+  // pour un hook de données aussi largement utilisé).
+  const currentUser = useAtomStateValue(currentUserState);
+  const isAuthenticated = isDefined(currentUser);
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
@@ -56,7 +68,11 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
   const { data, loading, error } = useQuery<RecordGqlOperationFindManyResult>(
     aggregateQuery,
     {
-      skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
+      skip:
+        skip ||
+        !isAuthenticated ||
+        !isDefined(objectMetadataItem) ||
+        !hasReadPermission,
       variables: {
         filter: entityScopedFilter,
       },

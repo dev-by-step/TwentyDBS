@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 32   | 3       | 36    |
+| FIX (bugs / incohérences) | 33   | 3       | 37    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33, 35, 36. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 34.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32, 33, 35, 36, 37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 34.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -186,6 +186,15 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
 - **Constat** : les onglets de fiche (Timeline, Tasks, Notes, Files, Emails, Calendar) étaient rendus en `<a>` sans `role="tab"` ni `aria-selected`, donc invisibles pour les lecteurs d'écran **et** inciblables par leur rôle dans les tests automatisés (constaté pendant l'audit : impossible de cliquer l'onglet Notes autrement que par un sélecteur de classe Linaria).
 - **Correctif** : `TabButton` expose `role="tab"`, `aria-selected` et `aria-disabled` ; le conteneur `TabList` expose `role="tablist"`.
 - **Vérification en réel** : l'arbre d'accessibilité expose désormais `tab "Timeline" [selected]`, `tab "Tasks"`, `tab "Notes"`, `tab "Files"`, `tab "Emails"`, `tab "Calendar"` ✅. Typecheck twenty-ui + twenty-front, lint OK.
+
+#### FIX-37 — Le décor de la page de connexion émettait des requêtes GraphQL non authentifiées (400) — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : ⚪ `UX`/`PERF`
+- **Fichiers** : `useAggregateRecords.ts`
+- **Constat** : au chargement de `/welcome`, une requête `AggregateCompanies` partait sans session et échouait en **400** (« Unknown type `CompanyFilterInput` » — le schéma workspace n'est pas résolu hors authentification), polluant la console.
+- **Cause** : le décor de connexion monte une vraie `RecordTableWithWrappers` alimentée par `SIGN_IN_BACKGROUND_MOCK_COMPANIES`. Les requêtes de **records** étaient déjà court-circuitées (`useRecordIndexTableQuery` : `skip: showAuthModal`), mais pas les **agrégations**.
+- **Correctif** : `useAggregateRecords` skippe désormais tant qu'aucun utilisateur n'est authentifié (`currentUserState`). Gate volontairement posée sur l'**état d'authentification** et non sur la route : `useShowAuthModal` dépend de `useLocation()`, donc du Router — dépendance trop lourde pour un hook de données aussi largement utilisé (première tentative : elle cassait 4 tests unitaires en exigeant un `<Router>`).
+- **Vérifié en réel** : page de connexion → **0 requête GraphQL et 0 erreur console** (le décor s'affiche à l'identique) ✅ ; une fois authentifié, les agrégations de pied de tableau fonctionnent normalement (« Unique of Emails 6 », « Empty of Phones 0% », « Earliest of Creation date ») ✅. Tests `useAggregateRecords` + `useAggregateRecordsQuery` 8/8, typecheck + lint OK.
 
 #### FIX-34 — Le nettoyage dev annule le backfill Company/Person qu'il vient de produire — `A_FAIRE` (découvert 2026-07-18)
 
