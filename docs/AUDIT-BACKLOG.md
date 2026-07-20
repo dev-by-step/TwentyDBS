@@ -31,10 +31,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 34   | 2       | 37    |
+| FIX (bugs / incohérences) | 34   | 4       | 39    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 38, 39.
+> Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-38** (🔴 masquage d'audience calendrier inopérant) et **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10), plus l'observation produit OBS-01 (notes invisibles aux collègues, conforme spec).
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -47,7 +48,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥇 Priorité 1 — Sécurité (à traiter en premier)
 
-_Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)
+| ID     | Axe    | Résumé                                                                                 |
+| ------ | ------ | -------------------------------------------------------------------------------------- |
+| FIX-38 | 🔴 SEC | Masquage d'audience calendrier inopérant : un non-membre lit le contenu des événements |
+
+_(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
@@ -154,6 +159,39 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
 - **Correction** : utilise désormais `USER_WORKSPACE_DATA_SEED_IDS.JONY` (l'admin du workspace seedé) comme propriétaire du thread par défaut.
 - **Vérif** : `nx database:reset` complet sans erreur, suite d'intégration exécutée avec succès sur la DB fraîchement seedée.
 
+### 🔴 À faire — Critiques
+
+#### FIX-38 — Le masquage d'audience calendrier ne s'applique jamais : un non-membre lit le contenu des événements — `A_FAIRE` (découvert 2026-07-18)
+
+- **Sévérité/Axe** : 🔴 `SEC`
+- **Fichiers** : `apply-calendar-events-visibility-restrictions.service.ts`, `calendar-event-find-one.post-query.hook.ts`, `calendar-event-find-many.post-query.hook.ts`, `calendar-privacy.service.ts`
+- **Constat reproduit** : avec le token de `louis@devbystep.dev` (non-admin, `user.entityId` = DEVBYSTEP, **non membre d'ANGLE_INTELLIGENCE**), la requête directe sur un événement `sharingScope = ENTITY_ONLY` dont l'audience est **ANGLE_INTELLIGENCE uniquement** renvoie tout en clair :
+  ```
+  title: "One-on-One Meeting"
+  description: "Regular one-on-one check-in to discuss performance and career development."
+  location: "Zoom"
+  ```
+  **Attendu (critère accepté de la Carte 10)** : « Une `audienceEntities` non vide masque l'événement pour les utilisateurs hors audience (**titre = "Occupé", description/location/attendees nuls**), tout en gardant `startsAt`/`endsAt` ». Le calendrier groupe affiche également **0 événement masqué** pour cet utilisateur.
+- **Cause probable identifiée** : la logique de visibilité est articulée autour des **canaux de calendrier** (`eventChannels` : `SHARE_EVERYTHING` / `METADATA` / propriété via `connectedAccount`). Or en base : **800 associations `calendarChannelEventAssociation` pour 0 `calendarChannel`** — les associations pointent vers des canaux inexistants. `eventChannels` est donc systématiquement vide, aucune branche ne s'engage, et le `calendarEventMaskMap` reste vide avant l'appel à `applyInternalEntityPrivacyToWorkspaceCalendarEvents`.
+- **⚠️ À vérifier avant correction** : déterminer si la prod est touchée. En prod, de vrais canaux existent (comptes connectés Google/Microsoft) et la branche `METADATA`/`hasRequesterEntityContext` peut s'engager. **Le bug est certain en dev ; son impact en prod reste à confirmer** — c'est le premier point à trancher.
+- **Piste** : le masquage par audience d'entité (Carte 10) ne devrait pas dépendre de l'existence d'un canal. L'arbitrage `sharingScope` + `audienceEntities` doit s'appliquer même pour un événement créé manuellement dans l'app (sans compte connecté), qui est précisément le cas d'usage du fork.
+
+### 🟡 À faire — Modérés (données de démo)
+
+#### FIX-39 — Le seed de démo ne permet pas d'exercer les Cartes 5 et 10 — `A_FAIRE` (découvert 2026-07-18)
+
+- **Sévérité/Axe** : 🟡 `DATA` (dev uniquement)
+- **Fichiers** : `dev-seeder/` (calendrier, notes, tâches)
+- **Constat** (état du seed avant enrichissement manuel) :
+  | Symptôme | Mesure |
+  | --- | --- |
+  | Associations événement ↔ canal orphelines | **800 associations / 0 canal** |
+  | Audiences d'entité sur les événements | **0** (tous en `ENTITY_ONLY`, aucun `WORKSPACE_PUBLIC`) |
+  | Notes sans aucun rattachement | ~**1750 / 1802** (52 `noteTarget`) |
+  | Tâches sans aucun rattachement | ~**1750 / 1801** (51 `taskTarget`) |
+- **Conséquence** : les fonctionnalités phares du fork (audience per-event, masquage inter-entités, activités sur fiche) n'ont **aucune donnée de démonstration**, ce qui les rend intestables en local et masque des régressions — FIX-38 n'a été détecté qu'après enrichissement manuel de la base.
+- **Contournement appliqué en local (non versionné)** : script SQL d'enrichissement — 90 notes rattachées à des opportunités, 60 tâches à des sociétés, 260 événements passés en `WORKSPACE_PUBLIC`, 540 audiences d'entité créées. À porter dans le dev-seeder pour être reproductible après `database:reset`.
+
 ### 🔐 Durcissements de spec
 
 #### FIX-33 — La Vue Groupe est scopée aux entités du membre (durcissement, changement de spec) — `FAIT` (2026-07-18)
@@ -206,6 +244,14 @@ _Aucun item de sécurité ouvert._ (FIX-31 a été investigué puis classé `INV
 - **Correctif livré** : le nettoyage conserve désormais une adhésion si elle est justifiée par une donnée réelle — (1) la société **est** l'entité (auto-référence canonique), **ou** (2) une opportunité rattache cette société (`opportunity.companyId`) / ce contact (`opportunity.pointOfContactId`) à cette entité. Seul le bruit des cascades Person <-> Company est supprimé.
 - **Arbitrage retenu** : une société cliente appartient au portefeuille de l'entité qui porte ses opportunités — c'est la règle qui reproduit la prod.
 - **Vérifié en réel** : après relance d'`init-internal-entities`, **20/20 companies** et **30/30 persons** rattachées (contre 4/20 et 14/30), avec un mapping cohérent (`Asteria Retail -> WEKNOW`, `Helios Industrie -> DEVBYSTEP`, `Cobalt Sante -> ALLSENSIA`, `Atlas Mobility -> ANGLE_INTELLIGENCE`). L'environnement de dev reflète enfin la prod. 150/150 tests, typecheck + lint OK.
+
+### 💬 Observations produit (conformes à la spec, à arbitrer)
+
+#### OBS-01 — Une note posée sur une fiche est invisible aux collègues — conforme Carte 10
+
+- **Constat** : connectée en **superadmin**, aline voit **2 notes sur 1802** dans la page Notes ; les tâches, elles, remontent à 597 (elle en est assignataire).
+- **Pourquoi ce n'est pas un bug** : `note`/`task` suivent la règle « personal work » de la Carte 10 — `note` filtre sur le **créateur seul**, `task` sur `créateur OR assignee`. L'asymétrie observée est donc exactement le contrat.
+- **Question produit** : dans un CRM, une note attachée à une opportunité est généralement une information **d'équipe**. En l'état, deux commerciaux d'une même entité ne voient pas leurs notes respectives sur une même affaire, et un superadmin ne peut pas auditer les notes. Si ce n'est pas voulu, c'est un **changement de spec** (nouvelle carte), pas un correctif — cf. la leçon tirée de FIX-31.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 
