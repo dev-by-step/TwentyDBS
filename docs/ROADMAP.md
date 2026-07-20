@@ -304,7 +304,7 @@ entité dont je ne fais pas partie).
 - [x] Un utilisateur en Vue Société (`activeInternalEntityId` posé) ne voit que les `Company`/`Person`/`Opportunity`/`Membership`/`InternalEntity` rattachés à son entité.
 - [x] Les mutations (`updateOne`, `deleteOne`, `bulkUpdate`, etc.) sont rejetées sur un enregistrement d'une autre entité, sauf pour `STANDARD_ROLE.admin` (platform admin) ou `STANDARD_ROLE.entityManager`.
 - [x] `findDuplicates` et `mergeMany` sont restreints aux entity managers / platform admins, et uniquement sur des enregistrements de l'entité active.
-- [x] `Task`/`Note`/`Attachment`/`NoteTarget`/`TaskTarget` suivent la règle "personal work" (créateur ou assignee uniquement).
+- [x] ~~`Task`/`Note`/`Attachment`/`NoteTarget`/`TaskTarget` suivent la règle "personal work" (créateur ou assignee uniquement).~~ **Révisé le 2026-07-18** : `Note`/`NoteTarget` passent en **visibilité d'équipe** — une note est visible si on l'a écrite **ou** si elle est rattachée à une société / personne / opportunité de ses entités. Motif : une note portée par une affaire est une information d'équipe ; l'ancienne règle empêchait deux commerciaux d'une même entité de partager quoi que ce soit sur une même affaire, et interdisait tout audit au superadmin. Le cloisonnement multi-entités est préservé (une note d'une entité dont on n'est pas membre reste invisible). `Task`/`Attachment`/`TaskTarget` gardent la règle personal work.
 - [x] `TimelineActivity` suit la règle hybride (OR createdBy personnel + targets visibles dans l'entité).
 
 **Résilience metadata :**

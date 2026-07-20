@@ -235,11 +235,15 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 💬 Observations produit (conformes à la spec, à arbitrer)
 
-#### OBS-01 — Une note posée sur une fiche est invisible aux collègues — conforme Carte 10
+#### OBS-01 — Une note posée sur une fiche est invisible aux collègues — `TRANCHÉ` (2026-07-18) → visibilité d'équipe
 
 - **Constat** : connectée en **superadmin**, aline voit **2 notes sur 1802** dans la page Notes ; les tâches, elles, remontent à 597 (elle en est assignataire).
 - **Pourquoi ce n'est pas un bug** : `note`/`task` suivent la règle « personal work » de la Carte 10 — `note` filtre sur le **créateur seul**, `task` sur `créateur OR assignee`. L'asymétrie observée est donc exactement le contrat.
-- **Question produit** : dans un CRM, une note attachée à une opportunité est généralement une information **d'équipe**. En l'état, deux commerciaux d'une même entité ne voient pas leurs notes respectives sur une même affaire, et un superadmin ne peut pas auditer les notes. Si ce n'est pas voulu, c'est un **changement de spec** (nouvelle carte), pas un correctif — cf. la leçon tirée de FIX-31.
+- **Décision produit (2026-07-18)** : **les notes doivent être visibles par l'équipe.** Changement de spec assumé — critère de la Carte 10 révisé dans `docs/ROADMAP.md`.
+- **Nouveau contrat** : une note est visible si (1) on l'a écrite, **ou** (2) elle est rattachée à une société / personne / opportunité de **ses entités**. Le cloisonnement multi-entités est préservé : une note portée par une affaire d'une entité dont on n'est pas membre reste invisible. `noteTarget` suit la visibilité de sa note, sans quoi l'onglet Notes resterait vide. `Task`, `Attachment` et `TaskTarget` **gardent** la règle personal work.
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getPersonalScopeFilter` cas `note`/`noteTarget`, nouveau `getTeamVisibleNoteIds`).
+- **Vérifié en réel** : l'onglet Notes d'une opportunité WEKNOW passe de « All 1 » à **« All 2 »** pour aline — elle voit désormais la note d'un collègue. Isolation contrôlée : deux notes portées par une opportunité `ANGLE_INTELLIGENCE` (entité dont elle n'est pas membre) restent **« Record not found »**. 150/150 tests, typecheck OK.
+- **Dette de test relevée au passage** : les dépôts mockés `company`/`person`/`opportunity`/`note`/`task` du spec n'avaient pas de valeur de retour sur `find()`, ce qui faisait échouer toute logique lisant réellement ces enregistrements. Corrigé.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 

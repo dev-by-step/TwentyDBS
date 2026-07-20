@@ -43,15 +43,15 @@ const buildServiceContext = ({
 
   const opportunityRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const noteRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const taskRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const attachmentRepository = {
     findOne: jest.fn(),
@@ -90,6 +90,9 @@ const buildServiceContext = ({
         case 'person':
           return {
             findOne: jest.fn(),
+            // `find` est indispensable depuis que la visibilité d'équipe des
+            // notes (OBS-01) résout les enregistrements de l'entité.
+            find: jest.fn().mockResolvedValue([]),
           };
         default:
           return {
@@ -1200,7 +1203,10 @@ describe('InternalEntityAccessPolicyService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('should scope note queries to the current workspace member', async () => {
+  // OBS-01 / décision produit du 2026-07-18 : une note est une information
+  // d'équipe. Elle reste cloisonnée par entité — on la voit si on l'a écrite OU
+  // si elle est rattachée à un enregistrement de nos entités.
+  it('should scope note queries to the author or the team entity scope', async () => {
     const { service, authContext, workspaceMemberId } = buildServiceContext();
 
     const payload = await service.scopeFindManyPayload(authContext, 'note', {
@@ -1219,11 +1225,16 @@ describe('InternalEntityAccessPolicyService', () => {
           },
         },
         {
-          createdBy: {
-            workspaceMemberId: {
-              eq: workspaceMemberId,
+          or: [
+            {
+              createdBy: {
+                workspaceMemberId: {
+                  eq: workspaceMemberId,
+                },
+              },
             },
-          },
+            expect.objectContaining({ id: expect.anything() }),
+          ],
         },
       ],
     });
