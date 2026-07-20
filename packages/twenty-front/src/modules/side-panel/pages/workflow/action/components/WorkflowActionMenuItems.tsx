@@ -31,7 +31,11 @@ export const WorkflowActionMenuItems = ({
             LeftIcon={() => (
               <Icon color={getActionIconColorOrThrow(action.type)} size={16} />
             )}
-            text={typeof action.defaultLabel === 'string' ? action.defaultLabel : action.defaultLabel.id}
+            text={
+              typeof action.defaultLabel === 'string'
+                ? action.defaultLabel
+                : action.defaultLabel.id
+            }
             onClick={() => onClick(action.type)}
           />
         );

@@ -28,10 +28,8 @@ import {
   resolveModuleOptions,
   type WorkspaceMemberEntityMembershipRecord,
 } from '@/onboarding/utils/superadminWorkspaceSetup';
-import {
-  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
-  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
-} from '@/onboarding/constants/superadminWorkspaceSetupUserVarKeys';
+import { ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING } from '@/onboarding/constants/onboardingSuperadminWorkspaceSetupPendingUserVarKey';
+import { ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE } from '@/onboarding/constants/onboardingSuperadminWorkspaceSetupStateUserVarKey';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';

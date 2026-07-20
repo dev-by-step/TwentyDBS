@@ -20,7 +20,9 @@ const getSubstringCoordinate = (
   return null;
 };
 
-export const getWrongExportedFunctionMarkers = (value: string): editor.IMarkerData[] => {
+export const getWrongExportedFunctionMarkers = (
+  value: string,
+): editor.IMarkerData[] => {
   const validRegex = /export\s+const\s+main\s*=/g;
   const invalidRegex = /export\s+const\s+\S*/g;
   const exportRegex = /export\s+const/g;

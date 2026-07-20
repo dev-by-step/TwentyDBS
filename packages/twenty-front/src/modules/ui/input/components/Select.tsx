@@ -290,7 +290,11 @@ export const Select = <Value extends SelectValue>({
                   <MenuItem
                     onClick={callToActionButton.onClick}
                     LeftIcon={callToActionButton.Icon}
-                    text={typeof callToActionButton.text === 'string' ? callToActionButton.text : callToActionButton.text.id}
+                    text={
+                      typeof callToActionButton.text === 'string'
+                        ? callToActionButton.text
+                        : callToActionButton.text.id
+                    }
                   />
                 </DropdownMenuItemsContainer>
               )}

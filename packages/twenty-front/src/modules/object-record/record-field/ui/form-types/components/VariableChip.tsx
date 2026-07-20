@@ -32,8 +32,16 @@ export const VariableChip = ({
   });
 
   const isVariableNotFound = !isDefined(variableLabel);
-  const label = isVariableNotFound ? t`Not Found` : isString(variableLabel) ? variableLabel : variableLabel?.id ?? '';
-  const title = isVariableNotFound ? t`Variable not found` : isString(variablePathLabel) ? variablePathLabel : variablePathLabel?.id ?? '';
+  const label = isVariableNotFound
+    ? t`Not Found`
+    : isString(variableLabel)
+      ? variableLabel
+      : (variableLabel?.id ?? '');
+  const title = isVariableNotFound
+    ? t`Variable not found`
+    : isString(variablePathLabel)
+      ? variablePathLabel
+      : (variablePathLabel?.id ?? '');
 
   return (
     <BaseChip
