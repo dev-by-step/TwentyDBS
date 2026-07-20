@@ -184,6 +184,26 @@ const FORMAT_DUE_DATE = (daysFromNow: number | null): string | null => {
 };
 
 // Generate task data seeds
+
+// FIX-39 : les notes/tâches rattachées à une opportunité (index 51 à 150) sont
+// réparties entre plusieurs membres. Sans cette rotation, tout était créé par
+// « Tim A » et la règle « personal work » de la Carte 10 rendait l'onglet
+// Notes/Tasks d'une fiche affaire vide pour tous les autres utilisateurs —
+// y compris le superadmin. Le rattachement seul ne suffisait donc pas.
+const OPPORTUNITY_ACTIVITY_AUTHORS = [
+  { id: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY, name: 'Aline Caquineau' },
+  { id: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM, name: 'Tim A' },
+  { id: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL, name: 'Phil S' },
+  { id: WORKSPACE_MEMBER_DATA_SEED_IDS.LOUIS_WEKNOW, name: 'Louis Viard' },
+];
+
+const RESOLVE_ACTIVITY_AUTHOR = (index: number) =>
+  index >= 51 && index <= 150
+    ? OPPORTUNITY_ACTIVITY_AUTHORS[
+        (index - 51) % OPPORTUNITY_ACTIVITY_AUTHORS.length
+      ]
+    : { id: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM, name: 'Tim A' };
+
 const GENERATE_TASK_SEEDS = (): TaskDataSeed[] => {
   const TASK_SEEDS: TaskDataSeed[] = [];
 
@@ -214,11 +234,11 @@ const GENERATE_TASK_SEEDS = (): TaskDataSeed[] => {
       dueAt: FORMAT_DUE_DATE(TEMPLATE.daysFromNow),
       assigneeId: GET_RANDOM_ASSIGNEE(),
       createdBySource: 'MANUAL',
-      createdByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      createdByName: 'Tim A',
+      createdByWorkspaceMemberId: RESOLVE_ACTIVITY_AUTHOR(INDEX).id,
+      createdByName: RESOLVE_ACTIVITY_AUTHOR(INDEX).name,
       updatedBySource: 'MANUAL',
-      updatedByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      updatedByName: 'Tim A',
+      updatedByWorkspaceMemberId: RESOLVE_ACTIVITY_AUTHOR(INDEX).id,
+      updatedByName: RESOLVE_ACTIVITY_AUTHOR(INDEX).name,
     });
   }
 
@@ -249,11 +269,11 @@ const GENERATE_TASK_SEEDS = (): TaskDataSeed[] => {
       dueAt: FORMAT_DUE_DATE(TEMPLATE.daysFromNow),
       assigneeId: GET_RANDOM_ASSIGNEE(),
       createdBySource: 'MANUAL',
-      createdByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      createdByName: 'Tim A',
+      createdByWorkspaceMemberId: RESOLVE_ACTIVITY_AUTHOR(INDEX).id,
+      createdByName: RESOLVE_ACTIVITY_AUTHOR(INDEX).name,
       updatedBySource: 'MANUAL',
-      updatedByWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      updatedByName: 'Tim A',
+      updatedByWorkspaceMemberId: RESOLVE_ACTIVITY_AUTHOR(INDEX).id,
+      updatedByName: RESOLVE_ACTIVITY_AUTHOR(INDEX).name,
     });
   }
 
