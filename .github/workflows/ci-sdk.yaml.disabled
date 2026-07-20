@@ -1,3 +1,8 @@
+# DÉSACTIVÉ (2026-07-20) : le job sdk-e2e-test échoue sur 'appDeploy failed: Upload failed: Entity performing the request does not have permission' — permissions de stockage cloud pour le déploiement d'app marketplace, non configurées sur ce fork.
+# Aucun rapport avec le code de ce fork. Renommé en .disabled plutôt que supprimé
+# pour rester réversible si ces identifiants deviennent un jour disponibles.
+# Pour réactiver : renommer en .yaml et fournir les secrets manquants.
+
 name: CI SDK
 
 on:
