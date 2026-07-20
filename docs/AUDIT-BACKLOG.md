@@ -31,11 +31,11 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 34   | 4       | 39    |
+| FIX (bugs / incohérences) | 34   | 3       | 39    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31. — `A_FAIRE` : 19, 25, 38, 39.
-> Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-38** (🔴 masquage d'audience calendrier inopérant) et **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10), plus l'observation produit OBS-01 (notes invisibles aux collègues, conforme spec).
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25, 39.
+> Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
@@ -159,23 +159,6 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Correction** : utilise désormais `USER_WORKSPACE_DATA_SEED_IDS.JONY` (l'admin du workspace seedé) comme propriétaire du thread par défaut.
 - **Vérif** : `nx database:reset` complet sans erreur, suite d'intégration exécutée avec succès sur la DB fraîchement seedée.
 
-### 🔴 À faire — Critiques
-
-#### FIX-38 — Le masquage d'audience calendrier ne s'applique jamais : un non-membre lit le contenu des événements — `A_FAIRE` (découvert 2026-07-18)
-
-- **Sévérité/Axe** : 🔴 `SEC`
-- **Fichiers** : `apply-calendar-events-visibility-restrictions.service.ts`, `calendar-event-find-one.post-query.hook.ts`, `calendar-event-find-many.post-query.hook.ts`, `calendar-privacy.service.ts`
-- **Constat reproduit** : avec le token de `louis@devbystep.dev` (non-admin, `user.entityId` = DEVBYSTEP, **non membre d'ANGLE_INTELLIGENCE**), la requête directe sur un événement `sharingScope = ENTITY_ONLY` dont l'audience est **ANGLE_INTELLIGENCE uniquement** renvoie tout en clair :
-  ```
-  title: "One-on-One Meeting"
-  description: "Regular one-on-one check-in to discuss performance and career development."
-  location: "Zoom"
-  ```
-  **Attendu (critère accepté de la Carte 10)** : « Une `audienceEntities` non vide masque l'événement pour les utilisateurs hors audience (**titre = "Occupé", description/location/attendees nuls**), tout en gardant `startsAt`/`endsAt` ». Le calendrier groupe affiche également **0 événement masqué** pour cet utilisateur.
-- **Cause probable identifiée** : la logique de visibilité est articulée autour des **canaux de calendrier** (`eventChannels` : `SHARE_EVERYTHING` / `METADATA` / propriété via `connectedAccount`). Or en base : **800 associations `calendarChannelEventAssociation` pour 0 `calendarChannel`** — les associations pointent vers des canaux inexistants. `eventChannels` est donc systématiquement vide, aucune branche ne s'engage, et le `calendarEventMaskMap` reste vide avant l'appel à `applyInternalEntityPrivacyToWorkspaceCalendarEvents`.
-- **⚠️ À vérifier avant correction** : déterminer si la prod est touchée. En prod, de vrais canaux existent (comptes connectés Google/Microsoft) et la branche `METADATA`/`hasRequesterEntityContext` peut s'engager. **Le bug est certain en dev ; son impact en prod reste à confirmer** — c'est le premier point à trancher.
-- **Piste** : le masquage par audience d'entité (Carte 10) ne devrait pas dépendre de l'existence d'un canal. L'arbitrage `sharingScope` + `audienceEntities` doit s'appliquer même pour un événement créé manuellement dans l'app (sans compte connecté), qui est précisément le cas d'usage du fork.
-
 ### 🟡 À faire — Modérés (données de démo)
 
 #### FIX-39 — Le seed de démo ne permet pas d'exercer les Cartes 5 et 10 — `A_FAIRE` (découvert 2026-07-18)
@@ -185,11 +168,11 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Constat** (état du seed avant enrichissement manuel) :
   | Symptôme | Mesure |
   | --- | --- |
-  | Associations événement ↔ canal orphelines | **800 associations / 0 canal** |
+  | Événements sans audience d'entité | **800 / 800** |
   | Audiences d'entité sur les événements | **0** (tous en `ENTITY_ONLY`, aucun `WORKSPACE_PUBLIC`) |
   | Notes sans aucun rattachement | ~**1750 / 1802** (52 `noteTarget`) |
   | Tâches sans aucun rattachement | ~**1750 / 1801** (51 `taskTarget`) |
-- **Conséquence** : les fonctionnalités phares du fork (audience per-event, masquage inter-entités, activités sur fiche) n'ont **aucune donnée de démonstration**, ce qui les rend intestables en local et masque des régressions — FIX-38 n'a été détecté qu'après enrichissement manuel de la base.
+- **Conséquence** : les fonctionnalités phares du fork (audience per-event, masquage inter-entités, activités sur fiche) n'ont **aucune donnée de démonstration**, ce qui les rend intestables en local. Le masquage de la Carte 10 n'a pu être validé qu'après enrichissement manuel de la base (cf. FIX-38, classé `INVALIDE` après re-test correct).
 - **Contournement appliqué en local (non versionné)** : script SQL d'enrichissement — 90 notes rattachées à des opportunités, 60 tâches à des sociétés, 260 événements passés en `WORKSPACE_PUBLIC`, 540 audiences d'entité créées. À porter dans le dev-seeder pour être reproductible après `database:reset`.
 
 ### 🔐 Durcissements de spec
@@ -254,6 +237,18 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Question produit** : dans un CRM, une note attachée à une opportunité est généralement une information **d'équipe**. En l'état, deux commerciaux d'une même entité ne voient pas leurs notes respectives sur une même affaire, et un superadmin ne peut pas auditer les notes. Si ce n'est pas voulu, c'est un **changement de spec** (nouvelle carte), pas un correctif — cf. la leçon tirée de FIX-31.
 
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
+
+#### FIX-38 — « Le masquage d'audience calendrier ne s'applique jamais » — `INVALIDE` (2026-07-18, faux positif)
+
+- **Ce qui avait été signalé** : `louis@devbystep.dev` (non-admin, non membre d'ANGLE_INTELLIGENCE) lisait `title`, `description` et `location` en clair sur un événement `ENTITY_ONLY` dont l'audience était ANGLE seule.
+- **Pourquoi c'est INVALIDE** : **louis était le propriétaire de cet événement.** Le canal portait un `connectedAccount` de handle `louis@devbystep.dev`. L'exemption **FIX-10** s'applique donc à bon droit : « le propriétaire du compte connecté voit TOUJOURS ses propres événements, quelles que soient les règles d'entité/audience ».
+- **Test correct (refait)** : sur deux événements `ENTITY_ONLY` d'audience ANGLE seule appartenant à **d'autres** propriétaires (`aline@weknow.dev`, `louis@allsensia.dev`), la même requête renvoie pour louis :
+  ```
+  title: "Occupé"   description: null   location: null   startsAt: conservé
+  ```
+  Soit exactement le critère de la Carte 10. **Le masquage fonctionne.**
+- **Erreur de méthode associée** : la « cause probable » avancée (800 associations pour 0 canal) venait d'une requête sur la **mauvaise table** — `calendarChannel` existe dans le schéma `core` (6 canaux : 4 `SHARE_EVERYTHING`, 2 `METADATA`), pas seulement dans le schéma workspace.
+- **À retenir** : avant de conclure à une fuite sur un enregistrement de test, **vérifier qui en est le propriétaire** et sur quelle table porte la vérification. Voir aussi FIX-31, même famille d'erreur.
 
 #### FIX-31 — « Isolation multi-entités contournable en lecture » — `INVALIDE` (2026-07-18, faux positif)
 
