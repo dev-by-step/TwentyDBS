@@ -245,6 +245,16 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Vérifié en réel** : l'onglet Notes d'une opportunité WEKNOW passe de « All 1 » à **« All 2 »** pour aline — elle voit désormais la note d'un collègue. Isolation contrôlée : deux notes portées par une opportunité `ANGLE_INTELLIGENCE` (entité dont elle n'est pas membre) restent **« Record not found »**. 150/150 tests, typecheck OK.
 - **Dette de test relevée au passage** : les dépôts mockés `company`/`person`/`opportunity`/`note`/`task` du spec n'avaient pas de valeur de retour sur `find()`, ce qui faisait échouer toute logique lisant réellement ces enregistrements. Corrigé.
 
+**Correctif complémentaire (2026-07-20)** — le bascule Ma Société / Vue Groupe ne filtrait pas la liste Notes :
+
+- **Constat** : passe de vérification systématique (superadmin + non-admin, API GraphQL + UI, sur les 13 pages) menée en environnement proche prod. Toutes les pages entity-scoped discriminaient correctement Ma Société/Vue Groupe (People, Companies, Opportunities, Entités internes), **sauf Notes** : le compteur restait figé sur l'union de toutes les entités d'appartenance, quel que soit le bascule affiché à l'écran.
+- **Cause (serveur)** : `getTeamVisibleNoteIds` résolvait systématiquement `requireAccessibleEntityIds` (toutes les entités du membre), sans jamais restreindre à la seule entité active demandée.
+- **Cause (front, découverte en testant le correctif serveur)** : même une fois le serveur corrigé, le compteur restait figé côté UI. `note` n'a jamais été dans `DEFAULT_ENTITY_FILTER_MAP` (`buildEntityScopedRecordFilter.ts`) puisque c'est un objet « personal work », donc les variables Apollo (`filter`) ne changent jamais au bascule d'entité pour cet objet — Apollo sert le cache sans réémettre de requête, même si l'en-tête HTTP change réellement.
+- **Correctif** :
+  1. Serveur : `getTeamVisibleNoteIds` respecte désormais `hasRequestedActiveEntity` — une entité active restreint à cette seule entité, la Vue Groupe couvre toutes les entités d'appartenance (même logique que `getEntityScopedObjectFilter`).
+  2. Front : nouveau helper `isEntityFilterRegisteredForObject` ; `useFindManyRecords` et `useAggregateRecords` déclenchent un `refetch()` explicite au changement d'entité active **uniquement** pour les objets absents du registre (pour ne pas dupliquer les requêtes des objets déjà correctement filtrés côté client).
+- **Vérifié en réel (live, sans recharger la page)** : bascule ALLSENSIA(1739) → WEKNOW(1746) → DEVBYSTEP(1749), compteur et liste se mettent à jour ensemble. Non-régression confirmée sur Companies (bascule DEVBYSTEP↔WEKNOW, un seul appel réseau, pas de doublon). 150/150 tests serveur, typecheck + lint OK sur les deux packages.
+
 ### ❌ Faux positifs (conservés pour ne pas être re-signalés)
 
 #### FIX-38 — « Le masquage d'audience calendrier ne s'applique jamais » — `INVALIDE` (2026-07-18, faux positif)

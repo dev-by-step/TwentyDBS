@@ -1,7 +1,11 @@
 import { useQuery } from '@apollo/client/react';
+import { useEffect, useState } from 'react';
 
 import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
-import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
+import {
+  buildEntityScopedRecordFilter,
+  isEntityFilterRegisteredForObject,
+} from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type RecordGqlFieldsAggregate } from '@/object-record/graphql/types/RecordGqlFieldsAggregate';
@@ -65,9 +69,8 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
     selectedEntityId,
   });
 
-  const { data, loading, error } = useQuery<RecordGqlOperationFindManyResult>(
-    aggregateQuery,
-    {
+  const { data, loading, error, refetch } =
+    useQuery<RecordGqlOperationFindManyResult>(aggregateQuery, {
       skip:
         skip ||
         !isAuthenticated ||
@@ -77,8 +80,34 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
         filter: entityScopedFilter,
       },
       client: apolloCoreClient,
-    },
-  );
+    });
+
+  // Même correctif que `useFindManyRecords` : pour les objets absents de
+  // `DEFAULT_ENTITY_FILTER_MAP` (ex. `note`), le scope par entité est décidé
+  // côté serveur via l'en-tête HTTP actif sans que les variables Apollo ne
+  // changent, donc le total agrégé (ex. le compteur « Toutes les Notes · N »)
+  // ne se rafraîchit pas tout seul au bascule Ma société / Vue groupe.
+  const isEntityViewReflectedInQueryVariables =
+    isEntityFilterRegisteredForObject(objectNameSingular);
+  const [previousSelectedEntityId, setPreviousSelectedEntityId] =
+    useState(selectedEntityId);
+
+  useEffect(() => {
+    if (previousSelectedEntityId === selectedEntityId) {
+      return;
+    }
+
+    setPreviousSelectedEntityId(selectedEntityId);
+
+    if (!isEntityViewReflectedInQueryVariables) {
+      void refetch();
+    }
+  }, [
+    selectedEntityId,
+    previousSelectedEntityId,
+    isEntityViewReflectedInQueryVariables,
+    refetch,
+  ]);
 
   const formattedData: AggregateRecordsData = {};
 

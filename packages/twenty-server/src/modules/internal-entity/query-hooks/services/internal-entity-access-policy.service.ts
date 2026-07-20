@@ -1315,11 +1315,19 @@ export class InternalEntityAccessPolicyService {
   // multi-entités est préservé : on passe par les sociétés / personnes /
   // opportunités déjà filtrées par `getReadableEntityScopedRecordIds`, donc une
   // note d'une entité dont je ne suis pas membre reste invisible.
+  //
+  // La portée respecte le bascule Ma Société / Vue Groupe, comme
+  // `getEntityScopedObjectFilter` pour company/person/opportunity : une entité
+  // active sélectionnée restreint aux notes de CETTE entité ; en Vue Groupe
+  // (aucune entité active demandée), la portée couvre toutes les entités
+  // d'appartenance. Avant ce correctif, la liste Notes ignorait le bascule et
+  // affichait toujours l'union de toutes les entités, quel que soit l'écran.
   private async getTeamVisibleNoteIds(
     authContext: UserWorkspaceAuthContext,
   ): Promise<string[]> {
-    const accessibleEntityIds =
-      await this.requireAccessibleEntityIds(authContext);
+    const accessibleEntityIds = this.hasRequestedActiveEntity(authContext)
+      ? [await this.requireActiveEntityId(authContext)]
+      : await this.requireAccessibleEntityIds(authContext);
 
     const [companyIds, personIds, opportunityIds] = await Promise.all([
       this.getReadableEntityScopedRecordIds(

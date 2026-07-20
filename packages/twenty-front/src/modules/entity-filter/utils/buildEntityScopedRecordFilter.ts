@@ -34,6 +34,19 @@ export const resetEntityFilterBuilders = (): void => {
   });
 };
 
+/**
+ * Vrai si `buildEntityScopedRecordFilter` fait varier sa sortie avec l'entité
+ * active pour cet objet. Utilisé par `useFindManyRecords` : quand c'est faux,
+ * les variables de la requête Apollo ne changent pas au bascule d'entité, donc
+ * le cache ne se rafraîchit pas tout seul — même si le SERVEUR, lui, applique
+ * bien un scope différent via l'en-tête HTTP (ex. `note`, dont la visibilité
+ * d'équipe est décidée côté serveur et ne peut pas se traduire en filtre
+ * GraphQL côté client).
+ */
+export const isEntityFilterRegisteredForObject = (
+  objectNameSingular: string,
+): boolean => entityFilterRegistry.has(objectNameSingular);
+
 const isEmptyRecordFilter = (
   filter: RecordGqlOperationFilter | undefined,
 ): boolean => !isDefined(filter) || Object.keys(filter).length === 0;
