@@ -106,6 +106,29 @@ describe('InternalEntityConfigurationService', () => {
     ]);
   });
 
+  it('should accept a hex color without the leading # and normalize it', () => {
+    // Robustesse aux shells/config (ex. Dokku VPS) qui tronquent au premier `#` :
+    // une couleur `RRGGBB` sans dièse est acceptée puis normalisée en `#RRGGBB`.
+    const customInternalEntity = buildInternalEntitySeed({
+      name: 'NO_HASH_ENTITY',
+      color: '2563eb',
+    });
+
+    process.env[INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME] = JSON.stringify([
+      customInternalEntity,
+    ]);
+
+    const service = new InternalEntityConfigurationService();
+
+    expect(service.getInternalEntitySeeds()).toStrictEqual([
+      {
+        ...customInternalEntity,
+        color: '#2563EB',
+        id: customInternalEntity.id.toLowerCase(),
+      },
+    ]);
+  });
+
   it('should throw on invalid env override payload', () => {
     process.env[INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME] = '{"entities":"invalid"}';
 

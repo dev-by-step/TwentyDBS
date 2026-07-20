@@ -1,3 +1,8 @@
+# DÉSACTIVÉ (2026-07-20) : dispatch vers twentyhq/ci-privileged via secrets.CI_PRIVILEGED_DISPATCH_TOKEN — dépôt privé de l'organisation Twenty auquel ce fork n'a pas accès.
+# Aucun rapport avec le code de ce fork. Renommé en .disabled plutôt que supprimé
+# pour rester réversible si ces identifiants deviennent un jour disponibles.
+# Pour réactiver : renommer en .yaml et fournir les secrets manquants.
+
 name: Post CI Comments
 
 on:

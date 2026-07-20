@@ -43,15 +43,15 @@ const buildServiceContext = ({
 
   const opportunityRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const noteRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const taskRepository = {
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
   };
   const attachmentRepository = {
     findOne: jest.fn(),
@@ -90,6 +90,9 @@ const buildServiceContext = ({
         case 'person':
           return {
             findOne: jest.fn(),
+            // `find` est indispensable depuis que la visibilité d'équipe des
+            // notes (OBS-01) résout les enregistrements de l'entité.
+            find: jest.fn().mockResolvedValue([]),
           };
         default:
           return {
@@ -133,24 +136,47 @@ const buildServiceContext = ({
   const internalEntityScopeCacheService = new InternalEntityScopeCacheService();
 
   const internalEntityRoleService = {
-    isPlatformAdmin: jest.fn().mockResolvedValue(
-      persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel,
-    ),
-    isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
-    canManageEntityScopedRecords: jest.fn().mockResolvedValue(
-      (persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel) ||
-        roleLabel === ENTITY_MANAGER_ROLE_LABEL,
-    ),
-    isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+    isPlatformAdmin: jest
+      .fn()
+      .mockResolvedValue(
+        persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel,
+      ),
+    isEntityManager: jest
+      .fn()
+      .mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+    canManageEntityScopedRecords: jest
+      .fn()
+      .mockResolvedValue(
+        (persistedCanAccessFullAdminPanel ?? canAccessFullAdminPanel) ||
+          roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+      ),
+    isInternalEntitySuperAdmin: jest
+      .fn()
+      .mockReturnValue(canAccessFullAdminPanel),
   };
 
   const service = new InternalEntityAccessPolicyService(
     globalWorkspaceOrmManager as unknown as GlobalWorkspaceOrmManager,
     {
-      resolveContext: jest.fn().mockResolvedValue({
-        currentEntityId: entityId,
-        activeEntityId: activeEntityId ?? entityId,
-        entityIds: accessibleEntityIds ?? [entityId],
+      // Ce mock reproduit la validation du vrai service
+      // (`WorkspaceMemberInternalEntityService.resolveActiveEntityId`) : l'entité
+      // active demandée par le client n'est retenue QUE si elle fait partie des
+      // adhésions du membre, sinon on retombe sur son entité courante. Sans
+      // cela, le mock pourrait exprimer un état impossible en production
+      // (portée élargie à une entité dont l'appelant n'est pas membre) et
+      // masquerait la garantie de sécurité correspondante.
+      resolveContext: jest.fn().mockImplementation(async () => {
+        const memberEntityIds = accessibleEntityIds ?? [entityId];
+
+        return {
+          currentEntityId: entityId,
+          activeEntityId:
+            activeEntityId !== undefined &&
+            memberEntityIds.includes(activeEntityId)
+              ? activeEntityId
+              : entityId,
+          entityIds: memberEntityIds,
+        };
       }),
     } as unknown as WorkspaceMemberInternalEntityService,
     objectMetadataService as unknown as import('src/engine/metadata-modules/object-metadata/object-metadata.service').ObjectMetadataService,
@@ -201,8 +227,11 @@ const buildServiceContext = ({
 };
 
 describe('InternalEntityAccessPolicyService', () => {
-  it('should keep opportunity findMany queries unscoped in group view', async () => {
-    const { service, authContext } = buildServiceContext({
+  // La Vue Groupe n'est plus « aucun filtre » : elle est scopée à TOUTES les
+  // entités du membre, résolues côté serveur. Une requête qui omet l'en-tête
+  // d'entité active ne peut donc plus lire l'intégralité du workspace.
+  it('should scope opportunity findMany queries to all member entities in group view', async () => {
+    const { service, authContext, entityId } = buildServiceContext({
       includeActiveEntityHeader: false,
     });
 
@@ -220,7 +249,30 @@ describe('InternalEntityAccessPolicyService', () => {
       },
     );
 
-    expect(payload.filter).toEqual(filter);
+    expect(payload.filter).toEqual({
+      and: [filter, { internalEntityId: { in: [entityId] } }],
+    });
+  });
+
+  // Garantie de sécurité : l'en-tête `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` est
+  // fourni par le client, il ne doit donc jamais pouvoir ÉLARGIR la portée à une
+  // entité dont l'appelant n'est pas membre — seulement la restreindre.
+  it('should ignore an active entity header pointing to a non-member entity', async () => {
+    const foreignEntityId = '99999999-9999-4999-8999-999999999999';
+    const { service, authContext, entityId } = buildServiceContext({
+      activeEntityId: foreignEntityId,
+    });
+
+    const payload = await service.scopeFindManyPayload(
+      authContext,
+      'opportunity',
+      {},
+    );
+
+    expect(payload.filter).toEqual({
+      internalEntityId: { in: [entityId] },
+    });
+    expect(JSON.stringify(payload.filter)).not.toContain(foreignEntityId);
   });
 
   it('should scope opportunity findMany queries to the current entity', async () => {
@@ -304,6 +356,9 @@ describe('InternalEntityAccessPolicyService', () => {
     const activeEntityId = faker.string.uuid();
     const { service, authContext } = buildServiceContext({
       activeEntityId,
+      // L'entité active doit faire partie des adhésions du membre, sinon elle
+      // est ignorée (l'en-tête client ne peut pas élargir la portée).
+      accessibleEntityIds: [activeEntityId],
       objectMetadataByObjectName: {
         company: [
           {
@@ -1148,7 +1203,10 @@ describe('InternalEntityAccessPolicyService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('should scope note queries to the current workspace member', async () => {
+  // OBS-01 / décision produit du 2026-07-18 : une note est une information
+  // d'équipe. Elle reste cloisonnée par entité — on la voit si on l'a écrite OU
+  // si elle est rattachée à un enregistrement de nos entités.
+  it('should scope note queries to the author or the team entity scope', async () => {
     const { service, authContext, workspaceMemberId } = buildServiceContext();
 
     const payload = await service.scopeFindManyPayload(authContext, 'note', {
@@ -1167,11 +1225,16 @@ describe('InternalEntityAccessPolicyService', () => {
           },
         },
         {
-          createdBy: {
-            workspaceMemberId: {
-              eq: workspaceMemberId,
+          or: [
+            {
+              createdBy: {
+                workspaceMemberId: {
+                  eq: workspaceMemberId,
+                },
+              },
             },
-          },
+            expect.objectContaining({ id: expect.anything() }),
+          ],
         },
       ],
     });

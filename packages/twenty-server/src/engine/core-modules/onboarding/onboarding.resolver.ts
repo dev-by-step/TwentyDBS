@@ -46,9 +46,11 @@ export class OnboardingResolver {
   @Mutation(() => OnboardingStepSuccessDTO)
   @UseGuards(NoPermissionGuard)
   async skipBookOnboardingStep(
+    @AuthUser() user: AuthContextUser,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<OnboardingStepSuccessDTO> {
     await this.onboardingService.setOnboardingBookOnboardingPending({
+      userId: user.id,
       workspaceId: workspace.id,
       value: false,
     });
@@ -73,6 +75,7 @@ export class OnboardingResolver {
     }
 
     await this.onboardingService.advanceFromInviteTeamStep({
+      userId: user.id,
       workspaceId: workspace.id,
     });
 

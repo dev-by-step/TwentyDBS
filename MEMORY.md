@@ -14,6 +14,35 @@
 - **Prod :** https://20.devbystep.fr (Dokku sur `vps-issa` 54.37.39.172, image `.dokku/Dockerfile`, Procfile web+worker, plugins dokku-postgres + dokku-redis + dokku-letsencrypt).
 - **Déploiement :** `git push dokku 10-permissions-entites:main` (branche locale → `main` côté dokku, `deploy-branch` config = `main`). Build sur le VPS via `.dokku/Dockerfile`, 4 GB de swap ajoutés pour le build front.
 
+### Variables d'environnement prod (Dokku app `twenty-dbs`)
+
+Deux variables **env-only** (déclarées dans `ConfigVariables`, `ADVANCED_SETTINGS`) pilotent des contrats d'exploitation. Sans elles, le code utilise un fallback codé en dur identique → aucun changement de comportement, mais le grant/seed ne sont pas rejouables proprement.
+
+**État réel posé en prod (2026-07-18) :**
+
+- ✅ **`BOOTSTRAP_ADMIN_EMAILS='aline@devbystep.fr'`** — posée et vérifiée (`config:export`).
+- ❌ **`INTERNAL_ENTITY_SEEDS`** — **volontairement NON posée** : impossible à stocker sur ce VPS (voir piège `#` ci-dessous). L'app utilise le fallback codé en dur (mêmes 4 entités) → aucun impact.
+
+⚠️ **Piège Dokku de ce VPS — les valeurs contenant `#` sont tronquées.** L'environnement shell du VPS est cassé (erreurs `syntax error near unexpected token '('` de basher) et **commente tout à partir du premier `#`** au moment d'écrire dans le fichier ENV, **même avec `--encoded` (base64)** — vérifié : `INTERNAL_ENTITY_SEEDS` s'est stockée tronquée à `...WEKNOW","color":\`. Ne jamais poser une valeur contenant `#` via `config:set` ici. Toujours vérifier après coup avec `dokku config:export --format=shell twenty-dbs` (et **pas** `config:get`, qui a le même bug d'affichage sur `#`).
+
+✅ **Correctif propre appliqué au code (commit `6a8d1d3779`)** : le validateur de seeds accepte désormais une couleur **sans `#`** (`"color":"2563EB"`) et la normalise en `#RRGGBB` en interne (`normalizeHexColor`, `internal-entity-seeds.util.ts`). Donc **une fois ce commit déployé**, on pose `INTERNAL_ENTITY_SEEDS` avec des couleurs sans dièse et rien n'est tronqué — plus besoin de hack. Fallback et valeurs déjà préfixées `#` restent inchangés. À défaut (poser la var sur le code _actuellement_ déployé, avant le prochain `git push dokku`), le repli reste l'échappement JSON `\u0023` des couleurs (ex. `"color":"\u00232563EB"`), que `JSON.parse` re-décode en `#2563EB`.
+
+⚠️ **Le restart auto de `config:set` est SAUTÉ sur cette app** (« Skipping web/worker as it is missing from the current Procfile » : le Procfile est embarqué dans l'image `.dokku/Dockerfile`, pas détecté par la phase restart). Conséquence : une variable posée par `config:set` n'est **pas chargée dans les conteneurs en cours** ; elle s'active au **prochain `git push dokku`**. Pour `BOOTSTRAP_ADMIN_EMAILS` c'est sans urgence (aline garde ses droits persistés en base en attendant).
+
+- **`BOOTSTRAP_ADMIN_EMAILS`** — liste (virgules) des e-mails qui reçoivent `canAccessFullAdminPanel` + `canImpersonate` + rôle **Admin** à chaque connexion. **Doit correspondre exactement à l'e-mail de connexion** du compte. Superadmin unique = **aline** : en **prod** son vrai mail est **`aline@devbystep.fr`** (vérifié en base prod) ; `aline@weknow.dev` n'est que le compte du dev-seeder local. Vérif e-mail réel : `SELECT email FROM core."user" WHERE "canAccessFullAdminPanel"=true;`.
+
+  ```bash
+  dokku config:set twenty-dbs BOOTSTRAP_ADMIN_EMAILS=aline@devbystep.fr
+  ```
+
+- **`INTERNAL_ENTITY_SEEDS`** — JSON des 4 sociétés (tableau OU `{ "entities": [...] }`), lu par `InternalEntityConfigurationService` → `init-internal-entities`. Chaque entité : `id` (uuid canonique existant), `name`, `color` (`#RRGGBB` **ou `RRGGBB` sans dièse** depuis le commit `6a8d1d3779`), `aliases` optionnel. **Non posée en prod** (fallback identique → aucun intérêt fonctionnel pour l'instant). IDs/couleurs canoniques (= ceux en base, à réutiliser tels quels si besoin) : WEKNOW `550e8400-…440001`/`2563EB`, DEVBYSTEP `…440002`/`16A34A`, ALLSENSIA `…440003`/`D97706`, ANGLE_INTELLIGENCE `…440004`/`7C3AED`. Commande (couleurs sans `#`, à jour, valable après déploiement du commit ci-dessus) :
+
+  ```bash
+  dokku config:set twenty-dbs INTERNAL_ENTITY_SEEDS='[{"id":"550e8400-e29b-41d4-a716-446655440001","name":"WEKNOW","color":"2563EB"},{"id":"550e8400-e29b-41d4-a716-446655440002","name":"DEVBYSTEP","color":"16A34A"},{"id":"550e8400-e29b-41d4-a716-446655440003","name":"ALLSENSIA","color":"D97706"},{"id":"550e8400-e29b-41d4-a716-446655440004","name":"ANGLE_INTELLIGENCE","color":"7C3AED"}]'
+  ```
+
+Accès VPS : `ssh dokku@vps-issa <commande-dokku>` (user restreint aux commandes dokku). Service PG prod = `twenty-dbs-db` ; requête non-interactive : `echo 'SELECT …;' | ssh dokku@vps-issa postgres:connect twenty-dbs-db`.
+
 ## Objectif métier
 
 Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKNOW`, `DEVBYSTEP`, `ALLSENSIA`, `ANGLE_INTELLIGENCE`) avec :
@@ -39,9 +68,9 @@ Permettre à un même workspace Twenty d'héberger 4 sociétés du groupe (`WEKN
 ## Décisions structurantes — déploiement et onboarding
 
 - **Single-tenant** : `IS_MULTIWORKSPACE_ENABLED=false`. Le 1er signup crée le workspace `TwentyDBS` + auto-active (cf. `signUpOnNewWorkspace.activateWorkspace`). Les signups suivants rejoignent ce workspace via `signInUpOnExistingWorkspace`. Aucune UI de "création de workspace" n'est jamais affichée.
-- **Auto-signup verrouillé au domaine du super admin** : `SignInUpService.assertEmailDomainAllowedForAutoSignUp` lookup `userRepository.findOne({ where: { canAccessFullAdminPanel: true } })`. Si un super admin existe, seul son domaine email peut s'auto-inscrire. Si aucun super admin (bootstrap), seuls `BOOTSTRAP_ADMIN_EMAILS` (`aline@weknow.dev`, `aline@devbystep.fr`) peuvent créer le 1er compte. Les invitations explicites continuent à bypass le check (via `signInUpWithPersonalInvitation`).
+- **Auto-signup verrouillé au domaine du super admin** : `SignInUpService.assertEmailDomainAllowedForAutoSignUp` lookup `userRepository.findOne({ where: { canAccessFullAdminPanel: true } })`. Si un super admin existe, seul son domaine email peut s'auto-inscrire. Si aucun super admin (bootstrap), seul `BOOTSTRAP_ADMIN_EMAILS` (superadmin unique aline : `aline@devbystep.fr` en prod, `aline@weknow.dev` en dev-seed local) peut créer le 1er compte. Les invitations explicites continuent à bypass le check (via `signInUpWithPersonalInvitation`).
 - **Skip InviteTeam pour non-admins** : nouvelle mutation `skipInviteTeamOnboardingStep` (NoPermissionGuard) + helper `advanceFromInviteTeamStep`. `InviteTeam.tsx` affiche un écran simplifié pour les users sans `WORKSPACE_MEMBERS` (un seul bouton Continue).
-- **Bootstrap admin** : `BOOTSTRAP_ADMIN_EMAILS = ['aline@weknow.dev', 'aline@devbystep.fr']`. Aline obtient `canAccessFullAdminPanel=true` à son signup + onboarding superadmin pour configurer les InternalEntities.
+- **Bootstrap admin** : **superadmin unique = aline**. Décision produit (2026-07-18) : un seul superadmin, son mail officiel. **Prod = `aline@devbystep.fr`** (vrai mail) ; `aline@weknow.dev` = compte de test dev-seeder local uniquement. Donc `BOOTSTRAP_ADMIN_EMAILS=aline@devbystep.fr` en prod (voir « Variables d'environnement prod » ci-dessus). Aline obtient `canAccessFullAdminPanel=true` + `canImpersonate=true` + rôle Admin à son signup + onboarding superadmin pour configurer les InternalEntities. _(Ancien réglage à 2 e-mails abandonné.)_
 - **Entrypoint Twenty** : `setup_and_migrate_db` teste désormais la présence de la table `core.keyValuePair` (créée par la 1re migration) au lieu du schema `core` (que TypeORM crée vide à la connexion). Évite que `database:init:prod` soit faussement skippé.
 - **Image Docker Dokku** : `.dokku/Dockerfile` (dérivé de `packages/twenty-docker/twenty/Dockerfile`) embarque le Procfile à `/app/Procfile`. Le worker share l'image avec le web, sélectionné via Procfile + `dokku ps:scale twenty-dbs web=1 worker=1`.
 - **`scripts/dokku/bootstrap-twenty.sh`** : provisionne l'app + services + storage + scaling. Fait `postgres:link --alias PG_DATABASE` et `redis:link` (indispensable, sinon DNS introuvable au boot) + `git:set deploy-branch main`.

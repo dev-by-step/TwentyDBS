@@ -269,10 +269,21 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       internalEntitySqlTable,
       companySqlTable,
       personSqlTable,
+      opportunitySqlTable,
       companyEntityMembershipSqlTable,
       personEntityMembershipSqlTable,
       workspaceMemberSqlTable,
       workspaceMemberEntityMembershipSqlTable,
+    });
+    await this.seedPrimaryDevCalendarEventAudiences({
+      workspaceId: validatedWorkspaceId,
+      dataSource,
+      internalEntitySqlTable,
+      calendarEventSqlTable: buildWorkspaceSqlTableName(
+        schemaName,
+        'calendarEvent',
+      ),
+      calendarEventEntityAudienceSqlTable,
     });
     await this.ensureMembershipIntegrity(dataSource, [
       {
@@ -1560,12 +1571,62 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     }
   }
 
+  // FIX-39 : donne une audience d'entité aux événements ENTITY_ONLY du seed de
+  // démo. Sans elle, `_calendarEventEntityAudience` restait vide et l'arbitrage
+  // de la Carte 10 (masquage « Occupé » hors audience) n'avait aucune donnée à
+  // exercer en local. Cette étape vit ici et non dans le dev-seeder parce que
+  // les entités internes n'existent pas encore au moment du seed : la table
+  // porte une contrainte de clé étrangère vers `_internalEntity`.
+  private async seedPrimaryDevCalendarEventAudiences({
+    workspaceId,
+    dataSource,
+    internalEntitySqlTable,
+    calendarEventSqlTable,
+    calendarEventEntityAudienceSqlTable,
+  }: {
+    workspaceId: string;
+    dataSource: GlobalWorkspaceDataSource;
+    internalEntitySqlTable: string;
+    calendarEventSqlTable: string;
+    calendarEventEntityAudienceSqlTable: string;
+  }): Promise<void> {
+    if (workspaceId !== SEED_APPLE_WORKSPACE_ID) {
+      return;
+    }
+
+    const insertedAudiences = await this.runAdminQuery<Array<{ id: string }>>(
+      dataSource,
+      `INSERT INTO ${calendarEventEntityAudienceSqlTable} ("id", "calendarEventId", "internalEntityId", "position")
+       SELECT gen_random_uuid(), evt."id", ent."id", evt."rn"
+       FROM (
+         SELECT "id", row_number() OVER (ORDER BY "startsAt") AS rn
+         FROM ${calendarEventSqlTable}
+         WHERE "deletedAt" IS NULL AND "sharingScope" = 'ENTITY_ONLY'
+       ) evt
+       JOIN (
+         SELECT "id", row_number() OVER (ORDER BY "name") AS rn
+         FROM ${internalEntitySqlTable}
+         WHERE "deletedAt" IS NULL
+       ) ent ON ent."rn" = ((evt."rn" - 1) % (SELECT count(*) FROM ${internalEntitySqlTable} WHERE "deletedAt" IS NULL)) + 1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM ${calendarEventEntityAudienceSqlTable} existing
+         WHERE existing."calendarEventId" = evt."id" AND existing."deletedAt" IS NULL
+       )
+       RETURNING "id"`,
+    );
+
+    this.logger.log(
+      `${insertedAudiences.length} audience(s) d'entité posée(s) sur les événements de démo`,
+    );
+  }
+
   private async cleanupPrimaryDevWorkspaceMemberships({
     workspaceId,
     dataSource,
     internalEntitySqlTable,
     companySqlTable,
     personSqlTable,
+    opportunitySqlTable,
     companyEntityMembershipSqlTable,
     personEntityMembershipSqlTable,
     workspaceMemberSqlTable,
@@ -1576,6 +1637,7 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
     internalEntitySqlTable: string;
     companySqlTable: string;
     personSqlTable: string;
+    opportunitySqlTable: string;
     companyEntityMembershipSqlTable: string;
     personEntityMembershipSqlTable: string;
     workspaceMemberSqlTable: string;
@@ -1585,8 +1647,18 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
       return;
     }
 
+    // Ce nettoyage ne vise que le bruit produit par les cascades
+    // Person <-> Company du seed de démo. Une adhésion est conservée si elle est
+    // justifiée par une donnée réelle :
+    //   1. la société EST l'entité (auto-référence canonique : WEKNOW <-> WEKNOW) ;
+    //   2. ou une opportunité rattache cette société / ce contact à cette entité.
+    // Sans la règle 2, le nettoyage supprimait les adhésions que
+    // `backfillCompanyMembershipsFromOpportunities` venait de créer dans le même
+    // run : les 16 sociétés clientes restaient orphelines alors que leurs
+    // opportunités étaient bien rattachées, rendant l'environnement de dev non
+    // représentatif de la prod (où 59/59 sociétés sont rattachées).
     this.logger.log(
-      'Nettoyage des memberships de démo pour ne garder que les correspondances entité <-> société canonique...',
+      'Nettoyage des memberships de démo (conserve les correspondances canoniques et celles justifiées par une opportunité)...',
     );
 
     const normalizeNameSql = (alias: string) =>
@@ -1607,6 +1679,13 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
            WHERE company."id" = membership."companyId"
              AND company."deletedAt" IS NULL
              AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${opportunitySqlTable} opportunity
+           WHERE opportunity."companyId" = membership."companyId"
+             AND opportunity."internalEntityId" = membership."internalEntityId"
+             AND opportunity."deletedAt" IS NULL
          )
        RETURNING membership."id"`,
     );
@@ -1629,6 +1708,13 @@ export class InitInternalEntitiesCommand extends ActiveOrSuspendedWorkspaceComma
            WHERE person."id" = membership."personId"
              AND person."deletedAt" IS NULL
              AND ${normalizeNameSql('company')} = ${normalizeNameSql('internal_entity')}
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${opportunitySqlTable} opportunity
+           WHERE opportunity."pointOfContactId" = membership."personId"
+             AND opportunity."internalEntityId" = membership."internalEntityId"
+             AND opportunity."deletedAt" IS NULL
          )
        RETURNING membership."id"`,
     );

@@ -1,4 +1,7 @@
-import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
+import {
+  buildEntityScopedRecordFilter,
+  isEntityFilterRegisteredForObject,
+} from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { buildInternalEntity } from '@/entity-filter/utils/__tests__/factories/internal-entity.factory';
 
 describe('buildEntityScopedRecordFilter', () => {
@@ -86,5 +89,23 @@ describe('buildEntityScopedRecordFilter', () => {
         selectedEntityId: internalEntity.id,
       }),
     ).toBe(filter);
+  });
+});
+
+describe('isEntityFilterRegisteredForObject', () => {
+  it('is true for objects with a client-side entity filter', () => {
+    expect(isEntityFilterRegisteredForObject('company')).toBe(true);
+    expect(isEntityFilterRegisteredForObject('opportunity')).toBe(true);
+    expect(isEntityFilterRegisteredForObject('person')).toBe(true);
+  });
+
+  // Garde-fou : `note` (visibilité d'équipe, OBS-01) est scopée par entité
+  // côté SERVEUR uniquement, sans filtre GraphQL client équivalent. Si ce test
+  // se met à échouer parce que `note` a été ajoutée au registre, retirer aussi
+  // le refetch forcé de `useFindManyRecords`/`useAggregateRecords` qui
+  // compense cette absence — il deviendrait redondant.
+  it('is false for objects scoped server-side without a client filter', () => {
+    expect(isEntityFilterRegisteredForObject('note')).toBe(false);
+    expect(isEntityFilterRegisteredForObject('task')).toBe(false);
   });
 });

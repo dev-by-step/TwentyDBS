@@ -4,6 +4,7 @@ import {
 } from '@/entity-filter/constants/entityFilterViewMode';
 import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
 import { useSelectableInternalEntities } from '@/entity-filter/hooks/useSelectableInternalEntities';
+import { shouldResetPersistedEntityFilter } from '@/entity-filter/utils/shouldResetPersistedEntityFilter';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
@@ -14,7 +15,7 @@ import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNaviga
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { type ComponentType } from 'react';
+import { type ComponentType, useEffect } from 'react';
 import {
   IconBuildingSkyscraper,
   IconCheck,
@@ -187,9 +188,28 @@ export const EntitySelector = () => {
     setGroupView,
     setSelectedEntityId,
   } = useEntityFilter();
-  const { selectableInternalEntities } = useSelectableInternalEntities({
-    fallbackEntityLabel: t`My company`,
-  });
+  const { selectableInternalEntities, isLoading } =
+    useSelectableInternalEntities({
+      fallbackEntityLabel: t`My company`,
+    });
+
+  // IMP-20 : resynchronise le filtre persisté (localStorage) une fois les
+  // entités sélectionnables chargées — si l'entité stockée n'appartient plus
+  // à l'utilisateur, on retombe sur la Vue Groupe pour éviter un libellé
+  // « Ma Société » qui ne correspond pas aux données réellement renvoyées.
+  useEffect(() => {
+    if (
+      shouldResetPersistedEntityFilter({
+        selectedEntityId,
+        selectableEntityIds: selectableInternalEntities.map(
+          (entity) => entity.id,
+        ),
+        isLoading,
+      })
+    ) {
+      setGroupView();
+    }
+  }, [selectedEntityId, selectableInternalEntities, isLoading, setGroupView]);
 
   if (!isMobile && !isNavigationDrawerExpanded) {
     return null;

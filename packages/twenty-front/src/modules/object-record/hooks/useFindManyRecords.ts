@@ -1,10 +1,13 @@
 import { type WatchQueryFetchPolicy } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 import { useEntityFilter } from '@/entity-filter/hooks/useEntityFilter';
-import { buildEntityScopedRecordFilter } from '@/entity-filter/utils/buildEntityScopedRecordFilter';
+import {
+  buildEntityScopedRecordFilter,
+  isEntityFilterRegisteredForObject,
+} from '@/entity-filter/utils/buildEntityScopedRecordFilter';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type ObjectMetadataItemIdentifier } from '@/object-metadata/types/ObjectMetadataItemIdentifier';
@@ -33,6 +36,18 @@ export type UseFindManyRecordsParams<T> = ObjectMetadataItemIdentifier &
     recordGqlFields?: RecordGqlOperationGqlRecordFields;
     fetchPolicy?: WatchQueryFetchPolicy;
     withSoftDeleted?: boolean;
+    /**
+     * N'applique pas le filtre client « Ma société / Vue groupe » à cette
+     * requête. Réservé aux écrans d'administration qui doivent lister des
+     * objets de CONFIGURATION multi-entités (ex. Settings > Internal entities,
+     * qui doit proposer une couleur pour *chaque* entité).
+     *
+     * Ne désactive aucune protection : la portée réelle reste décidée par
+     * `InternalEntityAccessPolicyService` côté serveur, qui scope ces objets
+     * selon l'entité active de l'appelant et n'exempte en lecture que les
+     * platform admins. Un utilisateur non-admin reste donc limité à son entité.
+     */
+    bypassEntityViewScope?: boolean;
   };
 
 export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
@@ -47,6 +62,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   cursorFilter,
   limit = QUERY_DEFAULT_LIMIT_RECORDS,
   withSoftDeleted = false,
+  bypassEntityViewScope = false,
 }: UseFindManyRecordsParams<T>) => {
   const { selectedEntityId } = useEntityFilter();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -76,7 +92,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   const entityScopedFilter = buildEntityScopedRecordFilter({
     objectNameSingular,
     filter: withSoftDeleteFilter,
-    selectedEntityId,
+    selectedEntityId: bypassEntityViewScope ? null : selectedEntityId,
   });
 
   const queryIdentifier = getQueryIdentifier({
@@ -110,6 +126,36 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
       fetchPolicy: fetchPolicy,
       client: apolloCoreClient,
     });
+
+  // Pour les objets absents de `DEFAULT_ENTITY_FILTER_MAP` (ex. `note`), la
+  // portée par entité est décidée côté SERVEUR via l'en-tête HTTP actif, sans
+  // que les variables Apollo ne changent — Apollo ne sait donc pas qu'il doit
+  // rafraîchir au bascule Ma société / Vue groupe. On force un refetch dans ce
+  // cas précis ; les objets déjà filtrés côté client (company, opportunity…)
+  // provoquent déjà un nouvel appel réseau via le changement de variables, et
+  // ne passent donc jamais par cette branche.
+  const isEntityViewReflectedInQueryVariables =
+    bypassEntityViewScope ||
+    isEntityFilterRegisteredForObject(objectNameSingular);
+  const [previousSelectedEntityId, setPreviousSelectedEntityId] =
+    useState(selectedEntityId);
+
+  useEffect(() => {
+    if (previousSelectedEntityId === selectedEntityId) {
+      return;
+    }
+
+    setPreviousSelectedEntityId(selectedEntityId);
+
+    if (!isEntityViewReflectedInQueryVariables) {
+      void refetch();
+    }
+  }, [
+    selectedEntityId,
+    previousSelectedEntityId,
+    isEntityViewReflectedInQueryVariables,
+    refetch,
+  ]);
 
   // TODO: Refactor these useEffects to avoid unnecessary re-renders (see PR #18584 review)
   useEffect(() => {

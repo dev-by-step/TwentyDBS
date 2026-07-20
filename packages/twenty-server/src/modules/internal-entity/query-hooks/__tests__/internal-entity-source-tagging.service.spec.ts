@@ -381,11 +381,8 @@ describe('InternalEntitySourceTaggingService', () => {
   });
 
   it('should allow an entity manager to assign an opportunity to any entity on create', async () => {
-    const {
-      service,
-      makeAuthContext,
-      internalEntityRoleService,
-    } = buildServiceContext();
+    const { service, makeAuthContext, internalEntityRoleService } =
+      buildServiceContext();
     const foreignInternalEntityId = buildInternalEntitySeed().id;
     const authContext = makeAuthContext() as UserWorkspaceAuthContext;
 

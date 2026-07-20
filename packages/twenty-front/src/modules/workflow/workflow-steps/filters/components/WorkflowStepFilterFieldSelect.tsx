@@ -64,9 +64,13 @@ export const WorkflowStepFilterFieldSelect = ({
     isFullRecord: stepFilter.isFullRecord ?? false,
   });
   const variableLabelStr =
-    typeof variableLabel === 'string' ? variableLabel : variableLabel?.id ?? '';
+    typeof variableLabel === 'string'
+      ? variableLabel
+      : (variableLabel?.id ?? '');
   const variablePathLabelStr =
-    typeof variablePathLabel === 'string' ? variablePathLabel : variablePathLabel?.id;
+    typeof variablePathLabel === 'string'
+      ? variablePathLabel
+      : variablePathLabel?.id;
 
   const {
     fieldMetadataItem: filterFieldMetadataItem,

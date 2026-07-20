@@ -31,13 +31,14 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 12   | 18      | 30    |
-| IMP (améliorations)       | 13   | 8       | 21    |
+| FIX (bugs / incohérences) | 36   | 2       | 40    |
+| IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01, 02, 03, 04, 05, 06, 18, 26, 27, 28, 29, 30.
-> `FAIT` IMP : 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 16, 17, 19.
-> `PARTIELLEMENT FAIT` : FIX-24 (docs).
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39, 40. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25.
+> Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
+> `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
+> Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
 
 ---
 
@@ -47,53 +48,36 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🥇 Priorité 1 — Sécurité (à traiter en premier)
 
-| ID     | Axe       | Résumé                                                                                    |
-| ------ | --------- | ----------------------------------------------------------------------------------------- |
-| FIX-11 | 🟠 SEC    | Permissions calendrier contournables via la forme `connect` (fuite d'écriture)            |
-| FIX-10 | 🟠 SEC    | Confidentialité calendrier : le propriétaire peut perdre l'accès à ses propres événements |
-| FIX-14 | 🟠 SEC/UX | `skipInviteTeamOnboardingStep` mute des flags workspace-level sous `NoPermissionGuard`    |
-| FIX-13 | 🟠 SEC/UX | Auto-signup limité à un seul domaine (les 3 autres sociétés ne peuvent pas s'inscrire)    |
-| FIX-15 | 🟡 SEC    | Le flag serveur « inscriptions désactivées » n'est plus respecté                          |
-| FIX-17 | 🟡 SEC    | Fallback JWT silencieux vers le premier workspace (token périmé re-routé sans trace)      |
-| IMP-11 | 🟡 SEC    | Aucun journal d'audit des décisions de la policy (refus, bypass, merges)                  |
+| ID     | Axe    | Résumé                                                                                 |
+| ------ | ------ | -------------------------------------------------------------------------------------- |
+| FIX-38 | 🔴 SEC | Masquage d'audience calendrier inopérant : un non-membre lit le contenu des événements |
+
+_(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
-| ID     | Axe         | Résumé                                                                                |
-| ------ | ----------- | ------------------------------------------------------------------------------------- |
-| FIX-07 | 🟠 DATA     | Le backfill CSV écrase les réassignations manuelles d'opportunités à chaque boot      |
-| FIX-08 | 🟠 DOC/DATA | Fallback par créateur contredit la décision documentée (**décision produit requise**) |
-| FIX-09 | 🟠 UX       | La page Calendrier Groupe crashe si `init-internal-entities` n'a pas tourné           |
-| FIX-12 | 🟠 UX       | Merge/détection de doublons impossibles sur les enregistrements multi-entités         |
-| FIX-16 | 🟡 UX       | Échec d'auto-activation du workspace silencieusement avalé                            |
-| IMP-18 | 🟡 MAINT/UX | `init-internal-entities` encore lancé à la main après l'onboarding superadmin         |
-| IMP-20 | 🟡 UX       | Le filtre d'entité persisté (localStorage) n'est jamais revalidé au chargement        |
-| IMP-21 | 🟡 UX       | Aucun récap des relations ignorées à l'import CSV (silencieux)                        |
+| ID     | Axe   | Résumé                                                                   |
+| ------ | ----- | ------------------------------------------------------------------------ |
+| FIX-32 | 🟠 UX | Settings > Internal entities : le superadmin ne voit qu'une entité sur 4 |
+| IMP-21 | 🟡 UX | Aucun récap des relations ignorées à l'import CSV (silencieux)           |
 
 ### 🥉 Priorité 3 — Performance / Scalabilité
 
-| ID     | Axe          | Résumé                                                                      |
-| ------ | ------------ | --------------------------------------------------------------------------- |
-| FIX-19 | 🟡 PERF/SCAL | Filtres `in: [ids…]` construits en chargeant des tables entières en mémoire |
+| ID     | Axe          | Résumé                                                                                                                      |
+| ------ | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| FIX-19 | 🟡 PERF/SCAL | Filtres `in: [ids…]` construits en chargeant des tables entières en mémoire (dont la visibilité d'équipe des notes, OBS-01) |
 
 ### 🏅 Priorité 4 — Maintenabilité (dette technique)
 
 | ID     | Axe      | Résumé                                                                       |
 | ------ | -------- | ---------------------------------------------------------------------------- |
-| IMP-13 | 🟠 MAINT | Extraire un `InternalEntityRoleService` partagé (logique rôle dupliquée 3×)  |
 | IMP-14 | 🟠 MAINT | Découper les 2 fichiers géants (access-policy 1679 l., init-command 1950 l.) |
-| IMP-15 | 🟡 MAINT | Découper `SuperadminWorkspaceSetup.tsx` (956 lignes)                         |
-| FIX-20 | 🟡 MAINT | Normalisation des IDs d'entité incohérente selon les frontières              |
 
 ### 🎗️ Priorité 5 — Mineurs / hygiène
 
 | ID     | Axe      | Résumé                                                          |
 | ------ | -------- | --------------------------------------------------------------- |
-| IMP-12 | ⚪ SEC   | Durcir le flux signup contre l'énumération de comptes           |
 | FIX-21 | ⚪ MAINT | `validate*Payload` sans `executeInWorkspaceContext`             |
-| FIX-22 | ⚪ MAINT | Parser CSV : champs parsés jamais utilisés + format silencieux  |
-| FIX-23 | ⚪ DOC   | Bypass asymétrique Person/Company vs Opportunity non documenté  |
-| FIX-24 | ⚪ DOC   | Docs périmées (ARCHITECTURE.md à réaligner après FIX-08/FIX-10) |
 | FIX-25 | ⚪ MAINT | Hygiène git : `.codex/`, `AGENTS.md`, snapshots Jest à trancher |
 
 ---
@@ -175,63 +159,206 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Correction** : utilise désormais `USER_WORKSPACE_DATA_SEED_IDS.JONY` (l'admin du workspace seedé) comme propriétaire du thread par défaut.
 - **Vérif** : `nx database:reset` complet sans erreur, suite d'intégration exécutée avec succès sur la DB fraîchement seedée.
 
+### 🟡 À faire — Modérés (données de démo)
+
+#### FIX-39 — Le seed de démo ne permet pas d'exercer les Cartes 5 et 10 — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟡 `DATA` (dev uniquement)
+- **Fichiers** : `dev-seeder/` (calendrier, notes, tâches)
+- **Constat** (état du seed avant enrichissement manuel) :
+  | Symptôme | Mesure |
+  | --- | --- |
+  | Événements sans audience d'entité | **800 / 800** |
+  | Audiences d'entité sur les événements | **0** (tous en `ENTITY_ONLY`, aucun `WORKSPACE_PUBLIC`) |
+  | Notes sans aucun rattachement | ~**1750 / 1802** (52 `noteTarget`) |
+  | Tâches sans aucun rattachement | ~**1750 / 1801** (51 `taskTarget`) |
+- **Conséquence** : les fonctionnalités phares du fork (audience per-event, masquage inter-entités, activités sur fiche) n'ont **aucune donnée de démonstration**, ce qui les rend intestables en local. Le masquage de la Carte 10 n'a pu être validé qu'après enrichissement manuel de la base (cf. FIX-38, classé `INVALIDE` après re-test correct).
+- **Correctif livré (reproductible après `database:reset`)** :
+  1. `note-target-data-seeds` et `task-target-data-seeds` rattachent désormais **2 notes et 2 tâches par opportunité** (l'onglet Notes/Tasks d'une fiche affaire n'est plus vide) ;
+  2. `calendar-event-data-seeds` pose un `sharingScope` mixte (**1 événement sur 3 en `WORKSPACE_PUBLIC`**, le reste en `ENTITY_ONLY`) ;
+  3. nouvelle étape dev `seedPrimaryDevCalendarEventAudiences` dans `init-internal-entities` qui distribue les **audiences d'entité** sur les événements `ENTITY_ONLY`. Cette étape ne peut pas vivre dans le dev-seeder : `_calendarEventEntityAudience` porte une clé étrangère vers `_internalEntity`, or les entités internes n'existent pas encore au moment du seed. Elle est idempotente (`NOT EXISTS`) et gardée par `SEED_APPLE_WORKSPACE_ID`.
+- **Complément indispensable (découvert au test)** : rattacher les notes ne suffisait pas. Toutes les activités seedées étaient créées par « Tim A », or la règle « personal work » de la Carte 10 (cf. OBS-01) ne montre une note qu'à son **créateur** — l'onglet Notes d'une fiche affaire restait donc vide pour aline comme pour tout le monde. Les activités rattachées aux opportunités sont désormais **réparties entre 4 membres** (Aline, Tim, Phil, Louis) via `RESOLVE_ACTIVITY_AUTHOR`. Vérifié : 25 notes par membre, et l'onglet Notes d'une opportunité affiche bien « All 1 » pour aline.
+- **Vérifié après un `database:reset` complet + `init-internal-entities`** : noteTargets **150** (dont 100 sur opportunités, contre 52 avant), taskTargets **150** (dont 100), audiences **534** (contre 0), `sharingScope` 266 `WORKSPACE_PUBLIC` / 534 `ENTITY_ONLY`, companies rattachées **20/20**. 150/150 tests, typecheck + lint OK.
+
+### 🔐 Durcissements de spec
+
+#### FIX-33 — La Vue Groupe est scopée aux entités du membre (durcissement, changement de spec) — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `SEC`
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getEntityScopedObjectFilter`), `internal-entity-access-policy.service.spec.ts`, `docs/ROADMAP.md` (Carte 10)
+- **Nature** : ⚠️ **changement de spec assumé, pas un correctif de bug.** L'ancien comportement (Vue Groupe = aucun filtre de lecture) était **conforme** à la Carte 10 — c'est le sujet du faux positif FIX-31. Décision produit du 2026-07-18 : le durcir malgré tout.
+- **Motif** : la portée de lecture était pilotée par `activeInternalEntityId`, alimenté par l'en-tête HTTP `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` **fourni par le client**. Une requête omettant simplement l'en-tête retournait donc l'intégralité du workspace.
+- **Nouveau contrat** : la portée est **toujours** résolue côté serveur depuis les adhésions du membre.
+  1. Platform admin → exemption de lecture conservée sur les objets de configuration.
+  2. En-tête présent et désignant une entité d'appartenance → portée restreinte à cette entité.
+  3. En-tête présent mais désignant une entité **non membre** → ignoré, retour à l'entité courante (l'en-tête ne peut jamais **élargir**).
+  4. Vue Groupe (en-tête absent) → portée = **toutes les entités d'appartenance** du membre (auparavant : aucun filtre).
+- **Vérifié en réel** (`louis@devbystep.dev`, non-admin, membre de 3 entités sur 4, appels GraphQL directs avec son propre token) : sans en-tête → `WEKNOW, DEVBYSTEP, ALLSENSIA` (ANGLE_INTELLIGENCE exclu) ✅ ; en-tête `DEVBYSTEP` → `DEVBYSTEP` seul ✅ ; en-tête `ANGLE_INTELLIGENCE` (non membre) → `DEVBYSTEP`, en-tête ignoré ✅.
+- **Tests** : le test qui verrouillait l'ancien contrat a été réécrit ; ajout d'un test « l'en-tête ne peut pas élargir la portée ». Le mock de `resolveContext` était **infidèle** (il renvoyait l'entité demandée sans la valider contre les adhésions, exprimant un état impossible en prod) — il réplique désormais la validation réelle. 150/150 verts, typecheck + lint OK.
+
+#### FIX-35 — Écran vide trompeur : « Add your first… » alors que des enregistrements existent — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX`
+- **Fichiers** : `RecordTableEmptyState.tsx`
+- **Constat** : sous une vue d'entité qui masque tous les enregistrements, l'écran affichait « Add your first Opportunity — Use our API or add your first Opportunity manually » alors que 50 opportunités existaient (simplement filtrées). Deux messages incohérents selon le contexte.
+- **Cause** : la sonde `useFindManyRecords({ limit: 1 })` qui calcule `noRecordAtAll` était **elle-même filtrée par l'entité active** → `totalCount = 0` → branche « aucun enregistrement du tout ».
+- **Correctif** : la sonde passe `bypassEntityViewScope: true` (option introduite par FIX-32). Elle répond désormais à « existe-t-il le moindre enregistrement ? » et non « en reste-t-il dans la vue courante ? ». La portée reste imposée par le serveur : l'utilisateur ne compte que des enregistrements de ses entités.
+- **Vérification** : typecheck + lint OK, tests d'état vide 6/6. ⚠️ Le cas n'a **pas pu être rejoué en local** après coup : le backfill du CSV dev ayant rattaché toutes les données, plus aucune vue d'entité ne renvoie 0. Correctif validé par lecture de code et par le fait que l'option `bypassEntityViewScope` est prouvée de bout en bout sur FIX-32.
+
+#### FIX-36 — Onglets de fiche absents de l'arbre d'accessibilité — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX` (accessibilité)
+- **Fichiers** : `twenty-ui/.../TabButton/TabButton.tsx`, `ui/layout/tab-list/components/TabList.tsx`
+- **Constat** : les onglets de fiche (Timeline, Tasks, Notes, Files, Emails, Calendar) étaient rendus en `<a>` sans `role="tab"` ni `aria-selected`, donc invisibles pour les lecteurs d'écran **et** inciblables par leur rôle dans les tests automatisés (constaté pendant l'audit : impossible de cliquer l'onglet Notes autrement que par un sélecteur de classe Linaria).
+- **Correctif** : `TabButton` expose `role="tab"`, `aria-selected` et `aria-disabled` ; le conteneur `TabList` expose `role="tablist"`.
+- **Vérification en réel** : l'arbre d'accessibilité expose désormais `tab "Timeline" [selected]`, `tab "Tasks"`, `tab "Notes"`, `tab "Files"`, `tab "Emails"`, `tab "Calendar"` ✅. Typecheck twenty-ui + twenty-front, lint OK.
+
+#### FIX-37 — Le décor de la page de connexion émettait des requêtes GraphQL non authentifiées (400) — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : ⚪ `UX`/`PERF`
+- **Fichiers** : `useAggregateRecords.ts`
+- **Constat** : au chargement de `/welcome`, une requête `AggregateCompanies` partait sans session et échouait en **400** (« Unknown type `CompanyFilterInput` » — le schéma workspace n'est pas résolu hors authentification), polluant la console.
+- **Cause** : le décor de connexion monte une vraie `RecordTableWithWrappers` alimentée par `SIGN_IN_BACKGROUND_MOCK_COMPANIES`. Les requêtes de **records** étaient déjà court-circuitées (`useRecordIndexTableQuery` : `skip: showAuthModal`), mais pas les **agrégations**.
+- **Correctif** : `useAggregateRecords` skippe désormais tant qu'aucun utilisateur n'est authentifié (`currentUserState`). Gate volontairement posée sur l'**état d'authentification** et non sur la route : `useShowAuthModal` dépend de `useLocation()`, donc du Router — dépendance trop lourde pour un hook de données aussi largement utilisé (première tentative : elle cassait 4 tests unitaires en exigeant un `<Router>`).
+- **Vérifié en réel** : page de connexion → **0 requête GraphQL et 0 erreur console** (le décor s'affiche à l'identique) ✅ ; une fois authentifié, les agrégations de pied de tableau fonctionnent normalement (« Unique of Emails 6 », « Empty of Phones 0% », « Earliest of Creation date ») ✅. Tests `useAggregateRecords` + `useAggregateRecordsQuery` 8/8, typecheck + lint OK.
+
+#### FIX-34 — Le nettoyage dev annule le backfill Company/Person qu'il vient de produire — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟡 `DATA` (dev uniquement — garde `workspaceId !== SEED_APPLE_WORKSPACE_ID`, **aucun impact prod**)
+- **Fichiers** : `init-internal-entities.command.ts` (`cleanupPrimaryDevWorkspaceMemberships`)
+- **Constat** : dans un même run d'`init-internal-entities`, `backfillCompanyMembershipsFromOpportunities` crée les adhésions (« 20 candidat(s) traité(s) pour Company <- Opportunity »), puis `cleanupPrimaryDevWorkspaceMemberships` les supprime. Le nettoyage ne conserve que les correspondances dont le **nom de société est identique au nom d'entité** — soit les 4 auto-références `WEKNOW -> WEKNOW`, `DEVBYSTEP -> DEVBYSTEP`, etc.
+- **Effet** : après backfill complet en local, `companies rattachées = 4/20` et `persons = 14/30`, alors que les 16 sociétés clientes ont bien des opportunités rattachées à une entité. **En prod : 59/59 companies et 77/77 persons rattachées.** L'environnement de dev n'est donc pas représentatif de la prod — c'est précisément ce qui a produit plusieurs faux diagnostics lors de l'audit du 2026-07-18.
+- **Absence de justification** : ni commentaire, ni entrée de backlog, ni décision produit documentée (contrairement à FIX-08). Introduit par le commit `b9a629f62b` (« perms »).
+- **Correctif livré** : le nettoyage conserve désormais une adhésion si elle est justifiée par une donnée réelle — (1) la société **est** l'entité (auto-référence canonique), **ou** (2) une opportunité rattache cette société (`opportunity.companyId`) / ce contact (`opportunity.pointOfContactId`) à cette entité. Seul le bruit des cascades Person <-> Company est supprimé.
+- **Arbitrage retenu** : une société cliente appartient au portefeuille de l'entité qui porte ses opportunités — c'est la règle qui reproduit la prod.
+- **Vérifié en réel** : après relance d'`init-internal-entities`, **20/20 companies** et **30/30 persons** rattachées (contre 4/20 et 14/30), avec un mapping cohérent (`Asteria Retail -> WEKNOW`, `Helios Industrie -> DEVBYSTEP`, `Cobalt Sante -> ALLSENSIA`, `Atlas Mobility -> ANGLE_INTELLIGENCE`). L'environnement de dev reflète enfin la prod. 150/150 tests, typecheck + lint OK.
+
+### 💬 Observations produit (conformes à la spec, à arbitrer)
+
+#### OBS-01 — Une note posée sur une fiche est invisible aux collègues — `TRANCHÉ` (2026-07-18) → visibilité d'équipe
+
+- **Constat** : connectée en **superadmin**, aline voit **2 notes sur 1802** dans la page Notes ; les tâches, elles, remontent à 597 (elle en est assignataire).
+- **Pourquoi ce n'est pas un bug** : `note`/`task` suivent la règle « personal work » de la Carte 10 — `note` filtre sur le **créateur seul**, `task` sur `créateur OR assignee`. L'asymétrie observée est donc exactement le contrat.
+- **Décision produit (2026-07-18)** : **les notes doivent être visibles par l'équipe.** Changement de spec assumé — critère de la Carte 10 révisé dans `docs/ROADMAP.md`.
+- **Nouveau contrat** : une note est visible si (1) on l'a écrite, **ou** (2) elle est rattachée à une société / personne / opportunité de **ses entités**. Le cloisonnement multi-entités est préservé : une note portée par une affaire d'une entité dont on n'est pas membre reste invisible. `noteTarget` suit la visibilité de sa note, sans quoi l'onglet Notes resterait vide. `Task`, `Attachment` et `TaskTarget` **gardent** la règle personal work.
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getPersonalScopeFilter` cas `note`/`noteTarget`, nouveau `getTeamVisibleNoteIds`).
+- **Vérifié en réel** : l'onglet Notes d'une opportunité WEKNOW passe de « All 1 » à **« All 2 »** pour aline — elle voit désormais la note d'un collègue. Isolation contrôlée : deux notes portées par une opportunité `ANGLE_INTELLIGENCE` (entité dont elle n'est pas membre) restent **« Record not found »**. 150/150 tests, typecheck OK.
+- **Dette de test relevée au passage** : les dépôts mockés `company`/`person`/`opportunity`/`note`/`task` du spec n'avaient pas de valeur de retour sur `find()`, ce qui faisait échouer toute logique lisant réellement ces enregistrements. Corrigé.
+
+**Correctif complémentaire (2026-07-20)** — le bascule Ma Société / Vue Groupe ne filtrait pas la liste Notes :
+
+- **Constat** : passe de vérification systématique (superadmin + non-admin, API GraphQL + UI, sur les 13 pages) menée en environnement proche prod. Toutes les pages entity-scoped discriminaient correctement Ma Société/Vue Groupe (People, Companies, Opportunities, Entités internes), **sauf Notes** : le compteur restait figé sur l'union de toutes les entités d'appartenance, quel que soit le bascule affiché à l'écran.
+- **Cause (serveur)** : `getTeamVisibleNoteIds` résolvait systématiquement `requireAccessibleEntityIds` (toutes les entités du membre), sans jamais restreindre à la seule entité active demandée.
+- **Cause (front, découverte en testant le correctif serveur)** : même une fois le serveur corrigé, le compteur restait figé côté UI. `note` n'a jamais été dans `DEFAULT_ENTITY_FILTER_MAP` (`buildEntityScopedRecordFilter.ts`) puisque c'est un objet « personal work », donc les variables Apollo (`filter`) ne changent jamais au bascule d'entité pour cet objet — Apollo sert le cache sans réémettre de requête, même si l'en-tête HTTP change réellement.
+- **Correctif** :
+  1. Serveur : `getTeamVisibleNoteIds` respecte désormais `hasRequestedActiveEntity` — une entité active restreint à cette seule entité, la Vue Groupe couvre toutes les entités d'appartenance (même logique que `getEntityScopedObjectFilter`).
+  2. Front : nouveau helper `isEntityFilterRegisteredForObject` ; `useFindManyRecords` et `useAggregateRecords` déclenchent un `refetch()` explicite au changement d'entité active **uniquement** pour les objets absents du registre (pour ne pas dupliquer les requêtes des objets déjà correctement filtrés côté client).
+- **Vérifié en réel (live, sans recharger la page)** : bascule ALLSENSIA(1739) → WEKNOW(1746) → DEVBYSTEP(1749), compteur et liste se mettent à jour ensemble. Non-régression confirmée sur Companies (bascule DEVBYSTEP↔WEKNOW, un seul appel réseau, pas de doublon). 150/150 tests serveur, typecheck + lint OK sur les deux packages.
+
+### ❌ Faux positifs (conservés pour ne pas être re-signalés)
+
+#### FIX-38 — « Le masquage d'audience calendrier ne s'applique jamais » — `INVALIDE` (2026-07-18, faux positif)
+
+- **Ce qui avait été signalé** : `louis@devbystep.dev` (non-admin, non membre d'ANGLE_INTELLIGENCE) lisait `title`, `description` et `location` en clair sur un événement `ENTITY_ONLY` dont l'audience était ANGLE seule.
+- **Pourquoi c'est INVALIDE** : **louis était le propriétaire de cet événement.** Le canal portait un `connectedAccount` de handle `louis@devbystep.dev`. L'exemption **FIX-10** s'applique donc à bon droit : « le propriétaire du compte connecté voit TOUJOURS ses propres événements, quelles que soient les règles d'entité/audience ».
+- **Test correct (refait)** : sur deux événements `ENTITY_ONLY` d'audience ANGLE seule appartenant à **d'autres** propriétaires (`aline@weknow.dev`, `louis@allsensia.dev`), la même requête renvoie pour louis :
+  ```
+  title: "Occupé"   description: null   location: null   startsAt: conservé
+  ```
+  Soit exactement le critère de la Carte 10. **Le masquage fonctionne.**
+- **Erreur de méthode associée** : la « cause probable » avancée (800 associations pour 0 canal) venait d'une requête sur la **mauvaise table** — `calendarChannel` existe dans le schéma `core` (6 canaux : 4 `SHARE_EVERYTHING`, 2 `METADATA`), pas seulement dans le schéma workspace.
+- **À retenir** : avant de conclure à une fuite sur un enregistrement de test, **vérifier qui en est le propriétaire** et sur quelle table porte la vérification. Voir aussi FIX-31, même famille d'erreur.
+
+#### FIX-31 — « Isolation multi-entités contournable en lecture » — `INVALIDE` (2026-07-18, faux positif)
+
+- **Ce qui avait été signalé** : avec le token d'un non-admin (`louis@devbystep.dev`, membre de 3 entités sur 4), un appel GraphQL direct omettant le filtre d'entité renvoie **les 4 entités** et **les 50 opportunités**, alors que son écran en affiche 0 sous sa vue d'entité. Conclusion (erronée) : le scoping en lecture serait « opt-in par le client » via l'en-tête `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME`, donc contournable.
+- **Pourquoi c'est INVALIDE** : c'est le **comportement spécifié et accepté** de la Carte 10 (`docs/ROADMAP.md`), verbatim :
+  - « Un utilisateur **sans entité active (Vue Groupe) voit toutes les données CRM accessibles à son rôle (filtre désactivé en lecture)** » ;
+  - Notes de mise en service : « **Vue Groupe = header absent / vide → aucune contrainte de lecture appliquée par l'access policy** ».
+    Le scoping **en lecture** est un confort de vue, pas une frontière de sécurité. Le contrôle d'accès réel repose sur (1) le **rôle** (« accessibles à son rôle »), (2) les **mutations** qui, elles, sont bien rejetées hors entité (sauf platform admin / entityManager), (3) le **masquage calendrier** (Cartes 5 et 10).
+- **À retenir** : ne pas re-signaler la lecture non filtrée en Vue Groupe comme une faille. Si le besoin métier évolue vers une isolation en lecture réellement contraignante, c'est un **changement de spec** (nouvelle carte), pas un correctif de bug.
+
 ### 🟠 À faire — Importants
 
-#### FIX-07 — Le backfill CSV écrase les corrections manuelles à chaque boot — `A_FAIRE`
+#### FIX-32 — Settings > Internal entities n'affiche qu'une entité sur 4 pour le superadmin — `FAIT` (2026-07-18)
+
+- **Sévérité/Axe** : 🟠 `UX`
+- **Fichiers** : `buildEntityScopedRecordFilter.ts` (`DEFAULT_ENTITY_FILTER_MAP`, clé `internalEntity`), page `settings/internal-entities`
+- **Constat** : la page « Entity colors » annonce « Pick a color for **each** internal entity » mais ne liste que l'entité active → un platform admin ne peut pas configurer la couleur des 3 autres sans basculer en Vue Groupe. Reproduit avec aline (superadmin) : 1 entité affichée sur 4.
+- **Cause** : le front applique `internalEntity: (entityId) => ({ id: { eq: entityId } })`. Côté serveur, les objets de configuration (`ENTITY_CONFIGURATION_OBJECT_NAME_SET`) sont au contraire **volontairement exemptés en lecture pour les platform admins** — le filtre front écrase donc cette exemption sur une page d'administration.
+- **⚠️ Ne PAS corriger en retirant la clé `internalEntity` du filtre global** : la Carte 10 spécifie qu'en **Vue Société** un utilisateur ne voit que les `InternalEntity` rattachés à son entité. Retirer la clé casse ce critère (vérifié en A/B : un non-admin passe de 1 à 4 entités visibles dans sa vue d'entité).
+- **Correctif livré (2026-07-18)** : nouvelle option `bypassEntityViewScope` sur `useFindManyRecords` (documentée : n'ôte aucune protection, la portée reste imposée par l'access policy serveur), activée **uniquement** par `SettingsInternalEntities.tsx`. Le `DEFAULT_ENTITY_FILTER_MAP` global est laissé intact.
+- **Vérifications en réel** : aline (platform admin, vue WEKNOW) → les **4** entités configurables avec leurs couleurs ✅ ; `/objects/internalEntities` reste à **1** sous vue WEKNOW → critère Carte 10 préservé ✅ ; un non-admin (`louis@devbystep.dev`) est de toute façon **redirigé hors de cette page de settings** (déjà réservée aux admins) ✅. `npx nx typecheck twenty-front` + `lint:diff-with-main` OK.
+
+#### FIX-07 — Le backfill CSV écrase les corrections manuelles à chaque boot — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : le `UPDATE` de `updateOpportunitiesInternalEntity` garde `AND opportunity."internalEntityId" IS NULL` — une opportunité déjà rattachée (CSV ou réassignation manuelle) n'est jamais réécrite. Bug résolu.
 
 - **Sévérité/Axe** : 🟠 `DATA`
 - **Fichiers** : `init-internal-entities.command.ts` (`updateOpportunitiesInternalEntity`)
 - **Problème** : `UPDATE … WHERE internalEntityId IS DISTINCT FROM csv_values` — toute réassignation manuelle d'une opportunité listée dans le CSV est annulée au redeploy suivant.
 - **Piste** : ne backfiller que si `internalEntityId IS NULL`, ou marquer les opportunités migrées (colonne / userVar) pour ne les traiter qu'une fois.
 
-#### FIX-08 — Fallback par créateur contredit la décision documentée — `A_FAIRE`
+#### FIX-08 — Fallback par créateur contredit la décision documentée — `FAIT` (2026-07-16, décision produit)
 
 - **Sévérité/Axe** : 🟠 `DOC`/`DATA`
-- **Fichiers** : `init-internal-entities.command.ts` (`backfillOpportunitiesFromWorkspaceMembers`), `MEMORY.md`, `docs/ARCHITECTURE.md`
-- **Problème** : MEMORY/ARCHITECTURE disent « aucun fallback par créateur », le code infère `internalEntityId` depuis `createdBy`/`owner`.
-- **Piste** : trancher (retirer le backfill OU mettre à jour la doc) — décision produit à demander.
+- **Fichiers** : `init-internal-entities.command.ts`, `docs/ARCHITECTURE.md`
+- **Décision** : **aucun fallback par créateur** (option retenue). Vérifié en code : plus aucune inférence de `internalEntityId` depuis `createdBy`/`owner` dans `init-internal-entities.command.ts` (grep vide). Une opportunité sans correspondance CSV reste `NULL`. Doc `ARCHITECTURE.md` réalignée en conséquence (voir FIX-24). Code et doc désormais cohérents.
 
-#### FIX-09 — Page Calendrier Groupe crashe si metadata absente — `A_FAIRE`
+#### FIX-09 — Page Calendrier Groupe crashe si metadata absente — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟠 `UX`
-- **Fichiers** : `packages/twenty-front/src/modules/activities/group-calendar/components/GroupCalendarEventsCard.tsx` (→ `useCurrentUserEntityIds` → `useFindManyRecords('workspaceMemberEntityMembership')`)
-- **Problème** : `useObjectMetadataItem` throw au mount si `init-internal-entities` n'a pas tourné. Règle de gating (via `useObjectMetadataItems`) appliquée dans `GroupCalendarCreateEventModal` mais pas ici.
-- **Piste** : gater `useCurrentUserEntityIds` (retourner un Set vide si l'objet metadata est absent).
+- **Fichiers** : `packages/twenty-front/src/modules/activities/group-calendar/hooks/useCurrentUserEntityIds.ts`
+- **Problème** : `useCurrentUserEntityIds` appelait `useFindManyRecords('workspaceMemberEntityMembership')`, dont le `useObjectMetadataItem` interne **throw `ObjectMetadataItemNotFoundError` au mount** (indépendamment de `skip`) tant que `init-internal-entities` n'a pas tourné → crash de toute la page Calendrier Groupe. Un simple `skip` ne suffit pas (le throw précède le skip).
+- **Correction** : réécriture sur le pattern IMP-19 (`useSelectableInternalEntities`) — requête construite manuellement via `generateFindManyRecordsQuery` **seulement si** la métadonnée existe (sinon requête placebo `currentUser { id }`), `skip` sur absence de métadonnée / membre / permission de lecture. Hooks toujours appelés inconditionnellement (Rules of Hooks). Fallback `user.entityId` conservé.
+- **Vérif** : `npx nx typecheck twenty-front` OK.
 
-#### FIX-10 — Confidentialité calendrier : code ≠ commentaire ≠ spec — `A_FAIRE`
+#### FIX-10 — Confidentialité calendrier : code ≠ commentaire ≠ spec — `FAIT` (2026-07-16)
+
+- **Décision produit** : le propriétaire du compte connecté voit TOUJOURS ses propres événements.
+- **Correction** : `calendar-privacy.service.ts` construit désormais `ownerWorkspaceMemberIdsByCalendarEventId` et, en tête d'arbitrage (juste après le check WORKSPACE_PUBLIC), démasque inconditionnellement si `currentWorkspaceMemberId` est propriétaire de l'événement — avant toute règle d'entité/audience/visibilité de canal. Ordre d'arbitrage re-documenté (public > propriétaire > audience explicite > entité propriétaire > visibilité canal > masqué).
+- **Vérif** : nouveau test « should never mask a calendar event for its connected-account owner » (canal excluant explicitement l'entité du propriétaire) — spec privacy 25/25.
 
 - **Sévérité/Axe** : 🟠 `SEC`/`DOC`
 - **Fichiers** : `packages/twenty-server/src/modules/calendar/common/services/calendar-privacy.service.ts` (~l.372-407), `docs/ARCHITECTURE.md`
 - **Problème** : (a) une `visibleInternalEntityIds` de channel excluant l'entité propriétaire masque les événements aux membres de l'entité owner — y compris potentiellement au propriétaire — alors que le commentaire affirme le contraire ; (b) l'ordre implémenté (liste channel > entité owner > audience) ≠ l'arbitrage documenté (public > audience > carte 5).
 - **Piste** : garantir « owner voit toujours ses propres événements » (check viewer == owner du connected account), puis aligner doc et code sur un seul ordre.
 
-#### FIX-11 — Permissions calendrier contournables via la forme `connect` — `A_FAIRE`
+#### FIX-11 — Permissions calendrier contournables via la forme `connect` — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟠 `SEC`
-- **Fichiers** : `packages/twenty-server/src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts` (`validateCreatePayload`)
-- **Problème** : le contrôle n'est fait que si `calendarChannelId`/`calendarEventId` est une string du payload ; la forme `{ calendarChannel: { connect: { where: { id } } } }` saute la vérification.
-- **Piste** : réutiliser `extractRelationTargetId` (util partagé créé pour FIX-04) et **refuser** si aucun ID n'est extractible.
+- **Fichiers** : `packages/twenty-server/src/modules/calendar/common/query-hooks/calendar-event/services/calendar-event-mutation-permission.service.ts` (+ spec)
+- **Problème** : le contrôle n'était fait que si `calendarChannelId`/`calendarEventId` était extractible du payload ; la forme `connect` a été couverte par `extractRelationTargetId` (déjà branché), mais un payload **sans référence extractible** (forme d'input inconnue, relation absente) sautait encore silencieusement la vérification — le vecteur de contournement restant.
+- **Correction** : refus systématique quand aucune référence n'est extractible — `validateCreatePayload` : association → liste vide passée à `assertCalendarChannelMutationAllowed` (qui refuse les listes vides, avec audit `empty-calendar-channel-ids`) ; participant → `throwPermissionDenied` (`missing-calendar-event-reference`). `validateCreateManyPayload` : contrôle **par ligne** — une seule ligne du batch sans référence invalide tout le batch.
+- **Vérif** : 4 nouveaux tests de refus (one/many × association/participant, avec rôle entity manager pour prouver que c'est bien le payload qui est refusé) — suite calendrier 38/38.
 
-#### FIX-12 — Merge/doublons impossibles sur enregistrements multi-entités — `A_FAIRE`
+#### FIX-12 — Merge/doublons impossibles sur enregistrements multi-entités — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : `validateMergeManyPayload`/`validateFindDuplicatesPayload` exigent désormais `entityIds.includes(activeEntityId)` (au lieu de l'ancienne exclusivité `some(id !== activeEntityId)`) — un record partagé entre entités est accepté dès qu'il inclut l'entité active. Bug résolu.
 
 - **Sévérité/Axe** : 🟠 `UX`
 - **Fichiers** : `internal-entity-access-policy.service.ts` (`validateMergeManyPayload`, `validateFindDuplicatesPayload`)
 - **Problème** : `entityIds.some(id => id !== activeEntityId)` rejette tout record partagé entre entités (Carte 4). Message d'erreur trompeur.
 - **Piste** : exiger `entityIds.includes(activeEntityId)` au lieu de l'exclusivité (décider du comportement pour les managers).
 
-#### FIX-13 — Restriction signup mono-domaine vs 4 sociétés — `A_FAIRE`
+#### FIX-13 — Restriction signup mono-domaine vs 4 sociétés — `FAIT` (2026-07-16, décision produit)
+
+- **Décision** : **invitation uniquement** pour les 3 autres sociétés (statu quo conservé volontairement). Aucun changement de code ; comportement documenté. Les membres de DEVBYSTEP/ALLSENSIA/ANGLE_INTELLIGENCE rejoignent le workspace sur invitation d'un admin (ou via un domaine listé dans `BOOTSTRAP_ADMIN_EMAILS`). Se combine avec IMP-12 (durcissement anti-énumération).
 
 - **Sévérité/Axe** : 🟠 `SEC`/`UX`
 - **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/services/sign-in-up.service.ts` (`assertEmailDomainAllowedForAutoSignUp`)
 - **Problème** : seul le domaine email du premier super admin peut s'auto-inscrire — les 3 autres sociétés passent obligatoirement par invitation.
 - **Piste** : liste de domaines autorisés en variable d'env (un par société), ou assumer le modèle « invitation only » et documenter.
 
-#### FIX-14 — `skipInviteTeamOnboardingStep` modifie l'onboarding de tout le workspace — `A_FAIRE`
+#### FIX-14 — `skipInviteTeamOnboardingStep` modifie l'onboarding de tout le workspace — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟠 `SEC`/`UX`
-- **Fichiers** : `packages/twenty-server/src/engine/core-modules/onboarding/onboarding.resolver.ts`, `onboarding.service.ts` (`advanceFromInviteTeamStep`)
-- **Problème** : mutation sous `NoPermissionGuard` qui bascule des flags workspace-level (clear invite-team + arme book-onboarding pour tous).
-- **Piste** : passer ces flags au niveau user (userVars par userId), ou restreindre la mutation.
+- **Décision produit** : drapeaux d'onboarding au niveau UTILISATEUR.
+- **Fichiers** : `onboarding.service.ts` (+ spec), `onboarding.resolver.ts` (+ spec), `sign-in-up.service.ts`, `workspace-invitation.service.ts`.
+- **Problème** : `setOnboardingInviteTeamPending` et `setOnboardingBookOnboardingPending` écrivaient des userVars **workspace-level** (userId nul). Comme `getAll` fusionne le scope workspace partagé, un seul utilisateur qui passait/complétait l'étape « inviter l'équipe » basculait l'onboarding de TOUS les membres. (Codex avait déjà ajouté un garde superadmin sur la mutation `skip`, mais le drapeau restait partagé.)
+- **Correction** : les deux setters + `advanceFromInviteTeamStep` prennent désormais un `userId` et écrivent en scope user (userId + workspaceId), comme `setOnboardingConnectAccountPending`. Les 5 call sites passent l'utilisateur acteur : sign-up (`user.id`), envoi d'invitations (`sender.userId`), setup superadmin (`user.id`), `skipBookOnboardingStep`/`skipInviteTeamOnboardingStep` (`@AuthUser`). Le nettoyage book-onboarding dans `getOnboardingStatus` est aussi passé user-level.
+- **Caveat migration** : un éventuel drapeau workspace-level _hérité_ (posé par l'ancien code avant déploiement) resterait lisible via le scope partagé de `getAll` jusqu'à expiration ; sans impact sur un workspace fraîchement seedé (cas local + prod déjà onboardée). Pas de migration dédiée jugée nécessaire.
+- **Vérif** : `advanceFromInviteTeamStep` scoped-user (spec) + specs resolver/sign-in-up/invitation verts (24/24 sur le périmètre) ; typecheck OK.
 
 #### FIX-29 — Wizard superadmin non idempotent : bloque sur un workspace déjà seedé — `FAIT` (2026-07-16)
 
@@ -259,43 +386,53 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### 🟡 À faire — Modérés
 
-#### FIX-15 — `assertSignUpEnabled()` supprimé — `A_FAIRE`
+#### FIX-15 — `assertSignUpEnabled()` supprimé — `FAIT` (2026-07-16, déjà livré, constaté)
 
 - **Sévérité/Axe** : 🟡 `SEC`
-- **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/services/sign-in-up.service.ts` (`signUpWithoutWorkspace`)
-- **Problème** : le fork a retiré l'appel à `assertSignUpEnabled()` (qui lit le flag serveur `IS_SIGN_UP_ENABLED`). Résultat : même quand l'exploitant désactive les inscriptions côté serveur, un nouvel utilisateur peut toujours passer par `signUpWithoutWorkspace`. Le garde-fou d'exploitation est court-circuité.
-- **Correction proposée** : réintroduire `assertSignUpEnabled()` **en tout début** de `signUpWithoutWorkspace`, avant la restriction de domaine (FIX-13) — pour que « inscriptions désactivées » l'emporte sur toute autre logique. Ajouter un test qui vérifie le rejet quand le flag est off.
-- **Effort** : faible (réintroduction d'un check existant).
+- **Fichiers** : `sign-in-up.service.ts` (+ spec)
+- **Résolution constatée** : `assertSignUpEnabled()` est réintroduit et appelé en **tête** de `signUpWithoutWorkspace` et dans `assertWorkspaceCreationAllowed`. Sémantique fork : signup autorisé si `IS_MULTIWORKSPACE_ENABLED` ou si aucun workspace n'existe (bootstrap initial) — plus strict que le flag upstream. Testé : rejet `SIGNUP_DISABLED` quand mono-workspace + workspace existant (spec 12/12).
 
-#### FIX-16 — Échec d'auto-activation du workspace avalé — `A_FAIRE`
+#### FIX-16 — Échec d'auto-activation du workspace avalé — `FAIT` (2026-07-16, déjà livré, constaté)
 
 - **Sévérité/Axe** : 🟡 `UX`/`DATA`
-- **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/services/sign-in-up.service.ts` (`signUpOnNewWorkspace`)
-- **Problème** : si `activateWorkspace` lève une exception, elle est seulement loggée : le workspace reste en `PENDING_CREATION` et l'utilisateur est créé quand même, sans aucune remédiation ni feedback. L'utilisateur se retrouve avec un compte pointant vers un workspace mort-né, sans message d'erreur. Le cast `as unknown as AuthContextUser` masque en plus un problème de typage.
-- **Correction proposée** : (1) soit **retry** l'activation (idempotente), (2) soit propager une erreur explicite au front pour que l'utilisateur sache que la création a échoué et puisse réessayer ; dans les deux cas, ne pas laisser un workspace `PENDING_CREATION` orphelin. Supprimer le cast `as unknown as AuthContextUser` en corrigeant le type réellement retourné.
-- **Effort** : moyen (dépend du choix retry vs erreur remontée).
+- **Fichiers** : `sign-in-up.service.ts` (+ spec)
+- **Résolution constatée** : `activateWorkspace` est appelé en `await` direct **sans catch avaleur** — tout échec remonte au front (plus de workspace `PENDING_CREATION` orphelin silencieux). Le cast `as unknown as AuthContextUser` a été supprimé. Testé : « throws when the new workspace auto-activation fails » (spec 12/12).
 
-#### FIX-17 — Fallback JWT silencieux vers le premier workspace — `A_FAIRE`
+#### FIX-17 — Fallback JWT silencieux vers le premier workspace — `FAIT` (2026-07-16, résolu par la réécriture de la stratégie)
 
 - **Sévérité/Axe** : 🟡 `SEC`
-- **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/strategies/jwt.auth.strategy.ts`
-- **Problème** : quand un JWT porte un `workspaceId` qui n'existe plus / n'est plus accessible, la stratégie re-route silencieusement la requête vers le **premier** workspace trouvé, sans aucune trace. En multi-workspace, cela peut exposer un utilisateur au mauvais workspace ; même en mono-workspace, l'absence de log rend tout incident indétectable.
-- **Correction proposée** : (1) logger un `warn` structuré (userId, workspaceId demandé, workspaceId de repli) à chaque fois que le fallback se déclenche ; (2) n'activer le fallback que si `IS_MULTIWORKSPACE_ENABLED=false` (c'est déjà le cas en pratique — le rendre explicite et défensif) ; (3) documenter ce comportement dans `docs/ARCHITECTURE.md`. Se combine avec IMP-11 (journal d'audit).
-- **Effort** : faible.
+- **Fichiers** : `packages/twenty-server/src/engine/core-modules/auth/strategies/jwt.auth.strategy.ts` (+ spec)
+- **Problème (historique)** : un JWT au `workspaceId` obsolète était re-routé silencieusement vers le premier workspace trouvé, sans trace.
+- **Résolution constatée** : la stratégie a été réécrite — le fallback n'existe plus. Un token dont le workspace n'existe plus est **rejeté** (`WORKSPACE_NOT_FOUND`), un mismatch userWorkspace/workspace est rejeté aussi. Comportement plus strict que la piste initiale (qui proposait seulement un log). Testé : « should reject an access token when its workspace no longer exists » (19/19 verts). `logJwtFallback` reste disponible dans l'audit logger si un fallback devait réapparaître.
 
 #### FIX-18 — Emails bootstrap admin en dur — `FAIT` (déjà livré par un autre agent, constaté le 2026-07-16, voir IMP-10)
 
 - 🟡 `SEC`/`MAINT` — `bootstrap-admin-email.constant.ts` lit désormais `process.env.BOOTSTRAP_ADMIN_EMAILS`, aucun email codé en dur ne subsiste dans le module auth. Détails de la vérification : voir IMP-10.
 
+#### FIX-40 — Le calendrier groupe cachait entièrement les créneaux masqués en vue Ma Société — `FAIT` (2026-07-20)
+
+- **Sévérité/Axe** : 🟠 `DATA`/`UX` (contredisait un critère déjà accepté)
+- **Constat (demande explicite)** : en vue **Ma Société**, le calendrier groupe (`getGroupTimelineCalendarEvents`) excluait purement et simplement les événements masqués (`getUnmaskedGroupCalendarEventsPage` filtrait tout `visibility === METADATA`) — l'utilisateur ne voyait **aucune trace** du créneau, ni « Occupé » ni badge d'entité. Seule la Vue Groupe les affichait masqués.
+- **Pourquoi c'est un bug et non une nuance de spec** : la Carte 5 (`docs/ROADMAP.md`) exige explicitement : « Si différent : title/description/attendees remplacés par "Occupé"/null. **Les champs startAt/endAt restent visibles (pour la planification)** ». Les exclure entièrement en Ma Société violait ce critère déjà accepté — risque de double réservation silencieux.
+- **Correctif (1/2 — visibilité)** : suppression du paramètre `includeMaskedEvents` et de `getUnmaskedGroupCalendarEventsPage` (mort) côté serveur, du champ GraphQL correspondant, et de la logique de bascule côté front (`useGroupCalendarEvents`). Les événements masqués sont désormais **toujours** renvoyés — `startsAt`/`endsAt`/`entityColor`/`entityName` restent visibles, seuls `title`/`description` sont neutralisés.
+- **Effet de bord détecté avant de livrer** : le masquage (`getCalendarEventMaskMap`) ne dépendait **jamais** de l'entité active du bascule — seulement de l'identité globale du spectateur (toutes ses adhésions). Une fois (1) livré seul, Ma Société et Vue Groupe auraient produit un résultat **identique**, rendant le sélecteur d'entité inopérant sur cette page (régression UX silencieuse).
+- **Correctif (2/2 — bonne logique par vue)** : `requestedActiveEntityId` est propagé du contexte d'auth jusqu'à `CalendarPrivacyService.getCalendarEventMaskMap` (résolveur → service → privacy service), avec la même garantie que FIX-33/OBS-01 : une entité active restreint l'arbitrage à **cette seule entité** (les autres entités du spectateur redeviennent masquées), la Vue Groupe (pas d'en-tête) couvre **toutes** ses entités d'appartenance.
+- **Fichiers** : `timeline-calendar-event.resolver.ts`, `timeline-calendar-event.service.ts` (+ spec), `calendar-privacy.service.ts`, `getGroupTimelineCalendarEvents.ts`, `useGroupCalendarEvents.ts`, `generated/graphql.ts` (régénéré).
+- **Vérifié en réel** (non-admin membre de 3 entités sur 4, via API + UI) : le total d'événements reste **identique** entre les deux vues (763/763 — rien n'est jamais masqué au sens « supprimé ») ; le nombre de créneaux **masqués** diffère (4 en Vue Groupe vs 10 en Ma Société=DEVBYSTEP) — preuve que le bascule discrimine réellement. Un créneau masqué renvoie `title:"Occupé"`, `entityName:"ALLSENSIA, ANGLE_INTELLIGENCE"`, `entityColor` et `startsAt`/`endsAt` intacts. Confirmé visuellement : lignes « 🔒 Not shared » avec badges d'entité colorés. 245/245 tests, typecheck + lint OK sur les deux packages.
+- **Reste ouvert (non traité, hors périmètre)** : un des deux chemins de masquage (`buildTimelineCalendarEventsFromEvents`) pose parfois `title` à la constante brute non traduite `FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED` au lieu de « Occupé » — sans impact dans `GroupCalendarBoard.tsx` (qui n'utilise jamais ce champ pour un événement masqué), mais potentiellement visible ailleurs (ex. panneau latéral d'un événement). À vérifier séparément.
+
 #### FIX-19 — Filtres `in: [ids…]` construits en chargeant des tables entières — `A_FAIRE`
 
 - **Sévérité/Axe** : 🟡 `PERF`/`SCAL`
-- **Fichiers** : `internal-entity-access-policy.service.ts` (`getHybridScopeFilter`, `getPersonalScopeFilter` noteTarget/taskTarget), `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`)
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getHybridScopeFilter`, `getPersonalScopeFilter` note/noteTarget/taskTarget, **`getTeamVisibleNoteIds`**), `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`)
 - **Problème** : le scope de lecture est appliqué en chargeant **tous** les IDs accessibles côté serveur puis en construisant un filtre `in: [id1, id2, …]`. Sur une grosse base, ces tableaux d'IDs explosent (taille du filtre, mémoire, latence). IMP-01/02/05 ont ajouté un cache TTL 30 s qui **atténue** la fréquence du problème mais pas sa borne supérieure : un `in: [...]` avec des dizaines de milliers d'IDs reste pathologique.
 - **Correction proposée** : pousser le scope **en SQL** — sous-requête `EXISTS` / jointure sur les tables de membership (via `apply-row-level-permission-predicates`) au lieu de matérialiser la liste d'IDs. Pour le calendrier de groupe, IMP-03 a déjà paginé en SQL ; appliquer le même principe aux autres chemins. C'est la solution structurelle dont IMP-01/02 sont la version « cache » provisoire.
+- **Périmètre étendu le 2026-07-18 (OBS-01)** : la visibilité d'équipe des notes ajoute un chemin de ce type, et c'est le plus exposé à la volumétrie. `getTeamVisibleNoteIds` matérialise successivement les IDs de sociétés, de personnes et d'opportunités des entités du membre, puis **tous les `noteTarget`** qui les visent, pour en tirer un `id: { in: [...] }` de notes. Sur le seed de démo actuel cela reste modeste (1 800 notes, 150 rattachements), mais le coût croît avec le **produit** volume de notes × volume d'enregistrements CRM — plus vite que les chemins déjà listés. Le correctif est le même : un `EXISTS` sur `noteTarget` joint aux tables de membership, sans jamais matérialiser la liste.
 - **Effort** : élevé (touche le générateur de prédicats de permission de Twenty).
 
-#### FIX-20 — Normalisation des IDs d'entité incohérente — `A_FAIRE`
+#### FIX-20 — Normalisation des IDs d'entité incohérente — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : `calendar-privacy.service.ts` normalise désormais TOUTES les frontières via `normalizeOptionalEntityId`/`normalizeEntityIdSet` — entité propriétaire, `visibleInternalEntityIds` de canal, et lignes d'audience (`loadAudienceMap`). Plus de dépendance au comportement implicite de PG. Bug résolu.
 
 - **Sévérité/Axe** : 🟡 `MAINT` (risque `DATA` latent)
 - **Fichiers** : `internal-entity-access-policy.service.ts` (`resolveContext`), `calendar-privacy.service.ts`, chemins consommant `calendarChannel.visibleInternalEntityIds` et les lignes d'audience
@@ -305,7 +442,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 ### ⚪ À faire — Mineurs
 
-#### FIX-21 — `validateFindDuplicatesPayload`/`validateMergeManyPayload` sans `executeInWorkspaceContext` — `A_FAIRE`
+#### FIX-21 — `validateFindDuplicatesPayload`/`validateMergeManyPayload` sans `executeInWorkspaceContext` — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : les deux validateurs enveloppent désormais leurs lookups (`resolveRecordSummary`) dans `executeInWorkspaceContext`, comme le reste du service. Incohérence résolue.
 
 - **Sévérité/Axe** : ⚪ `MAINT`
 - **Fichiers** : `internal-entity-access-policy.service.ts`
@@ -313,7 +452,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Correction proposée** : aligner sur le pattern majoritaire — envelopper la logique dans `executeInWorkspaceContext`. À traiter en même temps que FIX-12 (qui touche déjà `validateMergeManyPayload`).
 - **Effort** : faible.
 
-#### FIX-22 — Parser CSV : champs parsés jamais utilisés — `A_FAIRE`
+#### FIX-22 — Parser CSV : champs parsés jamais utilisés — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : `import-csv-opportunities-parser.service.ts` — `CsvOpportunityRow` est élagué à `{id, name, entityName}` (les `amount`/`currency`/`stage`/`companyId`/`personId` inutiles au backfill ont été retirés), et `parseEntityName` **jette une erreur explicite avec numéro de ligne** quand `Société` n'est pas un tableau JSON valide/non vide (plus de `null` silencieux). Résolu. (`import-csv.command.ts`, l'import CSV complet, parse légitimement tous les champs — hors périmètre.)
 
 - **Sévérité/Axe** : ⚪ `MAINT`
 - **Fichiers** : `import-csv-opportunities-parser.service.ts`
@@ -321,21 +462,19 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Correction proposée** : (1) élaguer les champs parsés inutiles (ou documenter pourquoi ils restent), (2) remonter un `warn` explicite quand `Société` n'a pas le format attendu, avec le numéro de ligne, pour que les lignes ignorées soient visibles (recoupe IMP-21 côté import interactif).
 - **Effort** : faible.
 
-#### FIX-23 — Bypass asymétrique Person/Company vs Opportunity — `A_FAIRE`
+#### FIX-23 — Bypass asymétrique Person/Company vs Opportunity — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : ⚪ `DOC`
-- **Fichiers** : `internal-entity-source-tagging.service.ts`, `MEMORY.md`
-- **Problème** : le bypass de source tagging (FIX-03) s'applique à `person`/`company` mais est ignoré pour `opportunity` (`objectName !== OPPORTUNITY`). C'est **voulu** (l'opportunité a une FK directe, pas une jonction), mais rien ne le documente — un futur mainteneur risque de « corriger » cette asymétrie et de casser le modèle.
-- **Correction proposée** : ajouter un commentaire explicatif au point de branchement + une entrée dans `MEMORY.md` (« Pièges connus — code ») figeant l'intention.
-- **Effort** : trivial.
+- **Fichiers** : `internal-entity-source-tagging.service.ts`
+- **Constat/correction** : le vrai comportement est une asymétrie de **tagging** (person/company auto-tagués sans assignation explicite possible ; opportunity autorise une assignation explicite validée via sa FK directe). Commentaire explicatif ajouté au point de branchement `objectName !== OPPORTUNITY_OBJECT_NAME` figeant l'intention (ne pas uniformiser les deux branches sous peine de casser l'isolation ou l'assignation légitime). Le bypass FIX-03, lui, s'applique désormais uniformément à tous les objets (vérifié en amont du branchement).
+- **Vérif** : spec source-tagging 22/22, typecheck OK.
 
-#### FIX-24 — Docs périmées — `PARTIELLEMENT FAIT`
+#### FIX-24 — Docs périmées — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : ⚪ `DOC`
-- **Fichiers** : `MEMORY.md` (fait), `docs/ARCHITECTURE.md` (reste)
-- **Problème** : `MEMORY.md` a été resynchronisé pour FIX-01→06 et les fixes récents, mais `docs/ARCHITECTURE.md` reste à réaligner sur deux points non tranchés : le fallback par créateur (FIX-08) et l'ordre d'arbitrage de la confidentialité calendrier (FIX-10).
-- **Correction proposée** : **dépend de FIX-08 et FIX-10** (décisions produit). Une fois ces deux items tranchés, mettre `docs/ARCHITECTURE.md` en cohérence avec le code retenu, puis passer FIX-24 à `FAIT`.
-- **Effort** : faible (mais bloqué par FIX-08/FIX-10).
+- **Fichiers** : `MEMORY.md` (déjà à jour), `docs/ARCHITECTURE.md`
+- **Correction** : `ARCHITECTURE.md` réaligné sur les décisions tranchées — arbitrage de masquage calendrier réécrit avec la règle « propriétaire toujours visible » (FIX-10) + normalisation (FIX-20) ; note backfill précisée (aucun fallback créateur FIX-08, garde `IS NULL` FIX-07) ; nouvelle section « Accès & inscription » documentant invitation-only (FIX-13), anti-énumération (IMP-12) et onboarding par utilisateur (FIX-14).
+- **Vérif** : prettier OK ; cohérence code/doc revue sur les 3 axes tranchés.
 
 #### FIX-25 — Hygiène git : `.codex/`, `AGENTS.md` et snapshots — `A_FAIRE`
 
@@ -439,31 +578,29 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Durcissement 2026-07-16** : `BOOTSTRAP_ADMIN_EMAILS` est aussi déclarée dans `ConfigVariables` comme variable `env-only` (`ADVANCED_SETTINGS`), ce qui documente officiellement le contrat de déploiement et empêche une configuration DB de diverger de l'environnement d'exécution.
 - **Vérif** : `npx nx typecheck twenty-server` OK (aucune modif nécessaire). Durcissement 2026-07-16 : `multi-entity-config-variables.spec.ts` (2 tests) OK ; `npx nx typecheck twenty-server` OK ; oxlint ciblé + Prettier ciblé OK.
 
-#### IMP-11 — Journal d'audit des décisions de la policy — `A_FAIRE`
+#### IMP-11 — Journal d'audit des décisions de la policy — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟡 `SEC`
-- **Fichiers** : `internal-entity-access-policy.service.ts`, `internal-entity-source-tagging.service.ts`, `jwt.auth.strategy.ts`, `init-internal-entities.command.ts`
-- **Problème** : aucune trace n'est produite pour les décisions sensibles de la policy — refus de permission (`throwPermissionDenied`), bypass de source tagging honorés (FIX-03), fallback JWT silencieux (FIX-17), fusions destructives d'entités (FIX-05). En cas de fuite de données inter-entités ou d'abus, il est **impossible** de reconstituer ce qui s'est passé en prod.
-- **Correction proposée** : introduire un logger structuré dédié (niveau `warn`), avec un schéma d'événement stable : `{ workspaceId, userId, objectName, operation, decision, reason }`. L'appeler à chaque point de décision (refus, bypass, fallback, merge). Idéalement router vers un canal persistant (table d'audit ou log agrégé) et non seulement stdout. Recoupe FIX-17 (log du fallback) et FIX-05 (log des merges).
-- **Effort** : moyen (transversal, mais additif — n'altère aucune logique métier).
+- **Fichiers** : `packages/twenty-server/src/modules/internal-entity/services/internal-entity-audit-logger.service.ts` (+ module), branché dans `internal-entity-access-policy.service.ts`, `internal-entity-source-tagging.service.ts`, `calendar-event-mutation-permission.service.ts`, `init-internal-entities.command.ts`.
+- **Contenu livré** : logger structuré `warn` avec événements typés — `logPermissionDenied`, `logSourceTaggingBypass`, `logInternalEntityMerge` (constaté en action lors de la fusion des 3 doublons FIX-29), `logJwtFallback` (disponible, sans appelant : le fallback JWT a été supprimé, voir FIX-17). Schéma : `{event, workspaceId, userId?, objectName?, décision…}` sur stdout (agrégeable).
+- **Vérif** : specs des 4 consommateurs verts ; merges observés en réel dans les logs d'`init-internal-entities`.
 
-#### IMP-12 — Durcir le flux signup contre l'énumération — `A_FAIRE`
+#### IMP-12 — Durcir le flux signup contre l'énumération — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : ⚪ `SEC`
-- **Fichiers** : `sign-in-up.service.ts` (`assertEmailDomainAllowedForAutoSignUp`)
-- **Problème** : le flux d'inscription répond différemment selon qu'une invitation existe ou non pour l'email, et il n'y a pas de rate-limit spécifique sur les tentatives refusées. Un attaquant peut donc **énumérer** quels emails/domaines sont connus du système en observant les différences de réponse.
-- **Correction proposée** : (1) uniformiser les messages d'erreur (même réponse générique quel que soit l'état interne) ; (2) ajouter un throttle sur les tentatives de signup refusées (par IP / par email). Se traite naturellement avec FIX-13 (restriction de domaine) et FIX-15 (flag signup).
-- **Effort** : moyen.
+- **Fichiers** : `sign-in-up.service.ts` (+ spec), `auth.module.ts`
+- **Décision produit** : oui, durcir (on reste en invitation-only, cf. FIX-13).
+- **Correction** : (1) **messages uniformes** — tous les refus d'auto-inscription passent par `throwUniformSignUpRestricted` (même code + même `userFriendlyMessage`), supprimant l'oracle qui révélait l'existence d'un super admin / d'une invitation / d'un domaine ; (2) **throttle par e-mail** — `assertSignUpAttemptWithinRateLimit` consomme un token (`ThrottlerService`, 10 tentatives / 15 min, clé `sign-up-attempt:<email normalisé>`), le dépassement renvoyant le MÊME message uniforme. En défense en profondeur au-dessus du `CaptchaGuard` déjà présent sur la mutation `signUp`.
+- **Vérif** : nouveau test « throttles repeated sign-up attempts » (court-circuite avant lecture DB) — spec 13/13 ; typecheck OK.
 
 ### Maintenabilité
 
-#### IMP-13 — Extraire un `InternalEntityRoleService` partagé — `A_FAIRE`
+#### IMP-13 — Extraire un `InternalEntityRoleService` partagé — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟠 `MAINT`
-- **Fichiers** : `internal-entity-access-policy.service.ts`, `calendar-event-mutation-permission.service.ts`, `internal-entity-source-tagging.service.ts`
-- **Problème** : les helpers de rôle `isPlatformAdmin` / `isEntityManager` / `canManageEntityScopedRecords` sont **dupliqués dans 3 services**. Toute évolution du modèle de rôles (ex. FIX-27 sur le bypass admin) doit être répercutée 3 fois, avec un risque de divergence (c'est exactement le type d'écart qui a produit FIX-27).
-- **Correction proposée** : extraire un `InternalEntityRoleService` dans le module internal-entity, exposant ces prédicats, et l'injecter dans les 3 consommateurs. Se combine avec IMP-07 (le cache de rôle vit déjà dans `UserRoleService`) : le nouveau service peut s'appuyer dessus.
-- **Effort** : moyen (extraction + réinjection, sans changement de comportement).
+- **Fichiers** : `packages/twenty-server/src/modules/internal-entity/services/internal-entity-role.service.ts` (+ module), consommé par `internal-entity-access-policy.service.ts`, `calendar-event-mutation-permission.service.ts`, `internal-entity-source-tagging.service.ts`.
+- **Contenu livré** : `isPlatformAdmin` / `isEntityManager` / `canManageEntityScopedRecords` centralisés dans un service unique injecté dans les 3 anciens duplicateurs — l'évolution du modèle de rôles se fait désormais en un seul endroit. S'appuie sur le cache TTL de `UserRoleService` (IMP-07).
+- **Vérif** : 148/148 tests internal-entity + specs calendrier verts après mise à jour des mocks.
 
 #### IMP-14 — Découper les deux fichiers géants — `A_FAIRE`
 
@@ -476,13 +613,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
   - À faire **après** IMP-13 (le role service extrait allège déjà la policy) et idéalement avant de retoucher lourdement ces fichiers.
 - **Effort** : élevé (refactor structurel — bien couvrir de tests avant/après ; les suites unitaire + intégration existantes servent de filet).
 
-#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` (956 lignes) — `A_FAIRE`
+#### IMP-15 — Découper `SuperadminWorkspaceSetup.tsx` — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟡 `MAINT`
-- **Fichiers** : `packages/twenty-front/.../SuperadminWorkspaceSetup.tsx`
-- **Problème** : composant de 956 lignes, viole la règle projet « composants < 300 lignes ». Mélange logique de wizard, état et rendu de chaque étape.
-- **Correction proposée** : découper par **étape du wizard** (un composant par étape) + extraire la logique dans des **hooks dédiés** (`useSuperadminSetupStepX`). Le composant racine ne garde que l'orchestration.
-- **Effort** : moyen (front, sans logique serveur).
+- **Fichiers** : `SuperadminWorkspaceSetup.tsx` + nouveaux `SuperadminWorkspaceSetup.styles.ts`, `SuperadminEntitiesSection.tsx`, `SuperadminModulesSection.tsx`, `SuperadminModuleOrderSection.tsx`, `utils/superadminWorkspaceSetup.ts` (+ test).
+- **Progrès (décomposition sûre, sans changement de comportement)** : le composant passe de **995 à 670 lignes**. Extraits (déplacements verbatim, validés par typecheck + lint) : les 17 styled-components → fichier `.styles.ts` ; les types + helpers purs (`parseSavedSetupState`, `resolveModuleOptions`) → `utils/superadminWorkspaceSetup.ts` avec 5 tests unitaires ; les 3 sections d'UI (entités, modules, ordre du menu) → 3 sous-composants présentationnels purs (props in, aucun état). Le `handleSubmit`/FIX-29 n'a pas été touché.
+- **Finalisation** : (1) ajout d'un **test de rendu** filet de sécurité (`__tests__/SuperadminWorkspaceSetup.test.tsx`, 3 cas) exerçant l'affichage des 3 sections ET le flux `handleSubmit` de bout en bout (création entité + membership + completeSetup + snackbar succès) ; (2) extraction de toute l'orchestration (state + effets + handlers + `handleSubmit`/FIX-29 + `syncWorkspaceNavigationMenu`) dans `hooks/useSuperadminWorkspaceSetupForm.ts` (déplacement verbatim). Le composant tombe à **93 lignes** (< 300 ✓) ; le filet de rendu passe à l'identique après extraction, prouvant zéro changement de comportement.
+- **Vérif** : `jest src/modules/onboarding` **30/30** (dont le test de rendu, identique avant/après extraction) ; `nx typecheck twenty-front` OK ; `nx lint:diff-with-main twenty-front` OK ; oxlint + prettier OK.
 
 #### IMP-16 — Unifier les deux résolveurs de seeds — `FAIT` (2026-07-16, résolu par IMP-09)
 
@@ -502,7 +639,9 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Reste hors périmètre** (candidats pour une extension future) : isolation sur `person` (couverte indirectement via `company`, même chemin de code), merge/duplicates, calendrier (audience/masquage), et les rôles standard Member/EntityManager qui n'ont par défaut aucune permission d'écriture sur les objets CRM (contournement actuel : la suite crée un rôle custom dédié et l'assigne de façon additive — documenté dans le fichier).
 - **Vérif** : `npx jest src/modules/internal-entity` → 133/133 ; suite d'intégration → 16/16 ; `npx nx typecheck twenty-server` OK ; oxlint + prettier sur tous les fichiers touchés OK.
 
-#### IMP-18 — Automatiser `init-internal-entities` après l'onboarding superadmin — `A_FAIRE`
+#### IMP-18 — Automatiser `init-internal-entities` après l'onboarding superadmin — `FAIT` (2026-07-16, constaté)
+
+- **Constat** : `workspace.service.ts` appelle `seedInternalEntitiesForWorkspace` en fin d'activation (`activateAndInitializeUpgradeState`) → `runSeedForWorkspace` (idempotent, dans un `executeInWorkspaceContext`, avec catch non bloquant qui log en cas d'échec). Plus besoin de lancer la commande à la main. Amélioration livrée.
 
 - **Sévérité/Axe** : 🟡 `MAINT`/`UX`
 - **Fichiers** : flux `activateWorkspace` / `completeSuperadminWorkspaceSetup`, `init-internal-entities.command.ts` (`runSeedForWorkspace`, déjà public et idempotent)
@@ -520,13 +659,13 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 - **Point de robustesse** : la requête des memberships n'utilise pas `useFindManyRecords` pour éviter que le scope entité actif ne filtre lui-même les options du sélecteur.
 - **Vérif** : `jest buildSelectableInternalEntities.test.ts` OK, `nx typecheck twenty-front` OK, `oxlint --type-aware` ciblé OK, `prettier --check` ciblé OK. `nx lint:diff-with-main twenty-front` bloqué localement par le `npx` absent du PATH du shell, remplacé par l'équivalent ciblé sur les fichiers touchés.
 
-#### IMP-20 — Resynchroniser le filtre d'entité persisté — `A_FAIRE`
+#### IMP-20 — Resynchroniser le filtre d'entité persisté — `FAIT` (2026-07-16)
 
 - **Sévérité/Axe** : 🟡 `UX` (risque de confusion `DATA` perçue)
 - **Fichiers** : `packages/twenty-front/.../entity-filter/` (`selectedEntityIdState` / `activeEntityIdState` et leur persistance localStorage)
 - **Problème** : ces atomes persistent en localStorage **sans revalidation**. Si l'entité stockée n'existe plus, ou ne correspond plus à l'utilisateur (changement d'affectation, ou autre compte sur le même navigateur), l'UI affiche « Ma Société » (libellé de l'entité stockée) mais le serveur, lui, retombe silencieusement sur l'entité par défaut du user → **les données affichées ne correspondent pas au libellé**. L'utilisateur croit voir une entité alors qu'il en voit une autre.
-- **Correction proposée** : au chargement de `currentUser`, vérifier que l'ID d'entité stocké ∈ entités réelles du user (memberships) ; sinon **reset** vers « Vue Groupe » (ou l'entité par défaut). S'appuie sur `useSelectableInternalEntities` déjà créé pour IMP-19.
-- **Effort** : faible (front, quelques lignes dans le hook d'initialisation).
+- **Correction** : nouvel util pur `shouldResetPersistedEntityFilter` (`entity-filter/utils/`, testé 5 cas) + effet dans `entity-selector.component.tsx` : une fois `useSelectableInternalEntities` chargé (`isLoading=false`), si `selectedEntityId` n'appartient plus aux entités sélectionnables → `setGroupView()`. Ne réinitialise jamais pendant le chargement ni la Vue Groupe (null/''). L'effet est monté avant l'early-return du composant (Rules of Hooks).
+- **Vérif** : `jest shouldResetPersistedEntityFilter.test.ts` 5/5 ; `npx nx typecheck twenty-front` OK ; oxlint + prettier OK.
 
 #### IMP-21 — Récap des relations ignorées à l'import CSV — `A_FAIRE`
 

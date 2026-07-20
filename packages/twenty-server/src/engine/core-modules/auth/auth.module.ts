@@ -45,6 +45,7 @@ import { GuardRedirectModule } from 'src/engine/core-modules/guard-redirect/guar
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
 import { KeyValuePairEntity } from 'src/engine/core-modules/key-value-pair/key-value-pair.entity';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
+import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
 import { OnboardingModule } from 'src/engine/core-modules/onboarding/onboarding.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { WorkspaceSSOModule } from 'src/engine/core-modules/sso/sso.module';
@@ -111,6 +112,7 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     EmailVerificationModule,
     GuardRedirectModule,
     MetricsModule,
+    ThrottlerModule,
     PermissionsModule,
     TwoFactorAuthenticationModule,
     ApiKeyModule,

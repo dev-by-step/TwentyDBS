@@ -374,7 +374,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (!(await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        ))
+      ) {
         this.throwPermissionDenied(
           msg`Only superadmins can modify internal entity settings.`,
           {
@@ -385,7 +389,9 @@ export class InternalEntityAccessPolicyService {
         );
       }
     } else if (objectName === 'workspaceMemberEntityMembership') {
-      if (!(await this.internalEntityRoleService.isPlatformAdmin(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.isPlatformAdmin(authContext))
+      ) {
         this.throwPermissionDenied(
           msg`Bulk updates on workspace member entity assignments are reserved to platform administrators.`,
           {
@@ -396,7 +402,11 @@ export class InternalEntityAccessPolicyService {
         );
       }
     } else if (ENTITY_CONFIGURATION_OBJECT_NAME_SET.has(objectName)) {
-      if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+      if (
+        !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+          authContext,
+        ))
+      ) {
         this.throwPermissionDenied(
           msg`Bulk updates on entity assignments are reserved to entity managers and platform administrators.`,
           {
@@ -410,7 +420,9 @@ export class InternalEntityAccessPolicyService {
 
     if (
       ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-      !(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
     ) {
       this.throwPermissionDenied(
         msg`Bulk updates are reserved to entity managers and platform administrators.`,
@@ -492,7 +504,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
+      if (
+        await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        )
+      ) {
         return payload;
       }
 
@@ -506,7 +522,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Duplicate detection on entity-scoped records is reserved to entity managers and platform administrators.`,
         {
@@ -583,7 +603,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can merge entity records.`,
         {
@@ -642,7 +666,9 @@ export class InternalEntityAccessPolicyService {
 
     if (
       objectName === 'internalEntity' &&
-      (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext))
+      (await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+        authContext,
+      ))
     ) {
       return;
     }
@@ -719,7 +745,9 @@ export class InternalEntityAccessPolicyService {
     // reaching the bypass.
     const canBypassEntityMatchForCrmObject =
       ENTITY_SCOPED_CRM_OBJECT_NAME_SET.has(objectName) &&
-      (await this.internalEntityRoleService.canManageEntityScopedRecords(authContext));
+      (await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ));
 
     if (
       !canBypassEntityMatchForCrmObject &&
@@ -825,7 +853,11 @@ export class InternalEntityAccessPolicyService {
     }
 
     if (objectName === 'internalEntity') {
-      if (await this.internalEntityRoleService.isInternalEntitySuperAdmin(authContext)) {
+      if (
+        await this.internalEntityRoleService.isInternalEntitySuperAdmin(
+          authContext,
+        )
+      ) {
         return;
       }
 
@@ -858,7 +890,11 @@ export class InternalEntityAccessPolicyService {
       );
     }
 
-    if (!(await this.internalEntityRoleService.canManageEntityScopedRecords(authContext))) {
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
       this.throwPermissionDenied(
         msg`Only entity managers and platform administrators can manage entity assignments.`,
         {
@@ -924,10 +960,6 @@ export class InternalEntityAccessPolicyService {
       return undefined;
     }
 
-    if (scopeMode === 'read' && !this.hasRequestedActiveEntity(authContext)) {
-      return undefined;
-    }
-
     const canApplyScopeFilter = await this.canApplyEntityScopeFilter(
       authContext.workspace.id,
       objectName,
@@ -935,6 +967,22 @@ export class InternalEntityAccessPolicyService {
 
     if (!canApplyScopeFilter) {
       return undefined;
+    }
+
+    // La portée de lecture est TOUJOURS dérivée des adhésions résolues côté
+    // serveur — jamais de ce que le client déclare. L'en-tête
+    // `ACTIVE_INTERNAL_ENTITY_ID_HEADER_NAME` ne peut que RESTREINDRE la portée
+    // à une de ses entités, jamais l'élargir : `resolveContext` ne retient
+    // l'entité demandée que si elle figure dans `entityIds` (adhésions réelles).
+    //
+    // Vue Groupe (aucune entité active demandée) = toutes les entités du membre,
+    // et non plus « aucun filtre ». Auparavant ce cas retournait `undefined`,
+    // donc une requête omettant simplement l'en-tête voyait l'intégralité du
+    // workspace.
+    if (scopeMode === 'read' && !this.hasRequestedActiveEntity(authContext)) {
+      const { entityIds } = await this.resolveEntityContext(authContext);
+
+      return this.getEntityScopeFilter(objectName, entityIds);
     }
 
     return this.getEntityScopeFilter(objectName, [
@@ -1156,10 +1204,23 @@ export class InternalEntityAccessPolicyService {
       this.requireCurrentWorkspaceMemberId(authContext);
 
     switch (objectName) {
+      // OBS-01 / décision produit du 2026-07-18 : une note est une information
+      // d'ÉQUIPE, plus un contenu personnel. Elle reste néanmoins cloisonnée
+      // par entité : on la voit si on l'a écrite, ou si elle est rattachée à un
+      // enregistrement (société / personne / opportunité) de nos entités.
+      // Auparavant seul le créateur voyait sa note, si bien que deux commerciaux
+      // d'une même entité ne partageaient rien sur une même affaire et que le
+      // superadmin ne pouvait rien auditer.
       case 'note':
-        return this.buildCreatedByWorkspaceMemberFilter(
-          currentWorkspaceMemberId,
-        );
+        return {
+          or: [
+            this.buildCreatedByWorkspaceMemberFilter(currentWorkspaceMemberId),
+            this.buildIdsScopeFilter(
+              'id',
+              await this.getTeamVisibleNoteIds(authContext),
+            ),
+          ],
+        };
       case 'task':
         return {
           or: [
@@ -1171,14 +1232,18 @@ export class InternalEntityAccessPolicyService {
         return this.buildCreatedByWorkspaceMemberFilter(
           currentWorkspaceMemberId,
         );
+      // Les rattachements suivent la visibilité de leur note : sans cela,
+      // l'onglet Notes d'une fiche resterait vide même pour une note visible.
       case 'noteTarget':
-        return this.buildIdsScopeFilter(
-          'noteId',
-          await this.getReadablePersonalNoteIds(
-            authContext,
-            currentWorkspaceMemberId,
-          ),
-        );
+        return this.buildIdsScopeFilter('noteId', [
+          ...new Set([
+            ...(await this.getReadablePersonalNoteIds(
+              authContext,
+              currentWorkspaceMemberId,
+            )),
+            ...(await this.getTeamVisibleNoteIds(authContext)),
+          ]),
+        ]);
       case 'taskTarget':
         return this.buildIdsScopeFilter(
           'taskId',
@@ -1244,6 +1309,74 @@ export class InternalEntityAccessPolicyService {
     return {
       or: scopeBranches,
     };
+  }
+
+  // Notes rattachées à un enregistrement de mes entités (OBS-01). Le cloisonnement
+  // multi-entités est préservé : on passe par les sociétés / personnes /
+  // opportunités déjà filtrées par `getReadableEntityScopedRecordIds`, donc une
+  // note d'une entité dont je ne suis pas membre reste invisible.
+  //
+  // La portée respecte le bascule Ma Société / Vue Groupe, comme
+  // `getEntityScopedObjectFilter` pour company/person/opportunity : une entité
+  // active sélectionnée restreint aux notes de CETTE entité ; en Vue Groupe
+  // (aucune entité active demandée), la portée couvre toutes les entités
+  // d'appartenance. Avant ce correctif, la liste Notes ignorait le bascule et
+  // affichait toujours l'union de toutes les entités, quel que soit l'écran.
+  private async getTeamVisibleNoteIds(
+    authContext: UserWorkspaceAuthContext,
+  ): Promise<string[]> {
+    const accessibleEntityIds = this.hasRequestedActiveEntity(authContext)
+      ? [await this.requireActiveEntityId(authContext)]
+      : await this.requireAccessibleEntityIds(authContext);
+
+    const [companyIds, personIds, opportunityIds] = await Promise.all([
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'company',
+        accessibleEntityIds,
+      ),
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'person',
+        accessibleEntityIds,
+      ),
+      this.getReadableEntityScopedRecordIds(
+        authContext,
+        'opportunity',
+        accessibleEntityIds,
+      ),
+    ]);
+
+    const targetWhereClauses = [
+      companyIds.length > 0 ? { targetCompanyId: In(companyIds) } : undefined,
+      personIds.length > 0 ? { targetPersonId: In(personIds) } : undefined,
+      opportunityIds.length > 0
+        ? { targetOpportunityId: In(opportunityIds) }
+        : undefined,
+    ].filter(isDefined);
+
+    if (targetWhereClauses.length === 0) {
+      return [];
+    }
+
+    const noteTargetRepository =
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(authContext.workspace.id, 'noteTarget', {
+        shouldBypassPermissionChecks: true,
+      });
+
+    const noteTargets = await noteTargetRepository.find({
+      where: targetWhereClauses as FindOptionsWhere<Record<string, unknown>>[],
+    });
+
+    return [
+      ...new Set(
+        noteTargets
+          .map((noteTarget) => noteTarget.noteId)
+          .filter((noteId): noteId is string => typeof noteId === 'string'),
+      ),
+    ];
   }
 
   private async getReadablePersonalNoteIds(

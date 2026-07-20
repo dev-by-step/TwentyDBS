@@ -13,7 +13,18 @@ export const RecordTableEmptyState = () => {
   const { recordTableId, objectNameSingular, objectMetadataItem } =
     useRecordTableContextOrThrow();
 
-  const { totalCount } = useFindManyRecords({ objectNameSingular, limit: 1 });
+  // Cette sonde répond à « existe-t-il le moindre enregistrement ? », pas
+  // « en reste-t-il dans la vue courante ? » : elle doit donc ignorer le filtre
+  // de vue « Ma société / Vue groupe ». Sans ce bypass, une vue d'entité qui
+  // masque tous les enregistrements renvoyait totalCount = 0, et l'écran
+  // affichait « Add your first… » alors que des enregistrements existent et
+  // sont seulement filtrés. La portée réelle reste imposée par le serveur :
+  // l'utilisateur ne compte jamais que des enregistrements de ses entités.
+  const { totalCount } = useFindManyRecords({
+    objectNameSingular,
+    limit: 1,
+    bypassEntityViewScope: true,
+  });
   const noRecordAtAll = totalCount === 0;
 
   const isRemote = objectMetadataItem.isRemote;

@@ -49,6 +49,7 @@ describe('OnboardingResolver', () => {
       );
 
       expect(onboardingService.advanceFromInviteTeamStep).toHaveBeenCalledWith({
+        userId: user.id,
         workspaceId: workspace.id,
       });
       expect(result.success).toBe(true);

@@ -31,8 +31,7 @@ export const buildCsvMissingRequiredHeadersError = (
 export const buildCsvRequiredValueMissingError = (
   header: string,
   rowNumber: number,
-): string =>
-  `Valeur CSV obligatoire manquante: ${header} ligne ${rowNumber}`;
+): string => `Valeur CSV obligatoire manquante: ${header} ligne ${rowNumber}`;
 
 export const buildCsvDuplicateOpportunityIdError = (
   opportunityId: string,

@@ -108,7 +108,11 @@ export const ConfigVariableOptionsDropdownContent = ({
             {availableSourceOptions.map((option) => (
               <MenuItemSelectTag
                 key={option.value}
-                text={typeof option.label === 'string' ? option.label : option.label.id}
+                text={
+                  typeof option.label === 'string'
+                    ? option.label
+                    : option.label.id
+                }
                 color={option.color}
                 selected={option.value === sourceFilter}
                 onClick={() => {

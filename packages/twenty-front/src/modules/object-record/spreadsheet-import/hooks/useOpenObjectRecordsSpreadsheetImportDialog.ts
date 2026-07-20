@@ -18,7 +18,6 @@ import { spreadsheetImportDialogState } from '@/spreadsheet-import/states/spread
 import {
   type ImportedRow,
   type SpreadsheetImportDialogOptions,
-  type SpreadsheetImportField,
   type SpreadsheetImportFields,
 } from '@/spreadsheet-import/types';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -137,18 +136,27 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
     setBatchedRecordsCount: setSpreadsheetImportCreatedRecordsProgress,
   });
 
+  // Ces refs donnent aux callbacks asynchrones de longue durée définis plus bas
+  // (import de fichier volumineux, potentiellement à cheval sur plusieurs
+  // rendus) un accès à la valeur la PLUS RÉCENTE sans recréer la closure ni
+  // relancer l'import en cours — un besoin que useState ne peut pas couvrir
+  // (une closure déjà capturée ne relit jamais un state mis à jour après coup).
+  // oxlint-disable-next-line twenty/no-state-useref
   const objectMetadataItemRef = useRef(objectMetadataItem);
   objectMetadataItemRef.current = objectMetadataItem;
 
+  // oxlint-disable-next-line twenty/no-state-useref
   const apolloCoreClientRef = useRef(apolloCoreClient);
   apolloCoreClientRef.current = apolloCoreClient;
 
+  // oxlint-disable-next-line twenty/no-state-useref
   const ensureOpportunityImportRelationsRef = useRef(
     ensureOpportunityImportRelations,
   );
   ensureOpportunityImportRelationsRef.current =
     ensureOpportunityImportRelations;
 
+  // oxlint-disable-next-line twenty/no-state-useref
   const batchCreateManyRecordsRef = useRef(batchCreateManyRecords);
   batchCreateManyRecordsRef.current = batchCreateManyRecords;
 
@@ -166,6 +174,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
     };
   };
 
+  // oxlint-disable-next-line twenty/no-state-useref
   const importConfigurationRef = useRef<ImportConfiguration>(
     buildImportConfiguration(objectMetadataItem.updatableFields),
   );

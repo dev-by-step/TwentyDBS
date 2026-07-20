@@ -131,7 +131,7 @@ export class TimelineCalendarEventService {
 
   async getGroupCalendarEvents({
     currentWorkspaceMemberId,
-    includeMaskedEvents,
+    requestedActiveEntityId,
     workspaceId,
     page = 1,
     pageSize = TIMELINE_CALENDAR_EVENTS_DEFAULT_PAGE_SIZE,
@@ -139,7 +139,7 @@ export class TimelineCalendarEventService {
     endDate,
   }: {
     currentWorkspaceMemberId: string;
-    includeMaskedEvents: boolean;
+    requestedActiveEntityId?: string | null;
     workspaceId: string;
     page: number;
     pageSize: number;
@@ -160,17 +160,11 @@ export class TimelineCalendarEventService {
 
         const dateWhere = this.buildDateWhereClause(startDate, endDate);
 
-        if (!includeMaskedEvents) {
-          return this.getUnmaskedGroupCalendarEventsPage({
-            calendarEventRepository,
-            currentWorkspaceMemberId,
-            dateWhere,
-            page,
-            pageSize,
-            workspaceId,
-          });
-        }
-
+        // Carte 5 (docs/ROADMAP.md) : un créneau masqué reste TOUJOURS visible en
+        // tant que « Occupé » — startsAt/endsAt et l'entité qui l'occupe restent
+        // affichés pour permettre la planification, quel que soit le mode de vue
+        // (Ma Société ou Vue Groupe). Les exclure en vue Ma Société recréait
+        // silencieusement des risques de double réservation.
         const [events, totalNumberOfCalendarEvents] =
           await calendarEventRepository.findAndCount({
             where: dateWhere,
@@ -191,6 +185,7 @@ export class TimelineCalendarEventService {
             events,
             currentWorkspaceMemberId,
             workspaceId,
+            requestedActiveEntityId,
           });
 
         return {
@@ -315,83 +310,6 @@ export class TimelineCalendarEventService {
     return {};
   }
 
-  private async getUnmaskedGroupCalendarEventsPage({
-    calendarEventRepository,
-    currentWorkspaceMemberId,
-    dateWhere,
-    page,
-    pageSize,
-    workspaceId,
-  }: {
-    calendarEventRepository: Repository<CalendarEventWorkspaceEntity>;
-    currentWorkspaceMemberId: string;
-    dateWhere: FindOptionsWhere<CalendarEventWorkspaceEntity>;
-    page: number;
-    pageSize: number;
-    workspaceId: string;
-  }): Promise<TimelineCalendarEventsWithTotalDTO> {
-    const requestedOffset = (page - 1) * pageSize;
-    const batchSize = Math.max(pageSize * 2, 50);
-    const timelineCalendarEvents: TimelineCalendarEventDTO[] = [];
-    let totalNumberOfCalendarEvents = 0;
-    let fetchedEventsCount = 0;
-
-    for (;;) {
-      const events = await calendarEventRepository.find({
-        where: dateWhere,
-        relations: {
-          calendarEventParticipants: { person: true, workspaceMember: true },
-          calendarChannelEventAssociations: true,
-        },
-        order: { startsAt: 'DESC' },
-        skip: fetchedEventsCount,
-        take: batchSize,
-      });
-
-      fetchedEventsCount += events.length;
-
-      if (events.length === 0) {
-        break;
-      }
-
-      const batchTimelineCalendarEvents =
-        await this.buildTimelineCalendarEventsFromEvents({
-          events,
-          currentWorkspaceMemberId,
-          workspaceId,
-        });
-
-      const unmaskedBatchEvents = batchTimelineCalendarEvents.filter(
-        (timelineCalendarEvent) =>
-          timelineCalendarEvent.visibility !==
-          CalendarChannelVisibility.METADATA,
-      );
-
-      for (const timelineCalendarEvent of unmaskedBatchEvents) {
-        if (
-          totalNumberOfCalendarEvents >= requestedOffset &&
-          timelineCalendarEvents.length < pageSize
-        ) {
-          timelineCalendarEvents.push(timelineCalendarEvent);
-        }
-
-        totalNumberOfCalendarEvents += 1;
-      }
-
-      if (
-        events.length < batchSize ||
-        timelineCalendarEvents.length === pageSize
-      ) {
-        break;
-      }
-    }
-
-    return {
-      totalNumberOfCalendarEvents,
-      timelineCalendarEvents,
-    };
-  }
-
   private async buildTimelineCalendarEventsFromIds({
     calendarEventRepository,
     ids,
@@ -424,11 +342,13 @@ export class TimelineCalendarEventService {
     currentWorkspaceMemberId,
     workspaceId,
     sortByIds,
+    requestedActiveEntityId,
   }: {
     events: CalendarEventWorkspaceEntity[];
     currentWorkspaceMemberId: string;
     workspaceId: string;
     sortByIds?: string[];
+    requestedActiveEntityId?: string | null;
   }): Promise<TimelineCalendarEventDTO[]> {
     const allCalendarChannelIds = [
       ...new Set(
@@ -458,6 +378,7 @@ export class TimelineCalendarEventService {
         calendarEventIds: events.map((event) => event.id),
         workspaceId,
         currentWorkspaceMemberId,
+        requestedActiveEntityId,
       });
 
     const sortedEvents = sortByIds

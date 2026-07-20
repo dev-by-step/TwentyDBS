@@ -128,10 +128,9 @@ export const SettingsAdminConfigVariables = () => {
     const optionLabel =
       CONFIG_VARIABLE_SOURCE_OPTIONS.find(
         (o) => o.value === configVariableSourceFilter,
-      )?.label || '';
+      )?.label ?? '';
     activeChips.push({
-      label:
-        typeof optionLabel === 'string' ? optionLabel : optionLabel.id,
+      label: typeof optionLabel === 'string' ? optionLabel : optionLabel.id,
       onRemove: () => setConfigVariableSourceFilter('all'),
       variant: 'default' as const,
     });

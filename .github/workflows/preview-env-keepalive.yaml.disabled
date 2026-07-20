@@ -1,3 +1,8 @@
+# DÉSACTIVÉ (2026-07-20) : nécessite des identifiants DockerHub (secrets.DOCKERHUB_*) non configurés sur ce fork — infra de preview hébergée de Twenty Cloud, non applicable à un déploiement Dokku.
+# Aucun rapport avec le code de ce fork. Renommé en .disabled plutôt que supprimé
+# pour rester réversible si ces identifiants deviennent un jour disponibles.
+# Pour réactiver : renommer en .yaml et fournir les secrets manquants.
+
 name: 'Preview Environment Keep Alive'
 
 permissions:

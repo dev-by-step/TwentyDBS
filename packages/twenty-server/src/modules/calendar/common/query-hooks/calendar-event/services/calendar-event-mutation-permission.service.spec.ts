@@ -129,11 +129,17 @@ const buildServiceContext = ({
     } as unknown as InternalEntityAuditLoggerService,
     {
       isPlatformAdmin: jest.fn().mockResolvedValue(canAccessFullAdminPanel),
-      isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
-      canManageEntityScopedRecords: jest.fn().mockResolvedValue(
-        canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
-      ),
-      isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+      isEntityManager: jest
+        .fn()
+        .mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+      canManageEntityScopedRecords: jest
+        .fn()
+        .mockResolvedValue(
+          canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+        ),
+      isInternalEntitySuperAdmin: jest
+        .fn()
+        .mockReturnValue(canAccessFullAdminPanel),
     } as unknown as InternalEntityRoleService,
   );
 
@@ -870,6 +876,86 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
+  // FIX-11 : un payload sans référence extractible ne doit plus sauter la
+  // vérification — il est refusé, même pour un entity manager.
+  it('should deny creating a calendar link when no channel reference is extractable', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreatePayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: {
+            calendarChannel: { unexpectedShape: true },
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should deny a calendar link batch when one row has no extractable channel reference', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreateManyPayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: [
+            { calendarChannelId: 'calendar-channel-1' },
+            { eventExternalId: 'row-without-channel' },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should deny creating an event participant when no event reference is extractable', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreatePayload(authContext, 'calendarEventParticipant', {
+        data: {
+          handle: 'someone@example.com',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
+  it('should deny an event participant batch when one row has no extractable event reference', async () => {
+    const { service, authContext } = buildServiceContext({
+      roleLabel: ENTITY_MANAGER_ROLE_LABEL,
+    });
+
+    await expect(
+      service.validateCreateManyPayload(
+        authContext,
+        'calendarEventParticipant',
+        {
+          data: [
+            { calendarEventId: 'calendar-event-1' },
+            { handle: 'row-without-event@example.com' },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    });
+  });
+
   it('should deny creating a calendar event to a standard user', async () => {
     const { service, authContext } = buildServiceContext();
 
@@ -1192,11 +1278,17 @@ describe('CalendarEventMutationPermissionService', () => {
       };
       const internalEntityRoleService = {
         isPlatformAdmin: jest.fn().mockResolvedValue(canAccessFullAdminPanel),
-        isEntityManager: jest.fn().mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
-        canManageEntityScopedRecords: jest.fn().mockResolvedValue(
-          canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
-        ),
-        isInternalEntitySuperAdmin: jest.fn().mockReturnValue(canAccessFullAdminPanel),
+        isEntityManager: jest
+          .fn()
+          .mockResolvedValue(roleLabel === ENTITY_MANAGER_ROLE_LABEL),
+        canManageEntityScopedRecords: jest
+          .fn()
+          .mockResolvedValue(
+            canAccessFullAdminPanel || roleLabel === ENTITY_MANAGER_ROLE_LABEL,
+          ),
+        isInternalEntitySuperAdmin: jest
+          .fn()
+          .mockReturnValue(canAccessFullAdminPanel),
       };
 
       const service = new CalendarEventMutationPermissionService(

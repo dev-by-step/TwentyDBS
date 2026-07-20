@@ -1,3 +1,5 @@
+import { CALENDAR_EVENT_SHARING_SCOPE } from 'twenty-shared/constants';
+
 type CalendarEventDataSeed = {
   id: string;
   title: string;
@@ -13,6 +15,7 @@ type CalendarEventDataSeed = {
   conferenceSolution: string;
   conferenceLinkPrimaryLinkLabel: string;
   conferenceLinkPrimaryLinkUrl: string;
+  sharingScope: string;
 };
 
 export const CALENDAR_EVENT_DATA_SEED_COLUMNS: (keyof CalendarEventDataSeed)[] =
@@ -31,6 +34,7 @@ export const CALENDAR_EVENT_DATA_SEED_COLUMNS: (keyof CalendarEventDataSeed)[] =
     'conferenceSolution',
     'conferenceLinkPrimaryLinkLabel',
     'conferenceLinkPrimaryLinkUrl',
+    'sharingScope',
   ];
 
 const GENERATE_CALENDAR_EVENT_IDS = (): Record<string, string> => {
@@ -221,6 +225,16 @@ const GENERATE_CALENDAR_EVENT_SEEDS = (): CalendarEventDataSeed[] => {
       conferenceSolution: CONFERENCE_SOLUTION,
       conferenceLinkPrimaryLinkLabel: CONFERENCE_LINK,
       conferenceLinkPrimaryLinkUrl: CONFERENCE_LINK,
+      // FIX-39 : sans ce mélange, les 800 événements seedés étaient tous en
+      // ENTITY_ONLY et l'arbitrage de la Carte 10 (WORKSPACE_PUBLIC vs audience
+      // d'entité) n'avait aucune donnée à exercer. Un tiers des événements est
+      // visible par tout le groupe, le reste est restreint à son audience —
+      // laquelle est posée par `init-internal-entities` (les entités internes
+      // n'existent pas encore au moment du seed).
+      sharingScope:
+        INDEX % 3 === 0
+          ? CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC
+          : CALENDAR_EVENT_SHARING_SCOPE.ENTITY_ONLY,
     });
   }
 

@@ -62,6 +62,8 @@ export const WorkflowDiagramCanvasEditable = () => {
 
   const { startNodeCreation } = useStartNodeCreation();
 
+  const { t } = useLingui();
+
   const onConnect = async (edgeConnect: WorkflowConnection) => {
     const steps = workflowWithCurrentVersion?.currentVersion?.steps;
     const sourceStep = isDefined(steps)
@@ -167,8 +169,6 @@ export const WorkflowDiagramCanvasEditable = () => {
   if (!isDefined(workflowWithCurrentVersion)) {
     return null;
   }
-
-  const { t } = useLingui();
 
   const tagProps = getWorkflowVersionStatusTagProps({
     workflowVersionStatus: workflowWithCurrentVersion.currentVersion.status,

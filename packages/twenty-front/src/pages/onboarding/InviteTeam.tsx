@@ -4,10 +4,8 @@ import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { calendarBookingPageIdState } from '@/client-config/states/calendarBookingPageIdState';
 import { SuperadminWorkspaceSetup } from '@/onboarding/components/SuperadminWorkspaceSetup';
-import {
-  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING,
-  ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE,
-} from '@/onboarding/constants/superadminWorkspaceSetupUserVarKeys';
+import { ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING } from '@/onboarding/constants/onboardingSuperadminWorkspaceSetupPendingUserVarKey';
+import { ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE } from '@/onboarding/constants/onboardingSuperadminWorkspaceSetupStateUserVarKey';
 import { useSetNextOnboardingStatus } from '@/onboarding/hooks/useSetNextOnboardingStatus';
 import { PageFocusId } from '@/types/PageFocusId';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -75,7 +73,9 @@ export const InviteTeam = () => {
   const { copyToClipboard } = useCopyToClipboard();
   const { enqueueSuccessSnackBar } = useSnackBar();
   const { sendInvitation } = useCreateWorkspaceInvitation();
-  const [skipInviteTeamMutation] = useMutation(SKIP_INVITE_TEAM_ONBOARDING_STEP);
+  const [skipInviteTeamMutation] = useMutation(
+    SKIP_INVITE_TEAM_ONBOARDING_STEP,
+  );
   const setNextOnboardingStatus = useSetNextOnboardingStatus();
   const permissionMap = usePermissionFlagMap();
   const canInviteTeammates =
@@ -87,10 +87,9 @@ export const InviteTeam = () => {
   const isSuperadminWorkspaceSetupPending =
     currentUser?.userVars?.[ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_PENDING] ===
     true;
-  const hasSuperadminWorkspaceSetupState =
-    isDefined(
-      currentUser?.userVars?.[ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE],
-    );
+  const hasSuperadminWorkspaceSetupState = isDefined(
+    currentUser?.userVars?.[ONBOARDING_SUPERADMIN_WORKSPACE_SETUP_STATE],
+  );
   const shouldShowSuperadminWorkspaceSetup =
     isSuperadminWorkspaceSetupPending ||
     (currentUser?.canAccessFullAdminPanel === true &&

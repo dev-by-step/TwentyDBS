@@ -212,11 +212,16 @@ CalendarEvent
 
 ### Audience de calendrier (Carte 10)
 
-Arbitrage du masquage par événement, dans l'ordre :
+Arbitrage du masquage par événement, dans l'ordre (source de vérité : `calendar-privacy.service.ts`) :
 
 1. `sharingScope = WORKSPACE_PUBLIC` → jamais masqué.
-2. `audienceEntities` non vide → masqué si l'entité du requêtant n'est pas dans l'audience (l'auteur peut cibler une entité dont il ne fait pas partie).
-3. Sinon → règle Carte 5 (masqué si l'entité propriétaire du canal diffère de l'entité du requêtant).
+2. **Propriétaire du compte connecté (FIX-10)** → jamais masqué pour lui-même : le propriétaire de l'agenda voit toujours ses propres événements, quelles que soient les règles d'entité, d'audience ou de visibilité de canal (y compris si la visibilité du canal exclut sa propre entité).
+3. `audienceEntities` (audience explicite) non vide → démasqué si l'entité du requêtant (ou sa présence en audience de personnes) est dans l'audience ; sinon masqué (l'auteur peut cibler une entité dont il ne fait pas partie).
+4. Sinon → règle Carte 5 : démasqué si l'entité du requêtant fait partie de l'entité propriétaire du canal.
+5. Sinon → démasqué si l'entité du requêtant fait partie des `visibleInternalEntityIds` du canal.
+6. Sinon → masqué (créneau visible « Occupé » avec le badge de l'entité propriétaire).
+
+Toutes les comparaisons d'IDs d'entité sont normalisées (`normalizeOptionalEntityId` / `normalizeEntityIdSet`) à chaque frontière (FIX-20).
 
 ### Propagation de l'entité (Carte 2)
 
@@ -247,8 +252,14 @@ Création d'un Person / Company
 ```
 
 Notes :
-- aucun fallback par créateur n'est appliqué sur l'historique ;
+- **aucun fallback par créateur n'est appliqué sur l'historique** (décision produit figée, FIX-08) : une opportunité sans correspondance CSV reste `internalEntityId = NULL` plutôt que d'être déduite du créateur ou du propriétaire ; le backfill ne réécrit jamais un `internalEntityId` déjà renseigné (`WHERE internalEntityId IS NULL`, FIX-07) — les réassignations manuelles sont donc préservées ;
 - le dataset seed Apple local n'est pas aligné sur les UUID du CSV réel.
+
+### Accès & inscription (politique produit)
+
+- **Inscription sur invitation uniquement (FIX-13)** : l'auto-inscription (`signUp`) n'est autorisée que pour le domaine e-mail du premier super admin, un domaine listé dans `BOOTSTRAP_ADMIN_EMAILS`, ou une adresse déjà invitée. Les membres des 3 autres sociétés (DEVBYSTEP, ALLSENSIA, ANGLE_INTELLIGENCE) rejoignent le workspace **sur invitation d'un admin**. Décision assumée : pas de multi-domaine self-service.
+- **Anti-énumération (IMP-12)** : tous les refus d'auto-inscription renvoient un message uniforme (aucune divulgation de l'existence d'un super admin / d'une invitation / d'un domaine), doublé d'un throttle par e-mail (`ThrottlerService`, 10 tentatives / 15 min) au-dessus du `CaptchaGuard`.
+- **Onboarding par utilisateur (FIX-14)** : les drapeaux d'onboarding `invite-team` et `book-onboarding` sont stockés en userVars **au niveau utilisateur** (userId + workspaceId), jamais au niveau workspace partagé — un membre qui passe une étape n'affecte pas l'onboarding des autres.
 
 ---
 

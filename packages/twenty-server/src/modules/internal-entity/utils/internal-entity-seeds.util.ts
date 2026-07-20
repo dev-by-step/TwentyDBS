@@ -9,9 +9,19 @@ type InternalEntitySeedsConfig = {
   entities: unknown;
 };
 
-const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+// Le `#` de tête est OPTIONNEL à l'entrée : certains environnements de
+// déploiement (shells cassés, config Dokku de notre VPS) tronquent toute valeur
+// à partir du premier `#`, qu'ils traitent comme un début de commentaire — même
+// une valeur base64-décodée. Accepter `RRGGBB` sans dièse permet donc de poser
+// `INTERNAL_ENTITY_SEEDS` proprement dans ces environnements. La couleur est
+// systématiquement re-normalisée en `#RRGGBB` en sortie (cf. normalizeHexColor).
+const HEX_COLOR_PATTERN = /^#?[0-9A-Fa-f]{6}$/;
 
-const normalizeLookupValue = (value: string): string => value.trim().toLowerCase();
+const normalizeHexColor = (color: string): string =>
+  `#${color.replace(/^#/, '')}`.toUpperCase();
+
+const normalizeLookupValue = (value: string): string =>
+  value.trim().toLowerCase();
 
 const isInternalEntitySeedsConfig = (
   value: unknown,
@@ -92,8 +102,8 @@ export const resolveInternalEntitySeedId = (
   }
 
   return (
-    internalEntitySeeds.find(
-      (seed) => buildLookupValues(seed).includes(normalizedEntityName),
+    internalEntitySeeds.find((seed) =>
+      buildLookupValues(seed).includes(normalizedEntityName),
     )?.id ?? null
   );
 };
@@ -116,7 +126,11 @@ const validateInternalEntitySeedOrThrow = (
     );
   }
 
-  if (!isDefined(name) || typeof name !== 'string' || name.trim().length === 0) {
+  if (
+    !isDefined(name) ||
+    typeof name !== 'string' ||
+    name.trim().length === 0
+  ) {
     throw new Error(
       `${INTERNAL_ENTITY_SEEDS_ENV_VAR_NAME}[${index}].name est obligatoire`,
     );
@@ -147,7 +161,7 @@ const validateInternalEntitySeedOrThrow = (
   return {
     id: id.toLowerCase(),
     name: name.trim(),
-    color: color.toUpperCase(),
+    color: normalizeHexColor(color),
     ...(aliases ? { aliases: aliases.map((alias) => alias.trim()) } : {}),
   };
 };

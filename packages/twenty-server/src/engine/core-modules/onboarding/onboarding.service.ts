@@ -141,7 +141,9 @@ export class OnboardingService {
         isNonEmptyString(calendarBookingPageId);
 
       if (!isBookingConfigured) {
+        // FIX-14 : nettoyage user-level du drapeau book-onboarding.
         await this.userVarsService.delete({
+          userId: user.id,
           workspaceId: workspace.id,
           key: OnboardingStepKeys.ONBOARDING_BOOK_ONBOARDING_PENDING,
         });
@@ -191,11 +193,17 @@ export class OnboardingService {
     );
   }
 
+  // FIX-14 : ce drapeau est désormais au niveau UTILISATEUR (userId +
+  // workspaceId). Avant, il était workspace-level (userId nul) : un seul
+  // utilisateur qui passait l'étape « inviter l'équipe » l'affectait pour
+  // TOUS les membres du workspace.
   async setOnboardingInviteTeamPending(
     {
+      userId,
       workspaceId,
       value,
     }: {
+      userId: string;
       workspaceId: string;
       value: boolean;
     },
@@ -204,6 +212,7 @@ export class OnboardingService {
     if (!value) {
       await this.userVarsService.delete(
         {
+          userId,
           workspaceId,
           key: OnboardingStepKeys.ONBOARDING_INVITE_TEAM_PENDING,
         },
@@ -215,6 +224,7 @@ export class OnboardingService {
 
     await this.userVarsService.set(
       {
+        userId,
         workspaceId,
         key: OnboardingStepKeys.ONBOARDING_INVITE_TEAM_PENDING,
         value: true,
@@ -223,13 +233,21 @@ export class OnboardingService {
     );
   }
 
-  async advanceFromInviteTeamStep({ workspaceId }: { workspaceId: string }) {
+  async advanceFromInviteTeamStep({
+    userId,
+    workspaceId,
+  }: {
+    userId: string;
+    workspaceId: string;
+  }) {
     await this.setOnboardingInviteTeamPending({
+      userId,
       workspaceId,
       value: false,
     });
 
     await this.setOnboardingBookOnboardingPending({
+      userId,
       workspaceId,
       value: true,
     });
@@ -300,10 +318,13 @@ export class OnboardingService {
     });
   }
 
+  // FIX-14 : drapeau au niveau UTILISATEUR (voir setOnboardingInviteTeamPending).
   async setOnboardingBookOnboardingPending({
+    userId,
     workspaceId,
     value,
   }: {
+    userId: string;
     workspaceId: string;
     value: boolean;
   }) {
@@ -317,6 +338,7 @@ export class OnboardingService {
 
     if (!value || !isBookingConfigured) {
       await this.userVarsService.delete({
+        userId,
         workspaceId,
         key: OnboardingStepKeys.ONBOARDING_BOOK_ONBOARDING_PENDING,
       });
@@ -325,6 +347,7 @@ export class OnboardingService {
     }
 
     await this.userVarsService.set({
+      userId,
       workspaceId,
       key: OnboardingStepKeys.ONBOARDING_BOOK_ONBOARDING_PENDING,
       value: true,
@@ -433,11 +456,11 @@ export class OnboardingService {
     });
 
     // Once the superadmin has personalised the workspace, arm the invite-team
-    // step so they immediately land on the team-invitation screen (or its
-    // simplified Continue button for non-admin teammates who join later).
-    // The flag is workspace-level and is cleared the first time anyone sends
-    // invitations or skips, so this is a one-shot prompt.
+    // step so they immediately land on the team-invitation screen. FIX-14 :
+    // le drapeau est désormais propre à cet utilisateur (le superadmin), il ne
+    // force plus l'écran d'invitation à tous les membres du workspace.
     await this.setOnboardingInviteTeamPending({
+      userId: user.id,
       workspaceId: workspace.id,
       value: true,
     });

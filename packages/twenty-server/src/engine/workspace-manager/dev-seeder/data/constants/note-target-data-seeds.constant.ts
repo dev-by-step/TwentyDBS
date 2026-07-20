@@ -1,5 +1,6 @@
 import { COMPANY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
 import { NOTE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/note-data-seeds.constant';
+import { OPPORTUNITY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/opportunity-data-seeds.constant';
 import { PERSON_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 
 type NoteTargetDataSeed = {
@@ -65,6 +66,31 @@ const GENERATE_NOTE_TARGET_SEEDS = (): NoteTargetDataSeed[] => {
       targetCompanyId: company.id,
       targetOpportunityId: null,
     });
+  });
+
+  // FIX-39 : sans ces cibles, aucune note n'était rattachée à une opportunité —
+  // l'onglet Notes d'une fiche opportunité restait vide en local, rendant le
+  // parcours « activités sur une affaire » intestable après un database:reset.
+  // Deux notes par opportunité, prises dans le stock de notes non rattachées.
+  const NOTES_PER_OPPORTUNITY = 2;
+  const firstOpportunityNoteIndex =
+    PERSON_DATA_SEEDS.length + COMPANY_DATA_SEEDS.length + 1;
+
+  OPPORTUNITY_DATA_SEEDS.forEach((opportunity, opportunityIndex) => {
+    for (let slot = 0; slot < NOTES_PER_OPPORTUNITY; slot++) {
+      const noteIndex =
+        firstOpportunityNoteIndex +
+        opportunityIndex * NOTES_PER_OPPORTUNITY +
+        slot;
+
+      NOTE_TARGET_SEEDS.push({
+        id: NOTE_TARGET_DATA_SEED_IDS[`ID_${noteIndex}`],
+        noteId: NOTE_DATA_SEED_IDS[`ID_${noteIndex}`],
+        targetPersonId: null,
+        targetCompanyId: null,
+        targetOpportunityId: opportunity.id,
+      });
+    }
   });
 
   return NOTE_TARGET_SEEDS;

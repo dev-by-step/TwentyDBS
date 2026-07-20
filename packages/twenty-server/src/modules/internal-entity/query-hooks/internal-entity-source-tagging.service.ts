@@ -76,6 +76,14 @@ export class InternalEntitySourceTaggingService {
       return payload;
     }
 
+    // FIX-23 : asymétrie INTENTIONNELLE person/company vs opportunity.
+    // person/company sont des jonctions M2M auto-taguées (aucune assignation
+    // explicite acceptée d'un user standard) : on résout simplement l'entité
+    // du user. opportunity a une FK directe `internalEntityId` et autorise une
+    // assignation explicite VALIDÉE (l'utilisateur doit appartenir à l'entité
+    // cible — voir `assertExplicitInternalEntityAssignmentsAllowed`). Ne pas
+    // « uniformiser » ces deux branches : ce serait casser soit l'isolation
+    // (person/company), soit l'assignation légitime d'opportunité.
     if (objectName !== OPPORTUNITY_OBJECT_NAME) {
       await this.resolveAndValidateUserInternalEntityId(authContext);
 

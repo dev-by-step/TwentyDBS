@@ -8,23 +8,23 @@ import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { getDateFnsLocale } from '@/ui/field/display/utils/getDateFnsLocale';
 import { enUS } from 'date-fns/locale';
 
-type SwitchableLocale = (typeof APP_LOCALES)['en'] | (typeof APP_LOCALES)['fr-FR'];
+type SwitchableLocale =
+  | (typeof APP_LOCALES)['en']
+  | (typeof APP_LOCALES)['fr-FR'];
 
 const StyledContainer = styled.div`
   align-items: center;
-  display: inline-flex;
   background: ${themeCssVariables.background.secondary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.pill};
+  display: inline-flex;
   overflow: hidden;
   padding: 2px;
 `;
 
 const StyledOption = styled.button<{ active: boolean }>`
   background: ${({ active }) =>
-    active
-      ? themeCssVariables.background.primary
-      : 'transparent'};
+    active ? themeCssVariables.background.primary : 'transparent'};
   border: none;
   border-radius: ${themeCssVariables.border.radius.pill};
   color: ${({ active }) =>

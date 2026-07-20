@@ -54,6 +54,12 @@ export const TabButton = ({
         to={to}
         className={className}
         onClick={onClick}
+        // Sans ces attributs, un onglet rendu en `<a>` (cas `to`) n'apparaît pas
+        // comme onglet dans l'arbre d'accessibilité : ni les lecteurs d'écran ni
+        // les tests automatisés ne peuvent le cibler par son rôle.
+        role="tab"
+        aria-selected={active === true}
+        aria-disabled={disabled === true ? true : undefined}
       >
         <TabContent
           id={id}
