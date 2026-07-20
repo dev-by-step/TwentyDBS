@@ -258,7 +258,6 @@ export type Query = {
 
 export type QueryGetGroupTimelineCalendarEventsArgs = {
   endDate?: InputMaybe<Scalars['DateTime']>;
-  includeMaskedEvents?: InputMaybe<Scalars['Boolean']>;
   page: Scalars['Int'];
   pageSize: Scalars['Int'];
   startDate?: InputMaybe<Scalars['DateTime']>;

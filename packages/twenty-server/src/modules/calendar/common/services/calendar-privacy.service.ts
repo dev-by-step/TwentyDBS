@@ -28,6 +28,17 @@ type GetCalendarEventMaskMapArgs = {
   currentUserEntityId?: string | null;
   currentUserId?: string;
   currentWorkspaceMemberId?: string;
+  /**
+   * Entité active du bascule Ma Société / Vue Groupe. Quand elle est fournie
+   * (et fait partie des adhésions du membre), l'arbitrage se fait du point de
+   * vue de CETTE seule entité — un événement d'une autre de ses entités
+   * s'affiche comme « Occupé », même si le spectateur y a normalement accès en
+   * Vue Groupe. Sans elle (Vue Groupe), l'arbitrage couvre toutes les entités
+   * d'appartenance du spectateur, comme avant. Sans ce paramètre, les deux vues
+   * produisaient un résultat identique une fois le filtrage FIX-38 retiré,
+   * rendant le bascule inopérant sur le calendrier.
+   */
+  requestedActiveEntityId?: string | null;
 };
 
 @Injectable()
@@ -51,6 +62,7 @@ export class CalendarPrivacyService {
     currentUserEntityId,
     currentUserId,
     currentWorkspaceMemberId,
+    requestedActiveEntityId,
   }: GetCalendarEventMaskMapArgs): Promise<Map<string, boolean>> {
     if (calendarEventIds.length === 0) {
       return this.createCalendarEventMaskMap(calendarEventIds, false);
@@ -66,9 +78,21 @@ export class CalendarPrivacyService {
             currentUserEntityId,
             currentUserId,
             currentWorkspaceMemberId,
+            requestedActiveEntityId,
           });
+        const hasRequestedActiveEntity =
+          isDefined(requestedActiveEntityId) &&
+          requestedActiveEntityId.length > 0;
+        // `resolveContext` ne retient `activeEntityId` que s'il fait partie des
+        // adhésions du membre (sinon il retombe sur son entité courante) : le
+        // bascule ne peut donc jamais élargir la portée, seulement la
+        // restreindre — même garantie que FIX-33/OBS-01.
         const accessibleEntityIds = this.normalizeEntityIdSet(
-          resolvedCurrentUserEntityContext.entityIds,
+          hasRequestedActiveEntity
+            ? [resolvedCurrentUserEntityContext.activeEntityId].filter(
+                isDefined,
+              )
+            : resolvedCurrentUserEntityContext.entityIds,
         );
 
         const calendarEventRepository =
@@ -609,11 +633,13 @@ export class CalendarPrivacyService {
     currentUserEntityId,
     currentUserId,
     currentWorkspaceMemberId,
+    requestedActiveEntityId,
   }: {
     workspaceId: string;
     currentUserEntityId?: string | null;
     currentUserId?: string;
     currentWorkspaceMemberId?: string;
+    requestedActiveEntityId?: string | null;
   }): Promise<WorkspaceMemberInternalEntityContext> {
     let fallbackEntityId = currentUserEntityId ?? null;
 
@@ -630,6 +656,7 @@ export class CalendarPrivacyService {
       workspaceId,
       workspaceMemberId: currentWorkspaceMemberId,
       fallbackEntityId,
+      requestedActiveEntityId,
     });
   }
 

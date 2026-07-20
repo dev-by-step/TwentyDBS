@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 35   | 2       | 39    |
+| FIX (bugs / incohérences) | 36   | 2       | 40    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39, 40. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25.
 > Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
@@ -408,6 +408,18 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 #### FIX-18 — Emails bootstrap admin en dur — `FAIT` (déjà livré par un autre agent, constaté le 2026-07-16, voir IMP-10)
 
 - 🟡 `SEC`/`MAINT` — `bootstrap-admin-email.constant.ts` lit désormais `process.env.BOOTSTRAP_ADMIN_EMAILS`, aucun email codé en dur ne subsiste dans le module auth. Détails de la vérification : voir IMP-10.
+
+#### FIX-40 — Le calendrier groupe cachait entièrement les créneaux masqués en vue Ma Société — `FAIT` (2026-07-20)
+
+- **Sévérité/Axe** : 🟠 `DATA`/`UX` (contredisait un critère déjà accepté)
+- **Constat (demande explicite)** : en vue **Ma Société**, le calendrier groupe (`getGroupTimelineCalendarEvents`) excluait purement et simplement les événements masqués (`getUnmaskedGroupCalendarEventsPage` filtrait tout `visibility === METADATA`) — l'utilisateur ne voyait **aucune trace** du créneau, ni « Occupé » ni badge d'entité. Seule la Vue Groupe les affichait masqués.
+- **Pourquoi c'est un bug et non une nuance de spec** : la Carte 5 (`docs/ROADMAP.md`) exige explicitement : « Si différent : title/description/attendees remplacés par "Occupé"/null. **Les champs startAt/endAt restent visibles (pour la planification)** ». Les exclure entièrement en Ma Société violait ce critère déjà accepté — risque de double réservation silencieux.
+- **Correctif (1/2 — visibilité)** : suppression du paramètre `includeMaskedEvents` et de `getUnmaskedGroupCalendarEventsPage` (mort) côté serveur, du champ GraphQL correspondant, et de la logique de bascule côté front (`useGroupCalendarEvents`). Les événements masqués sont désormais **toujours** renvoyés — `startsAt`/`endsAt`/`entityColor`/`entityName` restent visibles, seuls `title`/`description` sont neutralisés.
+- **Effet de bord détecté avant de livrer** : le masquage (`getCalendarEventMaskMap`) ne dépendait **jamais** de l'entité active du bascule — seulement de l'identité globale du spectateur (toutes ses adhésions). Une fois (1) livré seul, Ma Société et Vue Groupe auraient produit un résultat **identique**, rendant le sélecteur d'entité inopérant sur cette page (régression UX silencieuse).
+- **Correctif (2/2 — bonne logique par vue)** : `requestedActiveEntityId` est propagé du contexte d'auth jusqu'à `CalendarPrivacyService.getCalendarEventMaskMap` (résolveur → service → privacy service), avec la même garantie que FIX-33/OBS-01 : une entité active restreint l'arbitrage à **cette seule entité** (les autres entités du spectateur redeviennent masquées), la Vue Groupe (pas d'en-tête) couvre **toutes** ses entités d'appartenance.
+- **Fichiers** : `timeline-calendar-event.resolver.ts`, `timeline-calendar-event.service.ts` (+ spec), `calendar-privacy.service.ts`, `getGroupTimelineCalendarEvents.ts`, `useGroupCalendarEvents.ts`, `generated/graphql.ts` (régénéré).
+- **Vérifié en réel** (non-admin membre de 3 entités sur 4, via API + UI) : le total d'événements reste **identique** entre les deux vues (763/763 — rien n'est jamais masqué au sens « supprimé ») ; le nombre de créneaux **masqués** diffère (4 en Vue Groupe vs 10 en Ma Société=DEVBYSTEP) — preuve que le bascule discrimine réellement. Un créneau masqué renvoie `title:"Occupé"`, `entityName:"ALLSENSIA, ANGLE_INTELLIGENCE"`, `entityColor` et `startsAt`/`endsAt` intacts. Confirmé visuellement : lignes « 🔒 Not shared » avec badges d'entité colorés. 245/245 tests, typecheck + lint OK sur les deux packages.
+- **Reste ouvert (non traité, hors périmètre)** : un des deux chemins de masquage (`buildTimelineCalendarEventsFromEvents`) pose parfois `title` à la constante brute non traduite `FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED` au lieu de « Occupé » — sans impact dans `GroupCalendarBoard.tsx` (qui n'utilise jamais ce champ pour un événement masqué), mais potentiellement visible ailleurs (ex. panneau latéral d'un événement). À vérifier séparément.
 
 #### FIX-19 — Filtres `in: [ids…]` construits en chargeant des tables entières — `A_FAIRE`
 

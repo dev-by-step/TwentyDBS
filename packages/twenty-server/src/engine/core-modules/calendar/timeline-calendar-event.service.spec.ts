@@ -459,7 +459,6 @@ describe('TimelineCalendarEventService', () => {
 
     const result = await service.getGroupCalendarEvents({
       currentWorkspaceMemberId,
-      includeMaskedEvents: true,
       workspaceId: 'test-workspace-id',
       page: 1,
       pageSize: 10,
@@ -478,14 +477,23 @@ describe('TimelineCalendarEventService', () => {
     );
   });
 
-  it('should hide masked events from my company calendar view', async () => {
+  // Carte 5 (docs/ROADMAP.md) : startsAt/endsAt et l'entité qui occupe le
+  // créneau doivent rester visibles pour permettre la planification, que le
+  // spectateur soit en Vue Groupe (pas d'entité active) ou en Ma Société (une
+  // entité active demandée). Un ancien comportement excluait entièrement les
+  // événements masqués en Ma Société ; ce test verrouille qu'ils restent
+  // toujours présents, quelle que soit l'entité active demandée.
+  it('should always include masked events, even when a single entity is active (Ma Société)', async () => {
     const currentWorkspaceMemberId = 'current-workspace-member-id';
 
-    mockCalendarEventRepository.find.mockResolvedValue([
-      {
-        ...mockCalendarEvent,
-        calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
-      },
+    mockCalendarEventRepository.findAndCount.mockResolvedValue([
+      [
+        {
+          ...mockCalendarEvent,
+          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+        },
+      ],
+      1,
     ]);
     mockCalendarChannelCoreRepository.find.mockResolvedValue([
       {
@@ -500,7 +508,7 @@ describe('TimelineCalendarEventService', () => {
 
     const result = await service.getGroupCalendarEvents({
       currentWorkspaceMemberId,
-      includeMaskedEvents: false,
+      requestedActiveEntityId: 'some-other-entity-id',
       workspaceId: 'test-workspace-id',
       page: 1,
       pageSize: 10,
@@ -508,7 +516,20 @@ describe('TimelineCalendarEventService', () => {
       endDate: new Date('2024-01-02T00:00:00.000Z'),
     });
 
-    expect(result.totalNumberOfCalendarEvents).toBe(0);
-    expect(result.timelineCalendarEvents).toEqual([]);
+    expect(result.totalNumberOfCalendarEvents).toBe(1);
+    expect(result.timelineCalendarEvents).toHaveLength(1);
+    expect(result.timelineCalendarEvents[0].title).toBe(
+      FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+    );
+    expect(result.timelineCalendarEvents[0].visibility).toBe(
+      CalendarChannelVisibility.METADATA,
+    );
+    expect(
+      mockCalendarPrivacyService.getCalendarEventMaskMap,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedActiveEntityId: 'some-other-entity-id',
+      }),
+    );
   });
 });

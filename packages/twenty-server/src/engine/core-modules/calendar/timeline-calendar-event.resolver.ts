@@ -72,10 +72,6 @@ class GetGroupTimelineCalendarEventsArgs {
   @Field(() => Date, { nullable: true })
   @IsOptional()
   endDate?: Date;
-
-  @Field(() => Boolean, { nullable: true })
-  @IsOptional()
-  includeMaskedEvents?: boolean;
 }
 
 @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
@@ -149,26 +145,21 @@ export class TimelineCalendarEventResolver {
   @Query(() => TimelineCalendarEventsWithTotalDTO)
   async getGroupTimelineCalendarEvents(
     @Args()
-    {
-      page,
-      pageSize,
-      startDate,
-      endDate,
-      includeMaskedEvents,
-    }: GetGroupTimelineCalendarEventsArgs,
+    { page, pageSize, startDate, endDate }: GetGroupTimelineCalendarEventsArgs,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ) {
     const authContext = getWorkspaceAuthContext();
-    const shouldIncludeMaskedEvents =
-      includeMaskedEvents ??
-      (!isUserAuthContext(authContext) ||
-        !authContext.activeInternalEntityId ||
-        authContext.activeInternalEntityId.length === 0);
+    // Distingue Ma Société de Vue Groupe : une entité active restreint
+    // l'arbitrage masqué/visible à cette seule entité, la Vue Groupe (en-tête
+    // absent) couvre toutes les entités d'appartenance du spectateur.
+    const requestedActiveEntityId = isUserAuthContext(authContext)
+      ? authContext.activeInternalEntityId
+      : undefined;
 
     return this.timelineCalendarEventService.getGroupCalendarEvents({
       currentWorkspaceMemberId: workspaceMemberId,
-      includeMaskedEvents: shouldIncludeMaskedEvents,
+      requestedActiveEntityId,
       workspaceId: workspace.id,
       page,
       pageSize,
