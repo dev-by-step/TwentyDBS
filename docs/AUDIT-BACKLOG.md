@@ -63,9 +63,9 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 🥉 Priorité 3 — Performance / Scalabilité
 
-| ID     | Axe          | Résumé                                                                      |
-| ------ | ------------ | --------------------------------------------------------------------------- |
-| FIX-19 | 🟡 PERF/SCAL | Filtres `in: [ids…]` construits en chargeant des tables entières en mémoire |
+| ID     | Axe          | Résumé                                                                                                                      |
+| ------ | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| FIX-19 | 🟡 PERF/SCAL | Filtres `in: [ids…]` construits en chargeant des tables entières en mémoire (dont la visibilité d'équipe des notes, OBS-01) |
 
 ### 🏅 Priorité 4 — Maintenabilité (dette technique)
 
@@ -402,9 +402,10 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 #### FIX-19 — Filtres `in: [ids…]` construits en chargeant des tables entières — `A_FAIRE`
 
 - **Sévérité/Axe** : 🟡 `PERF`/`SCAL`
-- **Fichiers** : `internal-entity-access-policy.service.ts` (`getHybridScopeFilter`, `getPersonalScopeFilter` noteTarget/taskTarget), `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`)
+- **Fichiers** : `internal-entity-access-policy.service.ts` (`getHybridScopeFilter`, `getPersonalScopeFilter` note/noteTarget/taskTarget, **`getTeamVisibleNoteIds`**), `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`)
 - **Problème** : le scope de lecture est appliqué en chargeant **tous** les IDs accessibles côté serveur puis en construisant un filtre `in: [id1, id2, …]`. Sur une grosse base, ces tableaux d'IDs explosent (taille du filtre, mémoire, latence). IMP-01/02/05 ont ajouté un cache TTL 30 s qui **atténue** la fréquence du problème mais pas sa borne supérieure : un `in: [...]` avec des dizaines de milliers d'IDs reste pathologique.
 - **Correction proposée** : pousser le scope **en SQL** — sous-requête `EXISTS` / jointure sur les tables de membership (via `apply-row-level-permission-predicates`) au lieu de matérialiser la liste d'IDs. Pour le calendrier de groupe, IMP-03 a déjà paginé en SQL ; appliquer le même principe aux autres chemins. C'est la solution structurelle dont IMP-01/02 sont la version « cache » provisoire.
+- **Périmètre étendu le 2026-07-18 (OBS-01)** : la visibilité d'équipe des notes ajoute un chemin de ce type, et c'est le plus exposé à la volumétrie. `getTeamVisibleNoteIds` matérialise successivement les IDs de sociétés, de personnes et d'opportunités des entités du membre, puis **tous les `noteTarget`** qui les visent, pour en tirer un `id: { in: [...] }` de notes. Sur le seed de démo actuel cela reste modeste (1 800 notes, 150 rattachements), mais le coût croît avec le **produit** volume de notes × volume d'enregistrements CRM — plus vite que les chemins déjà listés. Le correctif est le même : un `EXISTS` sur `noteTarget` joint aux tables de membership, sans jamais matérialiser la liste.
 - **Effort** : élevé (touche le générateur de prédicats de permission de Twenty).
 
 #### FIX-20 — Normalisation des IDs d'entité incohérente — `FAIT` (2026-07-16, constaté)
