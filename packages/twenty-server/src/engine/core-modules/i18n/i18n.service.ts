@@ -93,7 +93,9 @@ export class I18nService implements OnModuleInit {
     });
   }
 
-  getI18nInstance(locale: keyof typeof APP_LOCALES | string | null | undefined) {
+  getI18nInstance(
+    locale: keyof typeof APP_LOCALES | string | null | undefined,
+  ) {
     // Defensive: legacy users may have language-only codes ('fr') instead of
     // full locale codes ('fr-FR'), or an unknown locale; fall back gracefully
     // to the canonical mapping (which itself returns SOURCE_LOCALE if nothing

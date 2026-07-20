@@ -221,9 +221,7 @@ describe('WorkspaceInvitationService', () => {
       expect(result.success).toBe(true);
       expect(result.result.length).toBe(2);
       expect(emailService.send).toHaveBeenCalledTimes(2);
-      expect(
-        onboardingService.advanceFromInviteTeamStep,
-      ).toHaveBeenCalledWith({
+      expect(onboardingService.advanceFromInviteTeamStep).toHaveBeenCalledWith({
         workspaceId: workspace.id,
       });
     });

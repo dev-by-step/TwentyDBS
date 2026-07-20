@@ -219,7 +219,10 @@ export class DirectExecutionService {
         return null;
       }
 
-      const topLevelFields = graphQLExtractTopLevelFields(document, operationName);
+      const topLevelFields = graphQLExtractTopLevelFields(
+        document,
+        operationName,
+      );
 
       this.checkRootResolverLimitsOrThrow(topLevelFields);
 

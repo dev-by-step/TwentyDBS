@@ -490,7 +490,9 @@ describe('TimelineCalendarEventService', () => {
       [
         {
           ...mockCalendarEvent,
-          calendarChannelEventAssociations: [{ calendarChannelId: 'channel-1' }],
+          calendarChannelEventAssociations: [
+            { calendarChannelId: 'channel-1' },
+          ],
         },
       ],
       1,
