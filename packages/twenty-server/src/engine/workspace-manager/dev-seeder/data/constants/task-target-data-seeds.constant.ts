@@ -1,4 +1,5 @@
 import { COMPANY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/company-data-seeds.constant';
+import { OPPORTUNITY_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/opportunity-data-seeds.constant';
 import { PERSON_DATA_SEEDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/person-data-seeds.constant';
 import { TASK_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/task-data-seeds.constant';
 
@@ -69,6 +70,29 @@ const GENERATE_TASK_TARGET_SEEDS = (): TaskTargetDataSeed[] => {
       targetCompanyId: company.id,
       targetOpportunityId: null,
     });
+  });
+
+  // FIX-39 : idem que pour les notes — aucune tâche n'était rattachée à une
+  // opportunité, l'onglet Tasks d'une fiche affaire restait donc vide en local.
+  const TASKS_PER_OPPORTUNITY = 2;
+  const firstOpportunityTaskIndex =
+    PERSON_DATA_SEEDS.length + COMPANY_DATA_SEEDS.length + 1;
+
+  OPPORTUNITY_DATA_SEEDS.forEach((opportunity, opportunityIndex) => {
+    for (let slot = 0; slot < TASKS_PER_OPPORTUNITY; slot++) {
+      const taskIndex =
+        firstOpportunityTaskIndex +
+        opportunityIndex * TASKS_PER_OPPORTUNITY +
+        slot;
+
+      TASK_TARGET_SEEDS.push({
+        id: TASK_TARGET_DATA_SEED_IDS[`ID_${taskIndex}`],
+        taskId: TASK_DATA_SEED_IDS[`ID_${taskIndex}`],
+        targetPersonId: null,
+        targetCompanyId: null,
+        targetOpportunityId: opportunity.id,
+      });
+    }
   });
 
   return TASK_TARGET_SEEDS;

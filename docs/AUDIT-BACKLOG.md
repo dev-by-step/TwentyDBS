@@ -31,10 +31,10 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 34   | 3       | 39    |
+| FIX (bugs / incohérences) | 35   | 2       | 39    |
 | IMP (améliorations)       | 19   | 2       | 21    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25, 39.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25.
 > Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
 > `FAIT` IMP : 01→13, 15→20.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
@@ -161,7 +161,7 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 🟡 À faire — Modérés (données de démo)
 
-#### FIX-39 — Le seed de démo ne permet pas d'exercer les Cartes 5 et 10 — `A_FAIRE` (découvert 2026-07-18)
+#### FIX-39 — Le seed de démo ne permet pas d'exercer les Cartes 5 et 10 — `FAIT` (2026-07-18)
 
 - **Sévérité/Axe** : 🟡 `DATA` (dev uniquement)
 - **Fichiers** : `dev-seeder/` (calendrier, notes, tâches)
@@ -173,7 +173,11 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
   | Notes sans aucun rattachement | ~**1750 / 1802** (52 `noteTarget`) |
   | Tâches sans aucun rattachement | ~**1750 / 1801** (51 `taskTarget`) |
 - **Conséquence** : les fonctionnalités phares du fork (audience per-event, masquage inter-entités, activités sur fiche) n'ont **aucune donnée de démonstration**, ce qui les rend intestables en local. Le masquage de la Carte 10 n'a pu être validé qu'après enrichissement manuel de la base (cf. FIX-38, classé `INVALIDE` après re-test correct).
-- **Contournement appliqué en local (non versionné)** : script SQL d'enrichissement — 90 notes rattachées à des opportunités, 60 tâches à des sociétés, 260 événements passés en `WORKSPACE_PUBLIC`, 540 audiences d'entité créées. À porter dans le dev-seeder pour être reproductible après `database:reset`.
+- **Correctif livré (reproductible après `database:reset`)** :
+  1. `note-target-data-seeds` et `task-target-data-seeds` rattachent désormais **2 notes et 2 tâches par opportunité** (l'onglet Notes/Tasks d'une fiche affaire n'est plus vide) ;
+  2. `calendar-event-data-seeds` pose un `sharingScope` mixte (**1 événement sur 3 en `WORKSPACE_PUBLIC`**, le reste en `ENTITY_ONLY`) ;
+  3. nouvelle étape dev `seedPrimaryDevCalendarEventAudiences` dans `init-internal-entities` qui distribue les **audiences d'entité** sur les événements `ENTITY_ONLY`. Cette étape ne peut pas vivre dans le dev-seeder : `_calendarEventEntityAudience` porte une clé étrangère vers `_internalEntity`, or les entités internes n'existent pas encore au moment du seed. Elle est idempotente (`NOT EXISTS`) et gardée par `SEED_APPLE_WORKSPACE_ID`.
+- **Vérifié après un `database:reset` complet + `init-internal-entities`** : noteTargets **150** (dont 100 sur opportunités, contre 52 avant), taskTargets **150** (dont 100), audiences **534** (contre 0), `sharingScope` 266 `WORKSPACE_PUBLIC` / 534 `ENTITY_ONLY`, companies rattachées **20/20**. 150/150 tests, typecheck + lint OK.
 
 ### 🔐 Durcissements de spec
 
