@@ -374,6 +374,13 @@ export class CalendarEventMutationPermissionService {
       );
     }
 
+    if (
+      this.extractWorkspaceMemberId(calendarEvent.createdBy) ===
+      authContext.workspaceMemberId
+    ) {
+      return;
+    }
+
     const calendarChannelIds = [
       ...new Set(
         associations
@@ -419,17 +426,6 @@ export class CalendarEventMutationPermissionService {
       this.throwPermissionDenied(permissionDeniedMessage, {
         ...auditContext,
         reason: 'empty-calendar-channel-ids',
-      });
-    }
-
-    if (
-      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
-        authContext,
-      ))
-    ) {
-      this.throwPermissionDenied(permissionDeniedMessage, {
-        ...auditContext,
-        reason: 'not-entity-manager-nor-admin',
       });
     }
 
@@ -484,6 +480,30 @@ export class CalendarEventMutationPermissionService {
       });
     }
 
+    // Le propriétaire du compte connecté (donc du canal) gère toujours ses
+    // propres événements en libre-service — restauré après un durcissement
+    // (29c34b9f61) qui l'avait supprimé par erreur et bloquait la création
+    // d'événement pour tout membre non entity manager/admin.
+    if (
+      connectedAccounts.some(
+        (connectedAccount) =>
+          connectedAccount.userWorkspaceId === authContext.userWorkspaceId,
+      )
+    ) {
+      return;
+    }
+
+    if (
+      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
+        authContext,
+      ))
+    ) {
+      this.throwPermissionDenied(permissionDeniedMessage, {
+        ...auditContext,
+        reason: 'not-entity-manager-nor-admin',
+      });
+    }
+
     const ownerEntityIds = await this.resolveOwnerEntityIds(
       authContext.workspace.id,
       connectedAccounts,
@@ -519,21 +539,13 @@ export class CalendarEventMutationPermissionService {
   private async assertCalendarRecordCreationAllowed(
     authContext: UserWorkspaceAuthContext,
   ): Promise<void> {
-    if (
-      !(await this.internalEntityRoleService.canManageEntityScopedRecords(
-        authContext,
-      ))
-    ) {
-      this.throwPermissionDenied(
-        msg`Only the entity manager or the platform administrator can create this event.`,
-        {
-          authContext,
-          objectName: 'calendarEvent',
-          reason: 'create-event-not-manager',
-        },
-      );
-    }
-
+    // Créer un enregistrement calendarEvent nu n'est pas en soi une action
+    // inter-entités : c'est le rattachement à un calendarChannel (donc à un
+    // compte connecté et son entité) qui détermine l'accès réel, déjà
+    // vérifié par assertCalendarChannelMutationAllowed sur la mutation
+    // calendarChannelEventAssociation qui suit systématiquement la création
+    // de l'événement. Exiger ici entity manager/admin bloquait à tort tout
+    // membre standard souhaitant créer un événement sur son propre calendrier.
     const { entityIds } =
       await this.workspaceMemberInternalEntityService.resolveContext({
         workspaceId: authContext.workspace.id,
@@ -682,6 +694,22 @@ export class CalendarEventMutationPermissionService {
     const value = (data as Record<string, unknown>)[fieldName];
 
     return typeof value === 'string' && value.length > 0 ? value : null;
+  }
+
+  private extractWorkspaceMemberId(actor: unknown): string | null {
+    if (
+      !isDefined(actor) ||
+      typeof actor !== 'object' ||
+      !('workspaceMemberId' in actor)
+    ) {
+      return null;
+    }
+
+    const workspaceMemberId = actor.workspaceMemberId;
+
+    return typeof workspaceMemberId === 'string' && workspaceMemberId.length > 0
+      ? workspaceMemberId
+      : null;
   }
 
   private throwPermissionDenied(

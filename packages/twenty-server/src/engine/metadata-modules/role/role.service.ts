@@ -364,7 +364,11 @@ export class RoleService {
         canUpdateAllSettings: false,
         canAccessAllTools: true,
         canReadAllObjectRecords: true,
-        canUpdateAllObjectRecords: false,
+        // Peut créer/modifier les enregistrements métier ; le cloisonnement par
+        // entité reste imposé indépendamment par les query-hooks internal-entity
+        // et calendar, pas par ce flag (voir GrantMemberEntityManagerUpdate...
+        // FastInstanceCommand pour le contexte de ce changement).
+        canUpdateAllObjectRecords: true,
         canSoftDeleteAllObjectRecords: false,
         canDestroyAllObjectRecords: false,
         canBeAssignedToUsers: true,
