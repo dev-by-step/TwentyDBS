@@ -132,6 +132,7 @@ export class TimelineCalendarEventService {
   async getGroupCalendarEvents({
     currentWorkspaceMemberId,
     requestedActiveEntityId,
+    entityFilterId,
     workspaceId,
     page = 1,
     pageSize = TIMELINE_CALENDAR_EVENTS_DEFAULT_PAGE_SIZE,
@@ -140,6 +141,14 @@ export class TimelineCalendarEventService {
   }: {
     currentWorkspaceMemberId: string;
     requestedActiveEntityId?: string | null;
+    /**
+     * IMP : filtre explicite « voir uniquement l'entité X » propre à la page
+     * Calendrier Groupe — distinct de `requestedActiveEntityId` (qui ne
+     * pilote que le masquage, jamais l'exclusion, voir FIX-40). Quand fourni,
+     * les événements non pertinents pour cette entité sont exclus du
+     * résultat, pas seulement masqués.
+     */
+    entityFilterId?: string | null;
     workspaceId: string;
     page: number;
     pageSize: number;
@@ -160,14 +169,38 @@ export class TimelineCalendarEventService {
 
         const dateWhere = this.buildDateWhereClause(startDate, endDate);
 
+        const hasEntityFilter =
+          isDefined(entityFilterId) && entityFilterId.length > 0;
+
+        const entityFilterCalendarEventIds = hasEntityFilter
+          ? await this.resolveEntityFilterCalendarEventIds({
+              calendarEventRepository,
+              dateWhere,
+              workspaceId,
+              entityFilterId,
+              currentWorkspaceMemberId,
+            })
+          : null;
+
+        if (
+          isDefined(entityFilterCalendarEventIds) &&
+          entityFilterCalendarEventIds.length === 0
+        ) {
+          return { totalNumberOfCalendarEvents: 0, timelineCalendarEvents: [] };
+        }
+
         // Carte 5 (docs/ROADMAP.md) : un créneau masqué reste TOUJOURS visible en
         // tant que « Occupé » — startsAt/endsAt et l'entité qui l'occupe restent
         // affichés pour permettre la planification, quel que soit le mode de vue
         // (Ma Société ou Vue Groupe). Les exclure en vue Ma Société recréait
-        // silencieusement des risques de double réservation.
+        // silencieusement des risques de double réservation. Le filtre
+        // `entityFilterId`, lui, exclut bien des événements du résultat — c'est
+        // un mode explicite et distinct, pas la vue par défaut.
         const [events, totalNumberOfCalendarEvents] =
           await calendarEventRepository.findAndCount({
-            where: dateWhere,
+            where: isDefined(entityFilterCalendarEventIds)
+              ? { ...dateWhere, id: In(entityFilterCalendarEventIds) }
+              : dateWhere,
             relations: {
               calendarEventParticipants: {
                 person: true,
@@ -195,6 +228,45 @@ export class TimelineCalendarEventService {
       },
       authContext,
     );
+  }
+
+  // Résout, pour `entityFilterId`, l'ensemble des ids d'événements pertinents
+  // dans la période demandée — requête en deux temps (ids candidats puis
+  // filtrage via CalendarPrivacyService) uniquement quand un filtre est
+  // demandé, pour ne jamais ajouter de coût sur le chemin par défaut (aucun
+  // filtre = un seul findAndCount, comportement inchangé). Même compromis
+  // pragmatique que getTeamVisibleNoteIds (FIX-19, docs/AUDIT-BACKLOG.md).
+  private async resolveEntityFilterCalendarEventIds({
+    calendarEventRepository,
+    dateWhere,
+    workspaceId,
+    entityFilterId,
+    currentWorkspaceMemberId,
+  }: {
+    calendarEventRepository: Repository<CalendarEventWorkspaceEntity>;
+    dateWhere: FindOptionsWhere<CalendarEventWorkspaceEntity>;
+    workspaceId: string;
+    entityFilterId: string;
+    currentWorkspaceMemberId: string;
+  }): Promise<string[]> {
+    const candidateEvents = await calendarEventRepository.find({
+      where: dateWhere,
+      select: { id: true },
+    });
+
+    if (candidateEvents.length === 0) {
+      return [];
+    }
+
+    const relevantCalendarEventIds =
+      await this.calendarPrivacyService.getEntityRelevantCalendarEventIds({
+        calendarEventIds: candidateEvents.map((event) => event.id),
+        workspaceId,
+        entityId: entityFilterId,
+        currentWorkspaceMemberId,
+      });
+
+    return [...relevantCalendarEventIds];
   }
 
   async getCalendarEventsFromCompanyId({

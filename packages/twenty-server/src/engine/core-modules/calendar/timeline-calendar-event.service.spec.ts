@@ -1,6 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { FindOperator } from 'typeorm';
+
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 
 import { CalendarChannelVisibility } from 'twenty-shared/types';
@@ -35,6 +37,7 @@ describe('TimelineCalendarEventService', () => {
   let mockWorkspaceMemberRepository: { findOne: jest.Mock; find: jest.Mock };
   let mockCalendarPrivacyService: {
     getCalendarEventMaskMap: jest.Mock;
+    getEntityRelevantCalendarEventIds: jest.Mock;
   };
   let mockWorkspaceMemberInternalEntityService: {
     resolveContextsByWorkspaceMemberIds: jest.Mock;
@@ -87,6 +90,7 @@ describe('TimelineCalendarEventService', () => {
       getCalendarEventMaskMap: jest
         .fn()
         .mockResolvedValue(new Map([['1', false]])),
+      getEntityRelevantCalendarEventIds: jest.fn().mockResolvedValue(new Set()),
     };
 
     mockWorkspaceMemberInternalEntityService = {
@@ -533,5 +537,129 @@ describe('TimelineCalendarEventService', () => {
         requestedActiveEntityId: 'some-other-entity-id',
       }),
     );
+  });
+
+  describe('entityFilterId (IMP — filtre par entité du Calendrier Groupe)', () => {
+    it('does not query candidate ids or the privacy filter when entityFilterId is absent (default path unchanged)', async () => {
+      mockCalendarEventRepository.findAndCount.mockResolvedValue([
+        [
+          {
+            ...mockCalendarEvent,
+            calendarChannelEventAssociations: [
+              { calendarChannelId: 'channel-1' },
+            ],
+          },
+        ],
+        1,
+      ]);
+      mockCalendarChannelCoreRepository.find.mockResolvedValue([
+        {
+          id: 'channel-1',
+          visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+          connectedAccountId: 'connected-account-1',
+        },
+      ]);
+
+      const result = await service.getGroupCalendarEvents({
+        currentWorkspaceMemberId: 'current-workspace-member-id',
+        workspaceId: 'test-workspace-id',
+        page: 1,
+        pageSize: 10,
+        startDate: new Date('2024-01-01T00:00:00.000Z'),
+        endDate: new Date('2024-01-02T00:00:00.000Z'),
+      });
+
+      expect(result.timelineCalendarEvents).toHaveLength(1);
+      // The candidate-ids lookup used only for entity filtering (`.find`
+      // with `select: { id: true }`) must not fire — unrelated `.find`
+      // calls from buildTimelineCalendarEventsFromEvents share this same
+      // mock repository object, so assert on the privacy-service call
+      // instead, which is unambiguous.
+      expect(
+        mockCalendarPrivacyService.getEntityRelevantCalendarEventIds,
+      ).not.toHaveBeenCalled();
+      expect(mockCalendarEventRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.not.objectContaining({ id: expect.anything() }),
+        }),
+      );
+    });
+
+    it('restricts findAndCount to the entity-relevant ids when entityFilterId is provided', async () => {
+      mockCalendarEventRepository.find.mockResolvedValue([
+        { id: '1' },
+        { id: '2' },
+      ]);
+      mockCalendarPrivacyService.getEntityRelevantCalendarEventIds.mockResolvedValue(
+        new Set(['1']),
+      );
+      mockCalendarEventRepository.findAndCount.mockResolvedValue([
+        [
+          {
+            ...mockCalendarEvent,
+            calendarChannelEventAssociations: [
+              { calendarChannelId: 'channel-1' },
+            ],
+          },
+        ],
+        1,
+      ]);
+      mockCalendarChannelCoreRepository.find.mockResolvedValue([
+        {
+          id: 'channel-1',
+          visibility: CalendarChannelVisibility.SHARE_EVERYTHING,
+          connectedAccountId: 'connected-account-1',
+        },
+      ]);
+
+      const result = await service.getGroupCalendarEvents({
+        currentWorkspaceMemberId: 'current-workspace-member-id',
+        entityFilterId: 'filtered-entity-id',
+        workspaceId: 'test-workspace-id',
+        page: 1,
+        pageSize: 10,
+        startDate: new Date('2024-01-01T00:00:00.000Z'),
+        endDate: new Date('2024-01-02T00:00:00.000Z'),
+      });
+
+      expect(result.timelineCalendarEvents).toHaveLength(1);
+      expect(
+        mockCalendarPrivacyService.getEntityRelevantCalendarEventIds,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          calendarEventIds: ['1', '2'],
+          entityId: 'filtered-entity-id',
+          currentWorkspaceMemberId: 'current-workspace-member-id',
+        }),
+      );
+      expect(mockCalendarEventRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: expect.any(FindOperator) }),
+        }),
+      );
+    });
+
+    it('short-circuits to an empty result without calling findAndCount when no event is relevant to the filtered entity', async () => {
+      mockCalendarEventRepository.find.mockResolvedValue([{ id: '1' }]);
+      mockCalendarPrivacyService.getEntityRelevantCalendarEventIds.mockResolvedValue(
+        new Set(),
+      );
+
+      const result = await service.getGroupCalendarEvents({
+        currentWorkspaceMemberId: 'current-workspace-member-id',
+        entityFilterId: 'filtered-entity-id',
+        workspaceId: 'test-workspace-id',
+        page: 1,
+        pageSize: 10,
+        startDate: new Date('2024-01-01T00:00:00.000Z'),
+        endDate: new Date('2024-01-02T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual({
+        totalNumberOfCalendarEvents: 0,
+        timelineCalendarEvents: [],
+      });
+      expect(mockCalendarEventRepository.findAndCount).not.toHaveBeenCalled();
+    });
   });
 });

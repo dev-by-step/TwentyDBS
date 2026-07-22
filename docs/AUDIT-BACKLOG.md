@@ -32,11 +32,12 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
 | FIX (bugs / incohérences) | 37   | 3       | 42    |
-| IMP (améliorations)       | 19   | 2       | 21    |
+| IMP (améliorations)       | 20   | 2       | 22    |
 
 > `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39, 40, 41. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25, 42.
 > Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
-> `FAIT` IMP : 01→13, 15→20.
+> `FAIT` IMP : 01→13, 15→20, 22.
+> IMP-22 (2026-07-21) : filtre par entité sur le Calendrier Groupe (exclusion réelle, pas du masquage) — voir la fiche pour le choix produit assumé sur le risque de double réservation.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
 > Investigation du bug d'audience calendrier (2026-07-21) : **FIX-41** — root cause bien plus large que le symptôme calendrier (Member/Entity Manager bloqués sur tout le CRM non-système, probable en prod aussi) ; **FIX-42** découvert en vérifiant le correctif (bug front `internalEntitiesId` préexistant sur la création de Company, indépendant des permissions, laissé `A_FAIRE`).
@@ -701,6 +702,21 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Problème** : conséquence directe de FIX-01 — un `connect` vers un ID inconnu laisse désormais la relation vide au lieu de crasher (bien), mais **silencieusement**. L'utilisateur qui importe un CSV ne sait pas quelles lignes ont perdu leur rattachement (company, person, entité…).
 - **Correction proposée** : compter côté serveur les connects ignorés (par relation) et remonter un **résumé** — soit dans le dialog d'import spreadsheet, soit en snackbar post-import (« 3 lignes importées sans société : IDs introuvables »). Recoupe FIX-22 (warning parser sur `Société` mal formée).
 - **Effort** : moyen (nécessite de propager un compteur du serveur jusqu'au front).
+
+#### IMP-22 — Filtre par entité sur le Calendrier Groupe (voir uniquement une entité, pas juste « tout le groupe ») — `FAIT` (2026-07-21)
+
+- **Sévérité/Axe** : 🟠 `UX`/`DATA` (choix produit assumé, voir ci-dessous)
+- **Demande** : le Calendrier Groupe permettait déjà de voir « tout le groupe » (toutes les entités, avec masquage FIX-40), mais pas de se restreindre à **une seule** de ses entités en excluant réellement les autres — le sélecteur global de la barre latérale (Ma Société / Vue Groupe) ne pilote que le masquage sur cette page, jamais l'exclusion.
+- **Décisions produit validées avec l'utilisateur avant implémentation** :
+  1. **Filtrage strict** (pas du masquage) : sur une entité sélectionnée, les événements des autres entités disparaissent complètement de l'affichage — **choix assumé qui réintroduit sciemment, pour ce mode explicite uniquement, le risque de double réservation invisible que FIX-40 avait justement corrigé pour la vue par défaut**. Le mode « toutes les entités » (par défaut, non filtré) reste inchangé et continue de bénéficier de la protection FIX-40.
+  2. **Nouveau contrôle dédié sur la page Calendrier Groupe**, indépendant du sélecteur global de la barre latérale, pour ne pas coupler la navigation du calendrier au scope CRM global (Companies, People…).
+- **Backend** :
+  - `calendar-privacy.service.ts` : extraction de la logique de collecte (associations canal↔événement, propriétaires, audiences, visibilité de canal, événements publics — jusque-là inline dans `getCalendarEventMaskMap`) dans une méthode privée partagée `gatherCalendarEventPrivacyContext`, réutilisée sans changement de comportement par `getCalendarEventMaskMap` (refactor pur, 25 tests existants toujours verts) et par la nouvelle méthode publique `getEntityRelevantCalendarEventIds({ calendarEventIds, workspaceId, entityId, currentWorkspaceMemberId })` : un événement est retenu si `WORKSPACE_PUBLIC`, OU l'entité est propriétaire/dans l'audience explicite/visible par un canal, OU si le spectateur en est lui-même propriétaire/dans l'audience personne (FIX-10 étendu au filtrage, pour ne jamais perdre de vue son propre événement en filtrant sur une autre entité).
+  - `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`) : nouveau paramètre optionnel `entityFilterId`. Absent → comportement strictement inchangé (un seul `findAndCount`, aucune requête supplémentaire). Présent → requête en deux temps (ids candidats de la période, puis filtrage via `CalendarPrivacyService`, puis `findAndCount` restreint), même compromis pragmatique que `getTeamVisibleNoteIds` (FIX-19).
+  - `timeline-calendar-event.resolver.ts` : nouvel argument GraphQL optionnel `entityFilterId` (UUID), indépendant de l'en-tête `x-active-internal-entity-id`.
+- **Front-end** : nouvel atome `groupCalendarEntityFilterState` (localStorage, `null` = toutes les entités) ; nouveau composant `GroupCalendarEntityFilterSelector.tsx` (dropdown calqué sur `entity-selector.component.tsx`, réutilise `useSelectableInternalEntities` et `shouldResetPersistedEntityFilter` sans nouvelle requête) ajouté dans `GroupCalendarTopBar.tsx` ; `useGroupCalendarEvents.ts` + `getGroupTimelineCalendarEvents.ts` propagent `entityFilterId` comme variable Apollo explicite (refetch automatique au changement, pas besoin du contournement `isEntityFilterRegisteredForObject` utilisé pour les objets CRM génériques).
+- **Vérifié en réel** (aline, admin, membre des 4 entités, dev server + inspection réseau) : dropdown liste bien « Toutes les entités » + les 4 entités avec pastille de couleur ; sélection DEVBYSTEP → `totalNumberOfCalendarEvents` passe de **68 à 65** (3 événements réellement exclus du résultat, pas seulement masqués) et tous les événements restants ont bien DEVBYSTEP dans `responsibleEntities` ; retour à « Toutes les entités » restaure les 68.
+- **Tests** : `calendar-privacy.service.spec.ts` +9 (34/34) ; `timeline-calendar-event.service.spec.ts` +3 (10/10) ; nouveau describe dans `calendar-event-cross-account-dedup.integration-spec.ts` (+4, 10/10) couvrant bout-en-bout via le vrai endpoint GraphQL (resolver → service → privacy service) le cas « inclus pour l'entité de l'un ou l'autre propriétaire » et « exclu pour une entité tierce », avec un spectateur non-propriétaire (Jony) pour ne pas confondre le bypass FIX-10 avec la pertinence réelle par entité. `npx nx typecheck` + oxlint + prettier OK sur les deux packages.
 
 ---
 
