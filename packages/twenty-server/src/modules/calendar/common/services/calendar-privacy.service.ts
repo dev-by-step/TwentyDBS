@@ -41,6 +41,26 @@ type GetCalendarEventMaskMapArgs = {
   requestedActiveEntityId?: string | null;
 };
 
+// Données brutes partagées entre l'arbitrage de masquage (getCalendarEventMaskMap)
+// et le filtre de pertinence par entité (getEntityRelevantCalendarEventIds) —
+// toutes deux répondent à des questions différentes à partir des mêmes faits
+// (qui possède/partage/rend visible chaque événement), donc les calculer une
+// seule fois évite de faire diverger silencieusement les deux logiques.
+type CalendarEventPrivacyContext = {
+  // false si aucun des événements demandés n'a de calendarChannelEventAssociation
+  // du tout (cas limite) — getCalendarEventMaskMap s'appuie dessus pour
+  // reproduire son court-circuit historique « fail open » (tout démasqué).
+  hasAnyAssociation: boolean;
+  publicCalendarEventIds: Set<string>;
+  audienceEntityIdsByCalendarEventId: Map<string, Set<string>>;
+  audienceMemberIdsByCalendarEventId: Map<string, Set<string>>;
+  ownerEntityIdsByCalendarEventId: Map<string, Set<string>>;
+  // FIX-10 : membres propriétaires (comptes connectés) par événement.
+  ownerWorkspaceMemberIdsByCalendarEventId: Map<string, Set<string>>;
+  visibleEntityIdsByCalendarEventId: Map<string, Set<string>>;
+  calendarEventIdsWithUnknownOwnerEntity: Set<string>;
+};
+
 @Injectable()
 export class CalendarPrivacyService {
   constructor(
@@ -95,43 +115,10 @@ export class CalendarPrivacyService {
             : resolvedCurrentUserEntityContext.entityIds,
         );
 
-        const calendarEventRepository =
-          await this.globalWorkspaceOrmManager.getRepository<{
-            id: string;
-            sharingScope: string | null;
-          }>(workspaceId, 'calendarEvent', {
-            shouldBypassPermissionChecks: true,
-          });
-        const calendarEvents = await calendarEventRepository.find({
-          where: {
-            id: In(calendarEventIds),
-          },
-          select: {
-            id: true,
-            sharingScope: true,
-          },
+        const context = await this.gatherCalendarEventPrivacyContext({
+          calendarEventIds,
+          workspaceId,
         });
-        const publicCalendarEventIds = new Set(
-          calendarEvents
-            .filter(
-              (calendarEvent) =>
-                calendarEvent.sharingScope ===
-                CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC,
-            )
-            .map((calendarEvent) => calendarEvent.id),
-        );
-
-        const audienceEntityIdsByCalendarEventId =
-          await this.loadAudienceEntityIdsByCalendarEventId({
-            workspaceId,
-            calendarEventIds,
-          });
-
-        const audienceMemberIdsByCalendarEventId =
-          await this.loadAudienceMemberIdsByCalendarEventId({
-            workspaceId,
-            calendarEventIds,
-          });
 
         const isViewerInPersonAudience = (calendarEventId: string): boolean => {
           if (!isDefined(currentWorkspaceMemberId)) {
@@ -139,7 +126,7 @@ export class CalendarPrivacyService {
           }
 
           const audienceMemberIds =
-            audienceMemberIdsByCalendarEventId.get(calendarEventId);
+            context.audienceMemberIdsByCalendarEventId.get(calendarEventId);
 
           return (
             isDefined(audienceMemberIds) &&
@@ -156,7 +143,7 @@ export class CalendarPrivacyService {
           return this.createCalendarEventMaskMapWithPredicate(
             calendarEventIds,
             (calendarEventId) =>
-              !publicCalendarEventIds.has(calendarEventId) &&
+              !context.publicCalendarEventIds.has(calendarEventId) &&
               !isViewerInPersonAudience(calendarEventId) &&
               hasRequesterIdentityHints,
           );
@@ -167,296 +154,12 @@ export class CalendarPrivacyService {
           false,
         );
 
-        const calendarChannelEventAssociationRepository =
-          await this.globalWorkspaceOrmManager.getRepository<CalendarChannelEventAssociationWorkspaceEntity>(
-            workspaceId,
-            MULTI_ENTITY_OBJECT_NAME.CalendarChannelEventAssociation,
-          );
-
-        const calendarChannelEventAssociations =
-          await calendarChannelEventAssociationRepository.find({
-            where: {
-              calendarEventId: In(calendarEventIds),
-            },
-          });
-
-        if (calendarChannelEventAssociations.length === 0) {
+        if (!context.hasAnyAssociation) {
           return defaultMaskMap;
         }
 
-        const calendarChannelIds = [
-          ...new Set(
-            calendarChannelEventAssociations.map(
-              (association) => association.calendarChannelId,
-            ),
-          ),
-        ];
-
-        const calendarChannels =
-          calendarChannelIds.length > 0
-            ? await this.calendarChannelRepository.find({
-                where: {
-                  id: In(calendarChannelIds),
-                  workspaceId,
-                },
-                select: [
-                  'id',
-                  'connectedAccountId',
-                  'visibleInternalEntityIds',
-                ],
-              })
-            : [];
-
-        const connectedAccountIds = [
-          ...new Set(
-            calendarChannels
-              .map((channel) => channel.connectedAccountId)
-              .filter(isDefined),
-          ),
-        ];
-
-        const connectedAccounts =
-          connectedAccountIds.length > 0
-            ? await this.connectedAccountRepository.find({
-                where: {
-                  id: In(connectedAccountIds),
-                  workspaceId,
-                },
-                select: ['id', 'userWorkspaceId'],
-              })
-            : [];
-
-        const userWorkspaceIds = [
-          ...new Set(
-            connectedAccounts
-              .map((connectedAccount) => connectedAccount.userWorkspaceId)
-              .filter(isDefined),
-          ),
-        ];
-
-        const userWorkspaces =
-          userWorkspaceIds.length > 0
-            ? await this.userWorkspaceRepository.find({
-                where: {
-                  id: In(userWorkspaceIds),
-                  workspaceId,
-                },
-                select: ['id', 'userId'],
-              })
-            : [];
-
-        const userIds = [
-          ...new Set(
-            userWorkspaces
-              .map((userWorkspace) => userWorkspace.userId)
-              .filter(isDefined),
-          ),
-        ];
-
-        const users =
-          userIds.length > 0
-            ? await this.userRepository.find({
-                where: {
-                  id: In(userIds),
-                },
-                select: ['id', 'entityId'],
-              })
-            : [];
-
-        const userWorkspaceIdByConnectedAccountId = new Map(
-          connectedAccounts.map((connectedAccount) => [
-            connectedAccount.id,
-            connectedAccount.userWorkspaceId,
-          ]),
-        );
-
-        const userIdByUserWorkspaceId = new Map(
-          userWorkspaces.map((userWorkspace) => [
-            userWorkspace.id,
-            userWorkspace.userId,
-          ]),
-        );
-
-        const workspaceMemberRepository =
-          await this.globalWorkspaceOrmManager.getRepository<
-            Record<string, unknown>
-          >(workspaceId, 'workspaceMember', {
-            shouldBypassPermissionChecks: true,
-          });
-        const workspaceMembers =
-          userIds.length > 0
-            ? await workspaceMemberRepository.find({
-                where: {
-                  userId: In(userIds),
-                },
-              })
-            : [];
-        const workspaceMemberIdByUserId = new Map(
-          workspaceMembers
-            .map((workspaceMember) => [
-              this.extractStringField(workspaceMember, 'userId'),
-              this.extractStringField(workspaceMember, 'id'),
-            ])
-            .filter(
-              (entry): entry is [string, string] =>
-                isDefined(entry[0]) && isDefined(entry[1]),
-            ),
-        );
-
-        const workspaceMemberIdByCalendarChannelId = new Map(
-          calendarChannels.map((calendarChannel) => {
-            const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
-              calendarChannel.connectedAccountId,
-            );
-            const userId = isDefined(userWorkspaceId)
-              ? userIdByUserWorkspaceId.get(userWorkspaceId)
-              : undefined;
-            const workspaceMemberId = isDefined(userId)
-              ? workspaceMemberIdByUserId.get(userId)
-              : null;
-
-            return [calendarChannel.id, workspaceMemberId ?? null] as const;
-          }),
-        );
-
-        const workspaceMemberIds = [
-          ...new Set(
-            [...workspaceMemberIdByCalendarChannelId.values()].filter(
-              isDefined,
-            ),
-          ),
-        ];
-
-        const fallbackEntityIdByWorkspaceMemberId = new Map(
-          workspaceMemberIds.map((workspaceMemberId) => {
-            const userId = [...workspaceMemberIdByUserId.entries()].find(
-              ([, resolvedWorkspaceMemberId]) =>
-                resolvedWorkspaceMemberId === workspaceMemberId,
-            )?.[0];
-
-            return [
-              workspaceMemberId,
-              userId != null
-                ? (users.find((user) => user.id === userId)?.entityId ?? null)
-                : null,
-            ] as const;
-          }),
-        );
-
-        const ownerEntityContexts =
-          workspaceMemberIds.length > 0
-            ? await this.workspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds(
-                {
-                  workspaceId,
-                  workspaceMemberIds,
-                  fallbackEntityIdByWorkspaceMemberId,
-                },
-              )
-            : new Map<string, WorkspaceMemberInternalEntityContext>();
-
-        const ownerEntityIdByCalendarChannelId = new Map(
-          calendarChannels.map((calendarChannel) => {
-            const workspaceMemberId = workspaceMemberIdByCalendarChannelId.get(
-              calendarChannel.id,
-            );
-            const currentEntityId = isDefined(workspaceMemberId)
-              ? (ownerEntityContexts.get(workspaceMemberId)?.currentEntityId ??
-                null)
-              : null;
-
-            return [
-              calendarChannel.id,
-              normalizeOptionalEntityId(currentEntityId),
-            ] as const;
-          }),
-        );
-
-        const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
-        // FIX-10 : membres propriétaires (comptes connectés) par événement,
-        // pour garantir qu'un propriétaire voit toujours ses propres créneaux.
-        const ownerWorkspaceMemberIdsByCalendarEventId = new Map<
-          string,
-          Set<string>
-        >();
-        const calendarEventIdsWithUnknownOwnerEntity = new Set<string>();
-        const visibleEntityIdsByCalendarEventId = new Map<
-          string,
-          Set<string>
-        >();
-        const visibleInternalEntityIdsByCalendarChannelId = new Map(
-          calendarChannels.map((calendarChannel) => [
-            calendarChannel.id,
-            this.normalizeEntityIdSet(
-              calendarChannel.visibleInternalEntityIds ?? [],
-            ),
-          ]),
-        );
-
-        for (const association of calendarChannelEventAssociations) {
-          const ownerEntityId = ownerEntityIdByCalendarChannelId.get(
-            association.calendarChannelId,
-          );
-          const ownerWorkspaceMemberId =
-            workspaceMemberIdByCalendarChannelId.get(
-              association.calendarChannelId,
-            );
-          const visibleInternalEntityIds =
-            visibleInternalEntityIdsByCalendarChannelId.get(
-              association.calendarChannelId,
-            );
-
-          if (isDefined(ownerWorkspaceMemberId)) {
-            const ownerWorkspaceMemberIds =
-              ownerWorkspaceMemberIdsByCalendarEventId.get(
-                association.calendarEventId,
-              ) ?? new Set<string>();
-
-            ownerWorkspaceMemberIds.add(ownerWorkspaceMemberId);
-            ownerWorkspaceMemberIdsByCalendarEventId.set(
-              association.calendarEventId,
-              ownerWorkspaceMemberIds,
-            );
-          }
-
-          if (
-            isDefined(visibleInternalEntityIds) &&
-            visibleInternalEntityIds.size > 0
-          ) {
-            const eventVisibleEntityIds =
-              visibleEntityIdsByCalendarEventId.get(
-                association.calendarEventId,
-              ) ?? new Set<string>();
-
-            for (const visibleInternalEntityId of visibleInternalEntityIds) {
-              eventVisibleEntityIds.add(visibleInternalEntityId);
-            }
-
-            visibleEntityIdsByCalendarEventId.set(
-              association.calendarEventId,
-              eventVisibleEntityIds,
-            );
-          }
-
-          if (!isDefined(ownerEntityId)) {
-            calendarEventIdsWithUnknownOwnerEntity.add(
-              association.calendarEventId,
-            );
-            continue;
-          }
-
-          const ownerEntityIds =
-            ownerEntityIdsByCalendarEventId.get(association.calendarEventId) ??
-            new Set<string>();
-
-          ownerEntityIds.add(ownerEntityId);
-          ownerEntityIdsByCalendarEventId.set(
-            association.calendarEventId,
-            ownerEntityIds,
-          );
-        }
-
         for (const calendarEventId of calendarEventIds) {
-          if (publicCalendarEventIds.has(calendarEventId)) {
+          if (context.publicCalendarEventIds.has(calendarEventId)) {
             defaultMaskMap.set(calendarEventId, false);
             continue;
           }
@@ -466,7 +169,7 @@ export class CalendarPrivacyService {
           // (notamment une visibilité de canal qui exclurait sa propre entité).
           const isViewerOwnerOfEvent =
             isDefined(currentWorkspaceMemberId) &&
-            (ownerWorkspaceMemberIdsByCalendarEventId
+            (context.ownerWorkspaceMemberIdsByCalendarEventId
               .get(calendarEventId)
               ?.has(currentWorkspaceMemberId) ??
               false);
@@ -483,9 +186,9 @@ export class CalendarPrivacyService {
           // 4. Otherwise, apply the legacy owner-entity rule, with optional
           // channel-level visibility granting additional entity access.
           const channelVisibleEntityIds =
-            visibleEntityIdsByCalendarEventId.get(calendarEventId);
+            context.visibleEntityIdsByCalendarEventId.get(calendarEventId);
           const audienceEntityIds =
-            audienceEntityIdsByCalendarEventId.get(calendarEventId);
+            context.audienceEntityIdsByCalendarEventId.get(calendarEventId);
           const hasExplicitEntityAudience =
             isDefined(audienceEntityIds) && audienceEntityIds.size > 0;
           const isViewerInEntityAudience =
@@ -508,9 +211,9 @@ export class CalendarPrivacyService {
           }
 
           const ownerEntityIds =
-            ownerEntityIdsByCalendarEventId.get(calendarEventId);
+            context.ownerEntityIdsByCalendarEventId.get(calendarEventId);
           const hasUnknownOwnerEntity =
-            calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId);
+            context.calendarEventIdsWithUnknownOwnerEntity.has(calendarEventId);
           const isViewerInOwnerEntity =
             !hasUnknownOwnerEntity &&
             isDefined(ownerEntityIds) &&
@@ -543,6 +246,454 @@ export class CalendarPrivacyService {
       },
       authContext,
     );
+  }
+
+  /**
+   * IMP : filtre « voir uniquement l'entité X » du Calendrier Groupe — à ne
+   * pas confondre avec getCalendarEventMaskMap (qui masque des détails mais
+   * n'exclut jamais un événement). Ici, un événement absent du Set retourné
+   * doit disparaître complètement de l'affichage : c'est un choix produit
+   * assumé qui réintroduit sciemment, pour ce mode de filtrage explicite
+   * uniquement, le risque de double réservation invisible que FIX-40 a
+   * justement corrigé pour la vue par défaut (voir docs/AUDIT-BACKLOG.md).
+   *
+   * Un événement est retenu si l'entité demandée y est rattachée d'une
+   * manière ou d'une autre (public, propriétaire, audience explicite,
+   * visibilité de canal), ou si le spectateur en est lui-même propriétaire /
+   * dans l'audience personne — pour ne jamais lui faire perdre de vue son
+   * propre événement en filtrant sur une autre de ses entités.
+   */
+  async getEntityRelevantCalendarEventIds({
+    calendarEventIds,
+    workspaceId,
+    entityId,
+    currentWorkspaceMemberId,
+  }: {
+    calendarEventIds: string[];
+    workspaceId: string;
+    entityId: string;
+    currentWorkspaceMemberId?: string;
+  }): Promise<Set<string>> {
+    if (calendarEventIds.length === 0) {
+      return new Set();
+    }
+
+    const normalizedEntityId = normalizeOptionalEntityId(entityId);
+
+    if (!isDefined(normalizedEntityId)) {
+      return new Set();
+    }
+
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const context = await this.gatherCalendarEventPrivacyContext({
+          calendarEventIds,
+          workspaceId,
+        });
+
+        const isViewerInPersonAudience = (calendarEventId: string): boolean => {
+          if (!isDefined(currentWorkspaceMemberId)) {
+            return false;
+          }
+
+          const audienceMemberIds =
+            context.audienceMemberIdsByCalendarEventId.get(calendarEventId);
+
+          return (
+            isDefined(audienceMemberIds) &&
+            audienceMemberIds.has(currentWorkspaceMemberId)
+          );
+        };
+
+        const relevantCalendarEventIds = new Set<string>();
+
+        for (const calendarEventId of calendarEventIds) {
+          if (context.publicCalendarEventIds.has(calendarEventId)) {
+            relevantCalendarEventIds.add(calendarEventId);
+            continue;
+          }
+
+          const isViewerOwnerOfEvent =
+            isDefined(currentWorkspaceMemberId) &&
+            (context.ownerWorkspaceMemberIdsByCalendarEventId
+              .get(calendarEventId)
+              ?.has(currentWorkspaceMemberId) ??
+              false);
+
+          if (
+            isViewerOwnerOfEvent ||
+            isViewerInPersonAudience(calendarEventId)
+          ) {
+            relevantCalendarEventIds.add(calendarEventId);
+            continue;
+          }
+
+          const ownerEntityIds =
+            context.ownerEntityIdsByCalendarEventId.get(calendarEventId);
+          const audienceEntityIds =
+            context.audienceEntityIdsByCalendarEventId.get(calendarEventId);
+          const visibleEntityIds =
+            context.visibleEntityIdsByCalendarEventId.get(calendarEventId);
+
+          const isRelevantToEntity =
+            (isDefined(ownerEntityIds) &&
+              ownerEntityIds.has(normalizedEntityId)) ||
+            (isDefined(audienceEntityIds) &&
+              audienceEntityIds.has(normalizedEntityId)) ||
+            (isDefined(visibleEntityIds) &&
+              visibleEntityIds.has(normalizedEntityId));
+
+          if (isRelevantToEntity) {
+            relevantCalendarEventIds.add(calendarEventId);
+          }
+        }
+
+        return relevantCalendarEventIds;
+      },
+      authContext,
+    );
+  }
+
+  private async gatherCalendarEventPrivacyContext({
+    calendarEventIds,
+    workspaceId,
+  }: {
+    calendarEventIds: string[];
+    workspaceId: string;
+  }): Promise<CalendarEventPrivacyContext> {
+    const calendarEventRepository =
+      await this.globalWorkspaceOrmManager.getRepository<{
+        id: string;
+        sharingScope: string | null;
+      }>(workspaceId, 'calendarEvent', {
+        shouldBypassPermissionChecks: true,
+      });
+    const calendarEvents = await calendarEventRepository.find({
+      where: {
+        id: In(calendarEventIds),
+      },
+      select: {
+        id: true,
+        sharingScope: true,
+      },
+    });
+    const publicCalendarEventIds = new Set(
+      calendarEvents
+        .filter(
+          (calendarEvent) =>
+            calendarEvent.sharingScope ===
+            CALENDAR_EVENT_SHARING_SCOPE.WORKSPACE_PUBLIC,
+        )
+        .map((calendarEvent) => calendarEvent.id),
+    );
+
+    const audienceEntityIdsByCalendarEventId =
+      await this.loadAudienceEntityIdsByCalendarEventId({
+        workspaceId,
+        calendarEventIds,
+      });
+
+    const audienceMemberIdsByCalendarEventId =
+      await this.loadAudienceMemberIdsByCalendarEventId({
+        workspaceId,
+        calendarEventIds,
+      });
+
+    const ownerEntityIdsByCalendarEventId = new Map<string, Set<string>>();
+    const ownerWorkspaceMemberIdsByCalendarEventId = new Map<
+      string,
+      Set<string>
+    >();
+    const calendarEventIdsWithUnknownOwnerEntity = new Set<string>();
+    const visibleEntityIdsByCalendarEventId = new Map<string, Set<string>>();
+
+    const calendarChannelEventAssociationRepository =
+      await this.globalWorkspaceOrmManager.getRepository<CalendarChannelEventAssociationWorkspaceEntity>(
+        workspaceId,
+        MULTI_ENTITY_OBJECT_NAME.CalendarChannelEventAssociation,
+      );
+
+    const calendarChannelEventAssociations =
+      await calendarChannelEventAssociationRepository.find({
+        where: {
+          calendarEventId: In(calendarEventIds),
+        },
+      });
+
+    if (calendarChannelEventAssociations.length === 0) {
+      return {
+        hasAnyAssociation: false,
+        publicCalendarEventIds,
+        audienceEntityIdsByCalendarEventId,
+        audienceMemberIdsByCalendarEventId,
+        ownerEntityIdsByCalendarEventId,
+        ownerWorkspaceMemberIdsByCalendarEventId,
+        visibleEntityIdsByCalendarEventId,
+        calendarEventIdsWithUnknownOwnerEntity,
+      };
+    }
+
+    const calendarChannelIds = [
+      ...new Set(
+        calendarChannelEventAssociations.map(
+          (association) => association.calendarChannelId,
+        ),
+      ),
+    ];
+
+    const calendarChannels =
+      calendarChannelIds.length > 0
+        ? await this.calendarChannelRepository.find({
+            where: {
+              id: In(calendarChannelIds),
+              workspaceId,
+            },
+            select: ['id', 'connectedAccountId', 'visibleInternalEntityIds'],
+          })
+        : [];
+
+    const connectedAccountIds = [
+      ...new Set(
+        calendarChannels
+          .map((channel) => channel.connectedAccountId)
+          .filter(isDefined),
+      ),
+    ];
+
+    const connectedAccounts =
+      connectedAccountIds.length > 0
+        ? await this.connectedAccountRepository.find({
+            where: {
+              id: In(connectedAccountIds),
+              workspaceId,
+            },
+            select: ['id', 'userWorkspaceId'],
+          })
+        : [];
+
+    const userWorkspaceIds = [
+      ...new Set(
+        connectedAccounts
+          .map((connectedAccount) => connectedAccount.userWorkspaceId)
+          .filter(isDefined),
+      ),
+    ];
+
+    const userWorkspaces =
+      userWorkspaceIds.length > 0
+        ? await this.userWorkspaceRepository.find({
+            where: {
+              id: In(userWorkspaceIds),
+              workspaceId,
+            },
+            select: ['id', 'userId'],
+          })
+        : [];
+
+    const userIds = [
+      ...new Set(
+        userWorkspaces
+          .map((userWorkspace) => userWorkspace.userId)
+          .filter(isDefined),
+      ),
+    ];
+
+    const users =
+      userIds.length > 0
+        ? await this.userRepository.find({
+            where: {
+              id: In(userIds),
+            },
+            select: ['id', 'entityId'],
+          })
+        : [];
+
+    const userWorkspaceIdByConnectedAccountId = new Map(
+      connectedAccounts.map((connectedAccount) => [
+        connectedAccount.id,
+        connectedAccount.userWorkspaceId,
+      ]),
+    );
+
+    const userIdByUserWorkspaceId = new Map(
+      userWorkspaces.map((userWorkspace) => [
+        userWorkspace.id,
+        userWorkspace.userId,
+      ]),
+    );
+
+    const workspaceMemberRepository =
+      await this.globalWorkspaceOrmManager.getRepository<
+        Record<string, unknown>
+      >(workspaceId, 'workspaceMember', {
+        shouldBypassPermissionChecks: true,
+      });
+    const workspaceMembers =
+      userIds.length > 0
+        ? await workspaceMemberRepository.find({
+            where: {
+              userId: In(userIds),
+            },
+          })
+        : [];
+    const workspaceMemberIdByUserId = new Map(
+      workspaceMembers
+        .map((workspaceMember) => [
+          this.extractStringField(workspaceMember, 'userId'),
+          this.extractStringField(workspaceMember, 'id'),
+        ])
+        .filter(
+          (entry): entry is [string, string] =>
+            isDefined(entry[0]) && isDefined(entry[1]),
+        ),
+    );
+
+    const workspaceMemberIdByCalendarChannelId = new Map(
+      calendarChannels.map((calendarChannel) => {
+        const userWorkspaceId = userWorkspaceIdByConnectedAccountId.get(
+          calendarChannel.connectedAccountId,
+        );
+        const userId = isDefined(userWorkspaceId)
+          ? userIdByUserWorkspaceId.get(userWorkspaceId)
+          : undefined;
+        const workspaceMemberId = isDefined(userId)
+          ? workspaceMemberIdByUserId.get(userId)
+          : null;
+
+        return [calendarChannel.id, workspaceMemberId ?? null] as const;
+      }),
+    );
+
+    const workspaceMemberIds = [
+      ...new Set(
+        [...workspaceMemberIdByCalendarChannelId.values()].filter(isDefined),
+      ),
+    ];
+
+    const fallbackEntityIdByWorkspaceMemberId = new Map(
+      workspaceMemberIds.map((workspaceMemberId) => {
+        const userId = [...workspaceMemberIdByUserId.entries()].find(
+          ([, resolvedWorkspaceMemberId]) =>
+            resolvedWorkspaceMemberId === workspaceMemberId,
+        )?.[0];
+
+        return [
+          workspaceMemberId,
+          userId != null
+            ? (users.find((user) => user.id === userId)?.entityId ?? null)
+            : null,
+        ] as const;
+      }),
+    );
+
+    const ownerEntityContexts =
+      workspaceMemberIds.length > 0
+        ? await this.workspaceMemberInternalEntityService.resolveContextsByWorkspaceMemberIds(
+            {
+              workspaceId,
+              workspaceMemberIds,
+              fallbackEntityIdByWorkspaceMemberId,
+            },
+          )
+        : new Map<string, WorkspaceMemberInternalEntityContext>();
+
+    const ownerEntityIdByCalendarChannelId = new Map(
+      calendarChannels.map((calendarChannel) => {
+        const workspaceMemberId = workspaceMemberIdByCalendarChannelId.get(
+          calendarChannel.id,
+        );
+        const currentEntityId = isDefined(workspaceMemberId)
+          ? (ownerEntityContexts.get(workspaceMemberId)?.currentEntityId ??
+            null)
+          : null;
+
+        return [
+          calendarChannel.id,
+          normalizeOptionalEntityId(currentEntityId),
+        ] as const;
+      }),
+    );
+
+    const visibleInternalEntityIdsByCalendarChannelId = new Map(
+      calendarChannels.map((calendarChannel) => [
+        calendarChannel.id,
+        this.normalizeEntityIdSet(
+          calendarChannel.visibleInternalEntityIds ?? [],
+        ),
+      ]),
+    );
+
+    for (const association of calendarChannelEventAssociations) {
+      const ownerEntityId = ownerEntityIdByCalendarChannelId.get(
+        association.calendarChannelId,
+      );
+      const ownerWorkspaceMemberId = workspaceMemberIdByCalendarChannelId.get(
+        association.calendarChannelId,
+      );
+      const visibleInternalEntityIds =
+        visibleInternalEntityIdsByCalendarChannelId.get(
+          association.calendarChannelId,
+        );
+
+      if (isDefined(ownerWorkspaceMemberId)) {
+        const ownerWorkspaceMemberIds =
+          ownerWorkspaceMemberIdsByCalendarEventId.get(
+            association.calendarEventId,
+          ) ?? new Set<string>();
+
+        ownerWorkspaceMemberIds.add(ownerWorkspaceMemberId);
+        ownerWorkspaceMemberIdsByCalendarEventId.set(
+          association.calendarEventId,
+          ownerWorkspaceMemberIds,
+        );
+      }
+
+      if (
+        isDefined(visibleInternalEntityIds) &&
+        visibleInternalEntityIds.size > 0
+      ) {
+        const eventVisibleEntityIds =
+          visibleEntityIdsByCalendarEventId.get(association.calendarEventId) ??
+          new Set<string>();
+
+        for (const visibleInternalEntityId of visibleInternalEntityIds) {
+          eventVisibleEntityIds.add(visibleInternalEntityId);
+        }
+
+        visibleEntityIdsByCalendarEventId.set(
+          association.calendarEventId,
+          eventVisibleEntityIds,
+        );
+      }
+
+      if (!isDefined(ownerEntityId)) {
+        calendarEventIdsWithUnknownOwnerEntity.add(association.calendarEventId);
+        continue;
+      }
+
+      const ownerEntityIds =
+        ownerEntityIdsByCalendarEventId.get(association.calendarEventId) ??
+        new Set<string>();
+
+      ownerEntityIds.add(ownerEntityId);
+      ownerEntityIdsByCalendarEventId.set(
+        association.calendarEventId,
+        ownerEntityIds,
+      );
+    }
+
+    return {
+      hasAnyAssociation: true,
+      publicCalendarEventIds,
+      audienceEntityIdsByCalendarEventId,
+      audienceMemberIdsByCalendarEventId,
+      ownerEntityIdsByCalendarEventId,
+      ownerWorkspaceMemberIdsByCalendarEventId,
+      visibleEntityIdsByCalendarEventId,
+      calendarEventIdsWithUnknownOwnerEntity,
+    };
   }
 
   applyInternalEntityPrivacyToWorkspaceCalendarEvents(

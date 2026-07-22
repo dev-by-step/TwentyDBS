@@ -8,12 +8,14 @@ export const getGroupTimelineCalendarEvents = gql`
     $pageSize: Int!
     $startDate: DateTime
     $endDate: DateTime
+    $entityFilterId: UUID
   ) {
     getGroupTimelineCalendarEvents(
       page: $page
       pageSize: $pageSize
       startDate: $startDate
       endDate: $endDate
+      entityFilterId: $entityFilterId
     ) {
       ...TimelineCalendarEventsWithTotalFragment
     }

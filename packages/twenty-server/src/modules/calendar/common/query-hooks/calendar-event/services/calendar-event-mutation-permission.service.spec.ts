@@ -174,7 +174,7 @@ const buildServiceContext = ({
 };
 
 describe('CalendarEventMutationPermissionService', () => {
-  it('should deny the author from mutating their own event when they are not an entity manager or platform administrator', async () => {
+  it('should allow the author to mutate their own event even when they are not an entity manager or platform administrator', async () => {
     const {
       service,
       authContext,
@@ -200,12 +200,10 @@ describe('CalendarEventMutationPermissionService', () => {
         'calendarEvent',
         faker.string.uuid(),
       ),
-    ).rejects.toMatchObject({
-      code: PermissionsExceptionCode.PERMISSION_DENIED,
-    });
+    ).resolves.toBeUndefined();
   });
 
-  it('should deny the connected account owner from mutating an event when they are not an entity manager or platform administrator', async () => {
+  it('should allow the connected account owner to mutate an event even when they are not an entity manager or platform administrator', async () => {
     const {
       service,
       authContext,
@@ -245,9 +243,7 @@ describe('CalendarEventMutationPermissionService', () => {
         'calendarEvent',
         faker.string.uuid(),
       ),
-    ).rejects.toMatchObject({
-      code: PermissionsExceptionCode.PERMISSION_DENIED,
-    });
+    ).resolves.toBeUndefined();
   });
 
   it('should allow an entity manager to mutate an event owned by the same entity', async () => {
@@ -703,7 +699,7 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
-  it('should deny creating a calendar link to a standard user even when they own the connected account', async () => {
+  it('should allow a standard user to create a calendar link when they own the connected account', async () => {
     const {
       service,
       authContext,
@@ -722,6 +718,44 @@ describe('CalendarEventMutationPermissionService', () => {
       {
         id: 'connected-account-1',
         userWorkspaceId,
+      },
+    ]);
+
+    await expect(
+      service.validateCreatePayload(
+        authContext,
+        'calendarChannelEventAssociation',
+        {
+          data: {
+            calendarChannelId: 'calendar-channel-1',
+          },
+        },
+      ),
+    ).resolves.toEqual({
+      data: {
+        calendarChannelId: 'calendar-channel-1',
+      },
+    });
+  });
+
+  it('should deny creating a calendar link to a standard user who neither owns the connected account nor manages the entity', async () => {
+    const {
+      service,
+      authContext,
+      calendarChannelRepository,
+      connectedAccountRepository,
+    } = buildServiceContext();
+
+    calendarChannelRepository.find.mockResolvedValue([
+      {
+        id: 'calendar-channel-1',
+        connectedAccountId: 'connected-account-1',
+      },
+    ]);
+    connectedAccountRepository.find.mockResolvedValue([
+      {
+        id: 'connected-account-1',
+        userWorkspaceId: 'someone-elses-user-workspace',
       },
     ]);
 
@@ -956,7 +990,7 @@ describe('CalendarEventMutationPermissionService', () => {
     });
   });
 
-  it('should deny creating a calendar event to a standard user', async () => {
+  it('should allow a standard user attached to an entity to create a calendar event', async () => {
     const { service, authContext } = buildServiceContext();
 
     await expect(
@@ -965,8 +999,10 @@ describe('CalendarEventMutationPermissionService', () => {
           title: 'Weekly sync',
         },
       }),
-    ).rejects.toMatchObject({
-      code: PermissionsExceptionCode.PERMISSION_DENIED,
+    ).resolves.toEqual({
+      data: {
+        title: 'Weekly sync',
+      },
     });
   });
 
@@ -1195,7 +1231,11 @@ describe('CalendarEventMutationPermissionService', () => {
       const calendarEventRepository = {
         findOne: jest.fn().mockResolvedValue({
           id: faker.string.uuid(),
-          createdBy: { workspaceMemberId },
+          // Deliberately not `workspaceMemberId` (the caller's own id): this
+          // suite exercises the entity-manager fallback path to verify every
+          // workspace query stays wrapped, so the record must not match the
+          // new author bypass, which would short-circuit before those queries.
+          createdBy: { workspaceMemberId: faker.string.uuid() },
         }),
       };
       const associationRepository = {

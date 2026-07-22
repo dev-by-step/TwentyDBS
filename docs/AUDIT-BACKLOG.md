@@ -31,14 +31,16 @@ Ce fichier est **dynamique** : il doit être mis à jour à chaque fois qu'un it
 
 | Série                     | Fait | À faire | Total |
 | ------------------------- | ---- | ------- | ----- |
-| FIX (bugs / incohérences) | 36   | 2       | 40    |
-| IMP (améliorations)       | 19   | 2       | 21    |
+| FIX (bugs / incohérences) | 37   | 3       | 42    |
+| IMP (améliorations)       | 20   | 2       | 22    |
 
-> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39, 40. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25.
+> `FAIT` FIX : 01→18, 20→24, 26→30, 32→37, 39, 40, 41. — `INVALIDE` FIX : 31, 38. — `A_FAIRE` : 19, 25, 42.
 > Passe fonctionnelle du 2026-07-18 (après enrichissement des données de démo) : **FIX-39** (seed ne permettant pas d'exercer les Cartes 5/10) et l'observation produit OBS-01. **FIX-38** (masquage calendrier) a été signalé puis classé `INVALIDE` : le masquage fonctionne, l'événement testé appartenait au demandeur.
-> `FAIT` IMP : 01→13, 15→20.
+> `FAIT` IMP : 01→13, 15→20, 22.
+> IMP-22 (2026-07-21) : filtre par entité sur le Calendrier Groupe (exclusion réelle, pas du masquage) — voir la fiche pour le choix produit assumé sur le risque de double réservation.
 > Nouveaux findings du test end-to-end du 2026-07-16 : FIX-29 (corrigé le jour même), FIX-30 (métadonnées héritées `entiteInterne` — corrigé le 2026-07-16).
 > Test end-to-end du 2026-07-18 : **FIX-31 classé `INVALIDE`** (la lecture non filtrée en Vue Groupe est le comportement spécifié par la Carte 10, pas une faille) ; **FIX-32** retenu (Settings > Internal entities limité à une entité pour le superadmin — à corriger au niveau de la page, pas du filtre global).
+> Investigation du bug d'audience calendrier (2026-07-21) : **FIX-41** — root cause bien plus large que le symptôme calendrier (Member/Entity Manager bloqués sur tout le CRM non-système, probable en prod aussi) ; **FIX-42** découvert en vérifiant le correctif (bug front `internalEntitiesId` préexistant sur la création de Company, indépendant des permissions, laissé `A_FAIRE`).
 
 ---
 
@@ -56,10 +58,11 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 
 ### 🥈 Priorité 2 — Intégrité des données & UX bloquante
 
-| ID     | Axe   | Résumé                                                                   |
-| ------ | ----- | ------------------------------------------------------------------------ |
-| FIX-32 | 🟠 UX | Settings > Internal entities : le superadmin ne voit qu'une entité sur 4 |
-| IMP-21 | 🟡 UX | Aucun récap des relations ignorées à l'import CSV (silencieux)           |
+| ID     | Axe       | Résumé                                                                   |
+| ------ | --------- | -------------------------------------------------------------------------- |
+| FIX-32 | 🟠 UX     | Settings > Internal entities : le superadmin ne voit qu'une entité sur 4 |
+| FIX-42 | 🟠 UX/DATA | Création de Company échoue (`internalEntitiesId` introuvable, bug front) |
+| IMP-21 | 🟡 UX     | Aucun récap des relations ignorées à l'import CSV (silencieux)           |
 
 ### 🥉 Priorité 3 — Performance / Scalabilité
 
@@ -421,6 +424,31 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Vérifié en réel** (non-admin membre de 3 entités sur 4, via API + UI) : le total d'événements reste **identique** entre les deux vues (763/763 — rien n'est jamais masqué au sens « supprimé ») ; le nombre de créneaux **masqués** diffère (4 en Vue Groupe vs 10 en Ma Société=DEVBYSTEP) — preuve que le bascule discrimine réellement. Un créneau masqué renvoie `title:"Occupé"`, `entityName:"ALLSENSIA, ANGLE_INTELLIGENCE"`, `entityColor` et `startsAt`/`endsAt` intacts. Confirmé visuellement : lignes « 🔒 Not shared » avec badges d'entité colorés. 245/245 tests, typecheck + lint OK sur les deux packages.
 - **Reste ouvert (non traité, hors périmètre)** : un des deux chemins de masquage (`buildTimelineCalendarEventsFromEvents`) pose parfois `title` à la constante brute non traduite `FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED` au lieu de « Occupé » — sans impact dans `GroupCalendarBoard.tsx` (qui n'utilise jamais ce champ pour un événement masqué), mais potentiellement visible ailleurs (ex. panneau latéral d'un événement). À vérifier séparément.
 
+#### FIX-41 — Member/Entity Manager ne pouvaient créer/modifier aucun enregistrement CRM non-système — `FAIT` (2026-07-21)
+
+- **Sévérité/Axe** : 🔴 `DATA`/`UX` (bloquant en prod pour tout non-admin, probable depuis l'origine du fork)
+- **Symptôme initial (signalé)** : Stéphane (non-admin) obtenait `FORBIDDEN`/`PERMISSION_DENIED` sur la mutation `createCalendarEventEntityAudience` en créant un événement calendrier, alors qu'un correctif calendrier antérieur avait déjà débloqué `createCalendarEvent`/`createCalendarChannelEventAssociation`/`createCalendarEventParticipant`.
+- **Investigation** : le blocage traverse **trois** couches de permission indépendantes dans ce code — le query-hook calendrier (`CalendarEventMutationPermissionService`), le query-hook internal-entity (`InternalEntityAccessPolicyService`), et le système RBAC générique de Twenty (`permissions.utils.ts` → `validateOperationIsPermittedOrThrow`). Les deux premières avaient déjà été auditées/durcies (FIX-10, FIX-11, FIX-26, FIX-27, FIX-33) ; c'est la **troisième**, jamais examinée jusqu'ici, qui bloquait réellement : pour tout objet `isSystem: false` (`company`, `opportunity`, `person`, `note`, `task`, `calendarEventEntityAudience`, `calendarEventPersonAudience`…), l'insert/update passe par `objectsPermissions[objectMetadataId].canUpdateObjectRecords`, qui retombe sur le flag de rôle `canUpdateAllObjectRecords` en l'absence d'override `ObjectPermission` par objet (aucun n'existe dans ce workspace). **`Member` et `Entity Manager` livrent tous deux `canUpdateAllObjectRecords: false` par défaut** (comportement standard Twenty, confirmé non spécifique au fork) — donc aucun non-admin ne pouvait créer/éditer la moindre Company, Person, Opportunity, Note, Task ou audience calendrier, en dev **comme en prod**.
+- **Vérifié en base avant correctif** : `Member`/`Entity Manager` → `canUpdateAllObjectRecords = false` ; zéro ligne `objectPermission` override sur tout le workspace.
+- **Analyse de risque avant correctif** : les objets réellement sensibles (`internalEntity`, `companyEntityMembership`, `personEntityMembership`, `workspaceMemberEntityMembership`) restent protégés **indépendamment** par `InternalEntityAccessPolicyService.assertCanCreate` (exige `isPlatformAdmin`/`isInternalEntitySuperAdmin`), qui ne dépend pas de ce flag — élargir `canUpdateAllObjectRecords` ne les affaiblit pas. Les objets `isSystem: true` (calendrier, `workspaceMember`, `attachment`, `noteTarget`, `taskTarget`, workflows) bypassent déjà le flag par construction.
+- **Correction** :
+  1. `canUpdateAllObjectRecords: false → true` pour `entityManager` dans `create-standard-flat-role-metadata.util.ts` et pour `Member` dans `role.service.ts` (`createMemberRole`) — le cloisonnement par entité reste imposé indépendamment (voir ci-dessus).
+  2. Nouvel instance-command `GrantMemberEntityManagerUpdatePermissionFastInstanceCommand` (`2-1/2-1-instance-command-fast-1785000000001-…`) pour appliquer le correctif aux workspaces **déjà provisionnés** (dont la prod) — `UPDATE core.role` ciblé par `universalIdentifier` fixe (Entity Manager) et par `label + isEditable` (Member, cf. `MEMBER_ROLE_LABEL`), réversible (`down()`), avec flush explicite du cache Redis `rolesPermissions` par workspace affecté après écriture (ce cache n'est invalidé que par `RoleService.updateRole()` — un `UPDATE` SQL direct le laisse périmé, constaté en local : la commande `cache:flush --namespace "engine:workspace"` a été nécessaire pour observer l'effet du correctif avant que l'instance-command n'existe).
+  3. `InstanceCommandProviderModule` importe désormais `WorkspaceCacheModule` (DI requise par le flush).
+- **Portée volontairement exclue** : `canDestroyAllObjectRecords`/`canSoftDeleteAllObjectRecords` **non touchés** — Member/Entity Manager restent sans droit de suppression, conformément au périmètre demandé (« créer » un événement, pas le supprimer). Ce n'est pas un oubli.
+- **Bug distinct découvert pendant la vérification** : voir FIX-42 (`internalEntitiesId` introuvable à la création de Company) — préexistant, reproduit aussi en admin, **hors périmètre** de ce correctif.
+- **Fichiers** : `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/create-standard-flat-role-metadata.util.ts`, `packages/twenty-server/src/engine/metadata-modules/role/role.service.ts`, `packages/twenty-server/src/database/commands/upgrade-version-command/2-1/2-1-instance-command-fast-1785000000001-grant-member-entity-manager-update-permission.ts` (nouveau), `instance-commands.constant.ts`, `instance-command-provider.module.ts`.
+- **Vérifié en réel** (Stéphane, non-admin, via UI + inspection des payloads réseau) : bouton « + Create Company » visible et fonctionnel, édition de champ Company OK, et la chaîne complète de création d'événement calendrier (`createCalendarEvent` → `createCalendarChannelEventAssociation` → `createCalendarEventParticipant` → `createCalendarEventEntityAudience`) réussit de bout en bout avec données réelles retournées. Suppression testée et **correctement toujours refusée** (`FORBIDDEN` sur `deleteCalendarEventEntityAudience`) — comportement attendu, pas une régression. `npx nx typecheck twenty-server` OK sur les 5 fichiers ; oxlint + prettier OK.
+- **Note versioning** : l'instance-command est enregistré sous `'2.1.0'` (pré-release, même précédent que la commande sœur `2-1-workspace-command-…deduplicate-internal-entity-memberships`) — non exécuté tant que `TWENTY_CURRENT_VERSION` n'est pas bumpé ; volontairement non touché ici.
+
+#### FIX-42 — Création de Company échoue : `internalEntitiesId` introuvable (bug front préexistant, indépendant des permissions) — `A_FAIRE`
+
+- **Sévérité/Axe** : 🟠 `UX`/`DATA`
+- **Constat** : cliquer « + Create Company » lève `Field metadata item 'internalEntitiesId' not found for object metadata item company`. Reproduit à l'identique pour un non-admin (Stéphane) **et** pour la superadmin (aline) — donc indépendant du correctif FIX-41, qui l'a seulement rendu visible en débloquant l'accès au bouton pour les non-admins.
+- **Investigation faite** : `core."fieldMetadata"` confirme que le champ s'appelle bien `internalEntities` (pluriel, RELATION) — `internalEntitiesId` n'existe nulle part en base. Vraisemblablement un calcul de clé de cache / valeur par défaut côté front qui suffixe `Id` sur une relation plurielle sans vérifier son cardinality (ONE_TO_MANY/MANY_TO_MANY n'ont pas de colonne `*Id` directe).
+- **Piste non explorée** : localiser le point de création du panneau « create record » pour l'objet `company` côté `twenty-front` qui référence `internalEntitiesId` en dur ou par convention de nommage (`${fieldName}Id`) sans garde de type de relation.
+- **Effort** : non estimé (pas encore localisé précisément dans le code front).
+
 #### FIX-19 — Filtres `in: [ids…]` construits en chargeant des tables entières — `A_FAIRE`
 
 - **Sévérité/Axe** : 🟡 `PERF`/`SCAL`
@@ -674,6 +702,21 @@ _(FIX-31 a été investigué puis classé `INVALIDE` — voir la fiche.)_
 - **Problème** : conséquence directe de FIX-01 — un `connect` vers un ID inconnu laisse désormais la relation vide au lieu de crasher (bien), mais **silencieusement**. L'utilisateur qui importe un CSV ne sait pas quelles lignes ont perdu leur rattachement (company, person, entité…).
 - **Correction proposée** : compter côté serveur les connects ignorés (par relation) et remonter un **résumé** — soit dans le dialog d'import spreadsheet, soit en snackbar post-import (« 3 lignes importées sans société : IDs introuvables »). Recoupe FIX-22 (warning parser sur `Société` mal formée).
 - **Effort** : moyen (nécessite de propager un compteur du serveur jusqu'au front).
+
+#### IMP-22 — Filtre par entité sur le Calendrier Groupe (voir uniquement une entité, pas juste « tout le groupe ») — `FAIT` (2026-07-21)
+
+- **Sévérité/Axe** : 🟠 `UX`/`DATA` (choix produit assumé, voir ci-dessous)
+- **Demande** : le Calendrier Groupe permettait déjà de voir « tout le groupe » (toutes les entités, avec masquage FIX-40), mais pas de se restreindre à **une seule** de ses entités en excluant réellement les autres — le sélecteur global de la barre latérale (Ma Société / Vue Groupe) ne pilote que le masquage sur cette page, jamais l'exclusion.
+- **Décisions produit validées avec l'utilisateur avant implémentation** :
+  1. **Filtrage strict** (pas du masquage) : sur une entité sélectionnée, les événements des autres entités disparaissent complètement de l'affichage — **choix assumé qui réintroduit sciemment, pour ce mode explicite uniquement, le risque de double réservation invisible que FIX-40 avait justement corrigé pour la vue par défaut**. Le mode « toutes les entités » (par défaut, non filtré) reste inchangé et continue de bénéficier de la protection FIX-40.
+  2. **Nouveau contrôle dédié sur la page Calendrier Groupe**, indépendant du sélecteur global de la barre latérale, pour ne pas coupler la navigation du calendrier au scope CRM global (Companies, People…).
+- **Backend** :
+  - `calendar-privacy.service.ts` : extraction de la logique de collecte (associations canal↔événement, propriétaires, audiences, visibilité de canal, événements publics — jusque-là inline dans `getCalendarEventMaskMap`) dans une méthode privée partagée `gatherCalendarEventPrivacyContext`, réutilisée sans changement de comportement par `getCalendarEventMaskMap` (refactor pur, 25 tests existants toujours verts) et par la nouvelle méthode publique `getEntityRelevantCalendarEventIds({ calendarEventIds, workspaceId, entityId, currentWorkspaceMemberId })` : un événement est retenu si `WORKSPACE_PUBLIC`, OU l'entité est propriétaire/dans l'audience explicite/visible par un canal, OU si le spectateur en est lui-même propriétaire/dans l'audience personne (FIX-10 étendu au filtrage, pour ne jamais perdre de vue son propre événement en filtrant sur une autre entité).
+  - `timeline-calendar-event.service.ts` (`getGroupCalendarEvents`) : nouveau paramètre optionnel `entityFilterId`. Absent → comportement strictement inchangé (un seul `findAndCount`, aucune requête supplémentaire). Présent → requête en deux temps (ids candidats de la période, puis filtrage via `CalendarPrivacyService`, puis `findAndCount` restreint), même compromis pragmatique que `getTeamVisibleNoteIds` (FIX-19).
+  - `timeline-calendar-event.resolver.ts` : nouvel argument GraphQL optionnel `entityFilterId` (UUID), indépendant de l'en-tête `x-active-internal-entity-id`.
+- **Front-end** : nouvel atome `groupCalendarEntityFilterState` (localStorage, `null` = toutes les entités) ; nouveau composant `GroupCalendarEntityFilterSelector.tsx` (dropdown calqué sur `entity-selector.component.tsx`, réutilise `useSelectableInternalEntities` et `shouldResetPersistedEntityFilter` sans nouvelle requête) ajouté dans `GroupCalendarTopBar.tsx` ; `useGroupCalendarEvents.ts` + `getGroupTimelineCalendarEvents.ts` propagent `entityFilterId` comme variable Apollo explicite (refetch automatique au changement, pas besoin du contournement `isEntityFilterRegisteredForObject` utilisé pour les objets CRM génériques).
+- **Vérifié en réel** (aline, admin, membre des 4 entités, dev server + inspection réseau) : dropdown liste bien « Toutes les entités » + les 4 entités avec pastille de couleur ; sélection DEVBYSTEP → `totalNumberOfCalendarEvents` passe de **68 à 65** (3 événements réellement exclus du résultat, pas seulement masqués) et tous les événements restants ont bien DEVBYSTEP dans `responsibleEntities` ; retour à « Toutes les entités » restaure les 68.
+- **Tests** : `calendar-privacy.service.spec.ts` +9 (34/34) ; `timeline-calendar-event.service.spec.ts` +3 (10/10) ; nouveau describe dans `calendar-event-cross-account-dedup.integration-spec.ts` (+4, 10/10) couvrant bout-en-bout via le vrai endpoint GraphQL (resolver → service → privacy service) le cas « inclus pour l'entité de l'un ou l'autre propriétaire » et « exclu pour une entité tierce », avec un spectateur non-propriétaire (Jony) pour ne pas confondre le bypass FIX-10 avec la pertinence réelle par entité. `npx nx typecheck` + oxlint + prettier OK sur les deux packages.
 
 ---
 

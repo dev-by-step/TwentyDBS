@@ -39,7 +39,11 @@ export const STANDARD_FLAT_ROLE_METADATA_BUILDERS_BY_ROLE_NAME = {
         canUpdateAllSettings: false,
         canAccessAllTools: true,
         canReadAllObjectRecords: true,
-        canUpdateAllObjectRecords: false,
+        // Peut créer/modifier les enregistrements métier (company, opportunity,
+        // person, note, task, calendarEvent*Audience...) : le cloisonnement par
+        // entité reste imposé indépendamment par InternalEntityAccessPolicyService
+        // et par CalendarEventMutationPermissionService, pas par ce flag.
+        canUpdateAllObjectRecords: true,
         canSoftDeleteAllObjectRecords: false,
         canDestroyAllObjectRecords: false,
         canBeAssignedToUsers: true,

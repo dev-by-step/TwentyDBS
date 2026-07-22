@@ -13,6 +13,7 @@ import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { GroupCalendarCreateEventModal } from '@/activities/group-calendar/components/GroupCalendarCreateEventModal';
+import { GroupCalendarEntityFilterSelector } from '@/activities/group-calendar/components/GroupCalendarEntityFilterSelector';
 import { GROUP_CALENDAR_CONFIG } from '@/activities/group-calendar/constants/GroupCalendar';
 import { type GroupCalendarDisplayMode } from '@/activities/group-calendar/types/GroupCalendarDisplayMode';
 import { type GroupCalendarViewMode } from '@/activities/group-calendar/types/GroupCalendarViewMode';
@@ -228,6 +229,8 @@ export const GroupCalendarTopBar = ({
               </StyledViewModeButton>
             ))}
           </StyledViewModeSelector>
+
+          <GroupCalendarEntityFilterSelector />
         </StyledRight>
       </StyledContainer>
       <GroupCalendarCreateEventModal

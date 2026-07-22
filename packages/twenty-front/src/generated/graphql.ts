@@ -258,6 +258,7 @@ export type Query = {
 
 export type QueryGetGroupTimelineCalendarEventsArgs = {
   endDate?: InputMaybe<Scalars['DateTime']>;
+  entityFilterId?: InputMaybe<Scalars['UUID']>;
   page: Scalars['Int'];
   pageSize: Scalars['Int'];
   startDate?: InputMaybe<Scalars['DateTime']>;

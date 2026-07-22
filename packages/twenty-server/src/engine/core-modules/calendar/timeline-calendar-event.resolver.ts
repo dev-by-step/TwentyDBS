@@ -72,6 +72,14 @@ class GetGroupTimelineCalendarEventsArgs {
   @Field(() => Date, { nullable: true })
   @IsOptional()
   endDate?: Date;
+
+  // IMP : filtre explicite « voir uniquement cette entité » du Calendrier
+  // Groupe — fourni par le client, indépendant de l'en-tête
+  // x-active-internal-entity-id (qui ne pilote que le masquage, voir
+  // requestedActiveEntityId ci-dessous).
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  entityFilterId?: string;
 }
 
 @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
@@ -145,7 +153,13 @@ export class TimelineCalendarEventResolver {
   @Query(() => TimelineCalendarEventsWithTotalDTO)
   async getGroupTimelineCalendarEvents(
     @Args()
-    { page, pageSize, startDate, endDate }: GetGroupTimelineCalendarEventsArgs,
+    {
+      page,
+      pageSize,
+      startDate,
+      endDate,
+      entityFilterId,
+    }: GetGroupTimelineCalendarEventsArgs,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ) {
@@ -160,6 +174,7 @@ export class TimelineCalendarEventResolver {
     return this.timelineCalendarEventService.getGroupCalendarEvents({
       currentWorkspaceMemberId: workspaceMemberId,
       requestedActiveEntityId,
+      entityFilterId,
       workspaceId: workspace.id,
       page,
       pageSize,
