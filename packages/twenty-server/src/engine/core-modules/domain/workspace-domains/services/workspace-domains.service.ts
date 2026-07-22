@@ -78,7 +78,7 @@ export class WorkspaceDomainsService {
 
     if (workspaces.length > 1) {
       Logger.warn(
-        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. The twwentydbs workspace will be used as fallback if it is found.`,
+        ` ${workspaces.length} workspaces found in database. In single-workspace mode, there should be only one workspace. The twentydbs workspace will be used as fallback if it is found.`,
       );
     }
 

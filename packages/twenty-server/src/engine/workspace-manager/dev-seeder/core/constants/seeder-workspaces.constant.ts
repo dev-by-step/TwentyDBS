@@ -1,5 +1,9 @@
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import {
+  TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
+  TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+} from 'src/engine/core-modules/workspace/constants/twenty-dbs-workspace.constant';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 export const WORKSPACE_FIELDS_TO_SEED = [
@@ -29,9 +33,9 @@ export type SeededWorkspacesIds = typeof SEED_APPLE_WORKSPACE_ID;
 export const SEEDER_CREATE_WORKSPACE_INPUT = {
   [SEED_APPLE_WORKSPACE_ID]: {
     id: SEED_APPLE_WORKSPACE_ID,
-    displayName: 'twwentydbs',
-    subdomain: 'twwentydbs',
-    inviteHash: 'twwentydbs.dev-invite-hash',
+    displayName: TWENTY_DBS_WORKSPACE_DISPLAY_NAME,
+    subdomain: TWENTY_DBS_WORKSPACE_SUBDOMAIN,
+    inviteHash: `${TWENTY_DBS_WORKSPACE_SUBDOMAIN}.dev-invite-hash`,
     logo: '',
     activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
     isTwoFactorAuthenticationEnforced: false,

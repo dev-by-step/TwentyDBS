@@ -12,7 +12,7 @@ import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder
 @Command({
   name: 'reset-shared-calendar-demo',
   description:
-    'Réinitialise le calendrier partagé de démo du workspace principal twwentydbs.',
+    'Réinitialise le calendrier partagé de démo du workspace principal twentydbs.',
 })
 export class ResetSharedCalendarDemoCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
